@@ -123,9 +123,62 @@ bash launch.sh
 The main entry point is [aegis.py](/home/john/Ablation/aegis.py).
 
 ```bash
+# Start the core orchestrator
 python3 aegis.py orchestrator
+
+# Start a worker (e.g., VPU worker for Sentinel missions)
 python3 aegis.py worker --type vpu
+
+# Launch the PyQt operator dashboard
 python3 aegis.py gui
+```
+
+## Workflow: Model Ablation
+
+### 1. Adding a Model
+To prepare a model for surgical ablation, place your model files (GGUF, ONNX, or PyTorch checkpoints) in the `models/` directory:
+
+```bash
+mkdir -p models
+cp /path/to/your/model.gguf models/
+```
+
+### 2. Starting an Ablation Mission
+You can launch a surgical ablation mission using the `train` command. This will trigger the staged pipeline (Intake -> Probe -> Atom Extract -> Clean -> Validation).
+
+```bash
+# Target a specific behavior (e.g., "refusal") using automated discovery
+python3 aegis.py train \
+  --project My-Ablation-Project \
+  --model models/qwen2.5.gguf \
+  --target refusal \
+  --device auto
+```
+
+For a fully automated "Qwen" specific mission with pre-set targets:
+```bash
+python3 aegis.py mission
+```
+
+### 3. Viewing Progress
+There are three ways to monitor your ablation missions:
+
+#### A. Operator Dashboard (Recommended)
+Launch the GUI to see a real-time 3D Ablation Map, hardware telemetry charts, and stage-by-stage progress:
+```bash
+python3 aegis.py gui
+```
+
+#### B. CLI Status
+Query the status of a specific job ID (received after submission):
+```bash
+python3 aegis.py status --job-id job-xxxxxxxx
+```
+
+#### C. REST API
+The system exposes a FastAPI surface for programmatic monitoring:
+```bash
+curl http://localhost:8000/jobs
 ```
 
 ## Documentation
