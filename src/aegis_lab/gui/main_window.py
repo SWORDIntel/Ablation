@@ -7,7 +7,8 @@ import os
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QTabWidget, QLabel, QPushButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QProgressBar, QDialog, QTextEdit, QSplitter, QFrame
+    QHeaderView, QProgressBar, QDialog, QTextEdit, QSplitter, QFrame,
+    QGridLayout
 )
 from PyQt6.QtCore import QTimer, Qt, QThread, pyqtSignal
 import pyqtgraph as pg
@@ -20,57 +21,90 @@ from aegis_lab.gui.widgets.chat_view import ChatView
 
 DARK_STYLESHEET = """
 QMainWindow, QWidget {
-    background-color: #0d1117;
-    color: #c9d1d9;
+    background-color: #09111f;
+    color: #d9e2f2;
+    font-family: "DejaVu Sans";
 }
 QTabWidget::pane {
-    border: 1px solid #30363d;
+    border: 1px solid #22324a;
+    top: -1px;
+    background: #0b1525;
 }
 QTabBar::tab {
-    background-color: #161b22;
-    padding: 8px 12px;
-    border: 1px solid #30363d;
-    margin-right: 2px;
+    background-color: #101c31;
+    color: #89a0bf;
+    padding: 10px 16px;
+    border: 1px solid #22324a;
+    border-bottom: none;
+    margin-right: 4px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
 }
 QTabBar::tab:selected {
-    background-color: #0d1117;
-    border-bottom: 2px solid #58a6ff;
-    color: #58a6ff;
+    background-color: #0b1525;
+    color: #7dd3fc;
+    border-bottom: 2px solid #7dd3fc;
 }
 QPushButton {
-    background-color: #21262d;
-    border: 1px solid #30363d;
-    border-radius: 6px;
-    padding: 5px 15px;
-    color: #58a6ff;
+    background-color: #12304d;
+    border: 1px solid #29547a;
+    border-radius: 8px;
+    padding: 7px 15px;
+    color: #ccecff;
     font-weight: bold;
 }
 QPushButton:hover {
-    background-color: #30363d;
+    background-color: #174166;
+    border-color: #4d8ec1;
 }
 QTableWidget {
-    gridline-color: #30363d;
-    border: 1px solid #30363d;
+    background-color: #0d1728;
+    alternate-background-color: #101d31;
+    gridline-color: #22324a;
+    border: 1px solid #22324a;
+    border-radius: 10px;
 }
 QHeaderView::section {
-    background-color: #161b22;
-    color: #8b949e;
-    padding: 4px;
-    border: 1px solid #30363d;
+    background-color: #101c31;
+    color: #94a8c6;
+    padding: 6px;
+    border: 1px solid #22324a;
 }
 QProgressBar {
-    border: 1px solid #30363d;
+    border: 1px solid #22324a;
     border-radius: 4px;
     text-align: center;
-    background-color: #161b22;
+    background-color: #101c31;
+    color: #d9e2f2;
 }
 QProgressBar::chunk {
-    background-color: #58a6ff;
+    background-color: #0ea5e9;
 }
 QTextEdit {
-    background-color: #0d1117;
-    border: 1px solid #30363d;
-    color: #c9d1d9;
+    background-color: #0d1728;
+    border: 1px solid #22324a;
+    color: #d9e2f2;
+    border-radius: 10px;
+}
+QLineEdit {
+    background-color: #0d1728;
+    border: 1px solid #22324a;
+    color: #d9e2f2;
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+QScrollBar:vertical {
+    background: #09111f;
+    width: 12px;
+    margin: 0px;
+}
+QScrollBar::handle:vertical {
+    background: #24405f;
+    min-height: 30px;
+    border-radius: 6px;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
 }
 """
 
@@ -108,6 +142,7 @@ class DashboardTab(QWidget):
         self.job_table = QTableWidget(0, 4)
         self.job_table.setHorizontalHeaderLabels(["Job ID", "Type", "Status", "Progress"])
         self.job_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.job_table.setAlternatingRowColors(True)
         self.job_table.itemSelectionChanged.connect(self.job_selected)
         self.job_layout.addWidget(self.job_table)
         self.splitter.addWidget(self.job_widget)
@@ -126,6 +161,7 @@ class DashboardTab(QWidget):
         self.stage_table = QTableWidget(0, 4)
         self.stage_table.setHorizontalHeaderLabels(["Stage ID", "Name", "Status", "Action"])
         self.stage_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.stage_table.setAlternatingRowColors(True)
         self.stage_layout.addWidget(self.stage_table)
         self.splitter.addWidget(self.stage_widget)
         
@@ -331,6 +367,7 @@ class ArtifactTab(QWidget):
         self.table = QTableWidget(0, 2)
         self.table.setHorizontalHeaderLabels(["Hash", "Path"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.setAlternatingRowColors(True)
         self.layout.addWidget(self.table)
         
         self.refresh_btn = QPushButton("Refresh")
@@ -373,6 +410,144 @@ class DiffViewTab(QWidget):
         self.load_btn = QPushButton("Load Comparison")
         self.layout.addWidget(self.load_btn)
 
+
+class SystemCard(QFrame):
+    def __init__(self, title: str, summary: str, action_label: str = None, action=None):
+        super().__init__()
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setStyleSheet("""
+            QFrame {
+                background-color: #0f1b2f;
+                border: 1px solid #22324a;
+                border-radius: 14px;
+            }
+            QLabel#title {
+                color: #eef6ff;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QLabel#summary {
+                color: #9db2cf;
+                font-size: 12px;
+            }
+            QLabel#status {
+                color: #7dd3fc;
+                font-size: 11px;
+                font-weight: bold;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+            }
+        """)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
+
+        self.title_label = QLabel(title)
+        self.title_label.setObjectName("title")
+        layout.addWidget(self.title_label)
+
+        self.summary_label = QLabel(summary)
+        self.summary_label.setObjectName("summary")
+        self.summary_label.setWordWrap(True)
+        layout.addWidget(self.summary_label)
+
+        self.status_label = QLabel("")
+        self.status_label.setObjectName("status")
+        layout.addWidget(self.status_label)
+
+        layout.addStretch()
+
+        self.action_btn = None
+        if action_label:
+            self.action_btn = QPushButton(action_label)
+            if action:
+                self.action_btn.clicked.connect(action)
+            layout.addWidget(self.action_btn)
+
+    def update_content(self, summary: str, status: str, accent: str):
+        self.summary_label.setText(summary)
+        self.status_label.setText(status)
+        self.status_label.setStyleSheet(
+            f"color: {accent}; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.08em;"
+        )
+
+
+class SystemsTab(QWidget):
+    def __init__(self, main_window: "MainWindow"):
+        super().__init__()
+        self.main_window = main_window
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(18, 18, 18, 18)
+        self.layout.setSpacing(14)
+
+        header = QFrame()
+        header.setStyleSheet("QFrame { background-color: #0f1b2f; border: 1px solid #22324a; border-radius: 16px; }")
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(20, 20, 20, 20)
+
+        title = QLabel("Systems Command Deck")
+        title.setStyleSheet("font-size: 26px; font-weight: bold; color: #eef6ff;")
+        header_layout.addWidget(title)
+
+        subtitle = QLabel("Linked access to orchestration, hardware telemetry, artifacts, rankings, interrogation, and diff inspection.")
+        subtitle.setWordWrap(True)
+        subtitle.setStyleSheet("font-size: 13px; color: #9db2cf;")
+        header_layout.addWidget(subtitle)
+
+        self.snapshot_label = QLabel("Refreshing subsystem snapshot...")
+        self.snapshot_label.setStyleSheet("font-size: 12px; color: #7dd3fc; font-weight: bold;")
+        header_layout.addWidget(self.snapshot_label)
+
+        header_buttons = QHBoxLayout()
+        refresh_btn = QPushButton("Refresh Systems")
+        refresh_btn.clicked.connect(self.refresh_cards)
+        header_buttons.addWidget(refresh_btn)
+
+        jobs_btn = QPushButton("Open Dashboard")
+        jobs_btn.clicked.connect(lambda: self.main_window.switch_to_tab(self.main_window.dashboard))
+        header_buttons.addWidget(jobs_btn)
+        header_buttons.addStretch()
+        header_layout.addLayout(header_buttons)
+        self.layout.addWidget(header)
+
+        self.grid = QGridLayout()
+        self.grid.setHorizontalSpacing(14)
+        self.grid.setVerticalSpacing(14)
+        self.layout.addLayout(self.grid)
+
+        self.cards = {}
+        descriptors = [
+            ("orchestrator", "Orchestrator", "Control plane for jobs, workers, and stage approvals.", "Open Dashboard",
+             lambda: self.main_window.switch_to_tab(self.main_window.dashboard)),
+            ("hardware", "Hardware Fabric", "CPU, iGPU, NPU, thermal state, and acceleration readiness.", "Open Hardware",
+             lambda: self.main_window.switch_to_tab(self.main_window.hardware)),
+            ("artifacts", "Artifact Store", "Content-addressed artifacts and promotion outputs.", "Open Artifacts",
+             lambda: self.main_window.switch_to_tab(self.main_window.artifacts)),
+            ("leaderboard", "Evaluation", "Leaderboard, scoring, robustness, and efficiency summaries.", "Open Leaderboard",
+             lambda: self.main_window.switch_to_tab(self.main_window.leaderboard)),
+            ("chat", "RAG Interrogation", "Operator chat, atom retrieval, and behavioral context review.", "Open Interrogation",
+             lambda: self.main_window.switch_to_tab(self.main_window.chat)),
+            ("diff", "Diff Review", "Before/after inspection surface for ablation comparisons.", "Open Diff View",
+             lambda: self.main_window.switch_to_tab(self.main_window.diff_view)),
+        ]
+
+        for index, (key, title_text, summary, label, action) in enumerate(descriptors):
+            card = SystemCard(title_text, summary, label, action)
+            self.cards[key] = card
+            self.grid.addWidget(card, index // 2, index % 2)
+
+        self.layout.addStretch()
+        self.refresh_cards()
+
+    def refresh_cards(self):
+        snapshot = self.main_window.collect_system_snapshot()
+        self.snapshot_label.setText(snapshot["headline"])
+
+        for key, payload in snapshot["systems"].items():
+            card = self.cards.get(key)
+            if card:
+                card.update_content(payload["summary"], payload["status"], payload["accent"])
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -392,7 +567,7 @@ class MainWindow(QMainWindow):
         # SITREP Top-Bar
         self.sitrep_bar = QFrame()
         self.sitrep_bar.setFrameShape(QFrame.Shape.StyledPanel)
-        self.sitrep_bar.setStyleSheet("background-color: #161b22; border-bottom: 1px solid #30363d; min-height: 40px;")
+        self.sitrep_bar.setStyleSheet("background-color: #0f1b2f; border-bottom: 1px solid #22324a; min-height: 48px; border-radius: 14px;")
         self.sitrep_layout = QHBoxLayout(self.sitrep_bar)
         self.sitrep_layout.setContentsMargins(15, 5, 15, 5)
 
@@ -408,7 +583,7 @@ class MainWindow(QMainWindow):
 
         self.sitrep_layout.addSpacing(20)
 
-        self.npu_sitrep = QLabel("NPU: DISCOVERED")
+        self.npu_sitrep = QLabel("Acceleration: CHECKING")
         self.npu_sitrep.setStyleSheet("color: #58a6ff; font-weight: bold;")
         self.sitrep_layout.addWidget(self.npu_sitrep)
 
@@ -417,6 +592,13 @@ class MainWindow(QMainWindow):
         self.status_label = QLabel("SYSTEM READY")
         self.status_label.setStyleSheet("color: #8b949e; font-size: 10px; font-family: monospace;")
         self.sitrep_layout.addWidget(self.status_label)
+
+        self.fullscreen_btn = QPushButton("⛶")
+        self.fullscreen_btn.setToolTip("Toggle Fullscreen (F11)")
+        self.fullscreen_btn.setFixedWidth(30)
+        self.fullscreen_btn.setStyleSheet("background-color: transparent; color: #8b949e; border: none; font-size: 16px;")
+        self.fullscreen_btn.clicked.connect(self.toggle_fullscreen)
+        self.sitrep_layout.addWidget(self.fullscreen_btn)
 
         self.main_layout.addWidget(self.sitrep_bar)
 
@@ -428,6 +610,7 @@ class MainWindow(QMainWindow):
         from aegis_lab.gui.widgets.chat_view import ChatView
         from aegis_lab.gui.widgets.leaderboard_view import LeaderboardTab
 
+        self.systems = SystemsTab(self)
         self.dashboard = DashboardTab(self.client)
         self.hardware = HardwareTab(self.client)
         self.artifacts = ArtifactTab(os.path.expanduser("~/.aegis_lab/artifacts"))
@@ -435,6 +618,7 @@ class MainWindow(QMainWindow):
         self.chat = ChatView()
         self.diff_view = DiffViewTab()
 
+        self.tabs.addTab(self.systems, "Systems")
         self.tabs.addTab(self.dashboard, "Dashboard")
         self.tabs.addTab(self.hardware, "Hardware")
         self.tabs.addTab(self.artifacts, "Artifacts")
@@ -449,12 +633,106 @@ class MainWindow(QMainWindow):
         self.sitrep_timer.timeout.connect(self.update_sitrep)
         self.sitrep_timer.start(2000)
 
+    def toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+
+    def switch_to_tab(self, widget):
+        index = self.tabs.indexOf(widget)
+        if index >= 0:
+            self.tabs.setCurrentIndex(index)
+
+    def collect_system_snapshot(self):
+        discovery = HardwareDiscovery.discover()
+        jobs_response = self.client.request("list_jobs")
+        jobs = jobs_response if isinstance(jobs_response, list) else []
+        running_jobs = sum(1 for job in jobs if job.get("status") == "running")
+        total_jobs = len(jobs)
+        telemetry_metrics = self.telemetry.get_metrics()
+        thermal = self.thermal_guardian.get_status()
+        artifact_root = os.path.expanduser("~/.aegis_lab/artifacts")
+        artifact_count = 0
+
+        if os.path.exists(artifact_root):
+            for root, _, files in os.walk(artifact_root):
+                artifact_count += sum(1 for file in files if len(file) == 64)
+
+        orchestrator_ok = not isinstance(jobs_response, dict) or "error" not in jobs_response
+        hardware_parts = []
+        if discovery["cpu_avx512"]:
+            hardware_parts.append("AVX-512")
+        if discovery["cpu_amx"]:
+            hardware_parts.append("AMX")
+        if discovery["igpu_present"]:
+            hardware_parts.append(f"iGPU {discovery['igpu_type']}")
+        if discovery["npu_present"]:
+            hardware_parts.append(f"NPU {discovery['npu_type']}")
+        if discovery["cuda_compat"]:
+            hardware_parts.append("CUDA-compat bridge")
+        if not hardware_parts:
+            hardware_parts.append("CPU-only fallback")
+
+        telemetry_summary = f"{len(telemetry_metrics)} telemetry device(s) online" if telemetry_metrics else "Telemetry offline"
+        headline = (
+            f"{running_jobs} running job(s), thermal {thermal['level'].lower()}, "
+            f"{telemetry_summary}, {len(hardware_parts)} linked acceleration path(s)."
+        )
+
+        return {
+            "headline": headline,
+            "systems": {
+                "orchestrator": {
+                    "summary": (
+                        f"{total_jobs} tracked job(s), {running_jobs} actively running. "
+                        f"{'IPC responding.' if orchestrator_ok else 'IPC unavailable.'}"
+                    ),
+                    "status": "Online" if orchestrator_ok else "Offline",
+                    "accent": "#34d399" if orchestrator_ok else "#f87171",
+                },
+                "hardware": {
+                    "summary": f"{', '.join(hardware_parts)}. Thermal {thermal['level']} at {thermal['temperature']:.1f}C.",
+                    "status": "Accelerated" if discovery["accel_available"] else "Fallback",
+                    "accent": "#7dd3fc" if discovery["accel_available"] else "#fbbf24",
+                },
+                "artifacts": {
+                    "summary": f"{artifact_count} stored artifact blob(s) under {artifact_root}.",
+                    "status": "Mounted" if os.path.exists(artifact_root) else "Missing",
+                    "accent": "#c084fc" if os.path.exists(artifact_root) else "#f87171",
+                },
+                "leaderboard": {
+                    "summary": "Ranking view wired to orchestrator leaderboard RPC for integrity and efficiency metrics.",
+                    "status": "Ready",
+                    "accent": "#fbbf24",
+                },
+                "chat": {
+                    "summary": "Interrogation panel linked to operator chat history and atom context sidebar.",
+                    "status": "Interactive",
+                    "accent": "#38bdf8",
+                },
+                "diff": {
+                    "summary": "Side-by-side before/after review surface available for ablation comparisons.",
+                    "status": "Review",
+                    "accent": "#fb7185",
+                },
+            },
+        }
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_F11:
+            self.toggle_fullscreen()
+        else:
+            super().keyPressEvent(event)
+
     def update_sitrep(self):
         # Active Jobs
         resp = self.client.request("list_jobs")
         if isinstance(resp, list):
             active_count = sum(1 for j in resp if j["status"] == "running")
             self.jobs_sitrep.setText(f"Active Jobs: {active_count}")
+        else:
+            self.jobs_sitrep.setText("Active Jobs: unavailable")
         
         # Thermal
         status = self.thermal_guardian.get_status()
@@ -466,18 +744,24 @@ class MainWindow(QMainWindow):
         else:
             self.thermal_sitrep.setStyleSheet("color: #d29922; font-weight: bold;")
 
-        # NPU Availability
+        # Acceleration Availability
+        discovery = HardwareDiscovery.discover()
         metrics = self.telemetry.get_metrics()
-        # On MTL-P, device 0 is usually iGPU, device 1 is NPU
-        if len(metrics) > 1:
-            self.npu_sitrep.setText("NPU: ACTIVE")
-            self.npu_sitrep.setStyleSheet("color: #58a6ff; font-weight: bold;")
-        elif len(metrics) > 0:
-             self.npu_sitrep.setText("NPU: NOT DETECTED")
-             self.npu_sitrep.setStyleSheet("color: #8b949e; font-weight: bold;")
+        if discovery["npu_present"] and len(metrics) > 1:
+            self.npu_sitrep.setText("Acceleration: NPU ACTIVE")
+            self.npu_sitrep.setStyleSheet("color: #7dd3fc; font-weight: bold;")
+        elif discovery["igpu_present"] or discovery["cuda_compat"]:
+            self.npu_sitrep.setText("Acceleration: GPU LINKED")
+            self.npu_sitrep.setStyleSheet("color: #7dd3fc; font-weight: bold;")
+        elif discovery["accel_available"]:
+            self.npu_sitrep.setText("Acceleration: PARTIAL")
+            self.npu_sitrep.setStyleSheet("color: #fbbf24; font-weight: bold;")
         else:
-            self.npu_sitrep.setText("NPU: NO TELEMETRY")
-            self.npu_sitrep.setStyleSheet("color: #8b949e; font-weight: bold;")
+            self.npu_sitrep.setText("Acceleration: CPU FALLBACK")
+            self.npu_sitrep.setStyleSheet("color: #94a3b8; font-weight: bold;")
+
+        self.status_label.setText(time.strftime("LAST REFRESH %H:%M:%S"))
+        self.systems.refresh_cards()
 
     def handle_chat(self, text):
         # In a real impl, this would call the RAG engine via IPC

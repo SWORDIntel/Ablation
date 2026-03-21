@@ -59,6 +59,12 @@ class SchedulerEngine:
             logger.error("THERMAL CRITICAL: Suspending all compute operations.")
             return []
 
+        # DYNAMIC ACCELERATION CHECK: 
+        # If the discovery layer flagged accelerators as non-functional/unsupported
+        if not self.hw.get("accel_available", True):
+            logger.info("No functional hardware accelerators detected. Using optimized CPU path.")
+            return ["CPU_AVX2"] if self.hw.get("cpu_vnni") or self.hw.get("cpu_avx512") else ["CPU"]
+
         # MTL-P Optimization: Prefer NPU/Xe-LPG for high throughput if available
         is_mtl_p = self.hw.get("igpu_type") == "xe-lpg" and self.hw.get("npu_present")
         
@@ -139,11 +145,17 @@ class SchedulerEngine:
                 devices.append("CPU")
             return devices
 
-        # 5. Opportunistic iGPU Placement (for compliance or speed)
+        # 3. Opportunistic iGPU Placement (for compliance or speed)
         if stage_name in self.IGPU_ELIGIBLE_STAGES:
+            # Prefer Virtual CUDA if ZLUDA is present for enhanced performance
+            if self.hw.get("cuda_compat") and self.hw.get("igpu_present"):
+                devices.append("CUDA") # Routes to ZLUDA-wrapped iGPU
+                return devices
+
             if runtime_profile.get("igpu_required", False) and self.hw.get("igpu_present"):
                 devices.append("iGPU")
                 return devices
+
 
         # 6. Default execution (fallback to best available CPU)
         if self.hw.get("cpu_amx"):

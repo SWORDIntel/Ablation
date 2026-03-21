@@ -43,9 +43,9 @@ def main():
     
     # Train job
     train = subparsers.add_parser("train", help="Submit a full ablation training pipeline")
-    train.add_argument("--project", required=True, help="Project ID")
-    train.add_argument("--model", required=True, help="Path or ID of the source model")
-    train.add_argument("--target", required=True, help="Behavioral target atom (e.g., 'refusal')")
+    train.add_argument("--project", default="Qwen-Mission-Alpha", help="Project ID")
+    train.add_argument("--model", default="models/qwen2.5.gguf", help="Path or ID of the source model")
+    train.add_argument("--target", default="refusal", help="Behavioral target atom")
     train.add_argument("--device", choices=["cpu", "igpu", "npu", "auto"], default="auto", help="Preferred compute device")
     train.add_argument("--url", default="tcp://localhost:5555", help="Orchestrator URL")
     

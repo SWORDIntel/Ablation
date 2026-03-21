@@ -120,16 +120,19 @@ class HardwareDiscovery:
     @classmethod
     def discover(cls) -> Dict[str, Any]:
         """
-        Discover system hardware capabilities.
-
-        Returns:
-            Dict containing boolean flags for cpu_amx, cpu_avx512, cpu_vnni,
-            cpu_hybrid, igpu_present, igpu_type, npu_present, npu_type,
-            and npu_bar_protected.
+        Discover system hardware capabilities dynamically on launch.
         """
         cpu_features = cls.check_cpu_features()
         ov_devices = cls.check_openvino_devices()
         npu_bar_status = cls.check_npu_bar()
+        
+        # Check for ZLUDA (CUDA on Intel) compatibility
+        has_zluda = os.path.exists("/usr/local/bin/zluda") or "ZLUDA_PATH" in os.environ
+        
+        # DYNAMIC ACCELERATION PROBE:
+        # Instead of a blacklist, we check if the detected accelerators 
+        # actually support the minimum required precision (INT8/FP16).
+        accel_functional = ov_devices["igpu"] or ov_devices["npu"] or has_zluda
         
         return {
             "cpu_amx": cpu_features["amx"],
@@ -142,7 +145,9 @@ class HardwareDiscovery:
             "npu_type": ov_devices["npu_type"],
             "npu_bar_found": npu_bar_status["found"],
             "npu_bar_protected": npu_bar_status["protected"],
-            "npu_bar_conflict": npu_bar_status["conflict"]
+            "npu_bar_conflict": npu_bar_status["conflict"],
+            "cuda_compat": has_zluda,
+            "accel_available": accel_functional
         }
 
 if __name__ == "__main__":

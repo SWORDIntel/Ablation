@@ -9,7 +9,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
 def main():
     parser = argparse.ArgumentParser(description="AEGIS-LAB Unified Launcher")
-    parser.add_argument("command", choices=["orchestrator", "worker", "gui", "api", "submit", "train", "list", "status"], help="Command to run")
+    parser.add_argument("command", choices=["orchestrator", "worker", "gui", "api", "submit", "train", "mission", "list", "status"], help="Command to run")
     parser.add_argument("--port", type=int, default=5555, help="Orchestrator port")
     parser.add_argument("--api-port", type=int, default=8000, help="REST API port")
     parser.add_argument("--url", default="tcp://localhost:5555", help="Orchestrator URL")
@@ -55,6 +55,10 @@ def main():
         cmd = [sys.executable, "src/aegis_lab/cli/main.py", "train", 
                "--project", args.project, "--model", args.model, "--target", args.target, 
                "--device", args.device, "--url", args.url]
+    elif args.command == "mission":
+        print("🚀 Launching Automated Qwen Ablation Mission...")
+        # Use defaults from CLI parser (Qwen path and refusal target)
+        cmd = [sys.executable, "src/aegis_lab/cli/main.py", "train"]
     elif args.command == "list":
         cmd = [sys.executable, "src/aegis_lab/cli/main.py", "list", "--url", args.url]
     elif args.command == "status":
