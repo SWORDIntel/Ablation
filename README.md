@@ -160,6 +160,12 @@ For a fully automated "Qwen" specific mission with pre-set targets:
 python3 aegis.py mission
 ```
 
+#### **Hardware-Aware Launch (Recommended)**
+Use the unified launch script to ensure all hardware-specific optimizations (AVX2 fallback, VPU detection) are active:
+```bash
+./run_mission.sh --model models/qwen2.5.gguf --target refusal
+```
+
 ### 3. Viewing Progress
 There are three ways to monitor your ablation missions:
 

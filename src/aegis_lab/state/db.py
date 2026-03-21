@@ -147,6 +147,7 @@ class StateDatabase:
 class AegisState:
     def __init__(self, storage_root: str, lib_path: str):
         self.db = StateDatabase(storage_root, lib_path)
+        self.qihse = self.db.qihse
         
     # --- Jobs ---
     def create_job(self, job_id: str, project_id: str, job_type: str, priority: int = 50) -> Dict[str, Any]:

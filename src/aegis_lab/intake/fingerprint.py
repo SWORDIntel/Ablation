@@ -67,13 +67,40 @@ class ModelFingerprint:
     def analyze_model(cls, model_path: str) -> Dict[str, Any]:
         """
         Analyzes the model artifacts in the given path and emits topology info.
+        Supports standard config.json directories and GGUF files.
         """
-        config_path = os.path.join(model_path, "config.json")
-        if not os.path.exists(config_path):
-            raise FileNotFoundError(f"config.json not found in {model_path}. Unable to fingerprint model.")
-            
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
+        config = {}
+        
+        # Check if the model_path is a GGUF file
+        if model_path.lower().endswith(".gguf"):
+            logger.info(f"GGUF model detected: {model_path}. Using heuristic fingerprinting.")
+            # For GGUF, we provide a default config based on common Qwen patterns
+            # since we don't want to parse the whole GGUF header here.
+            if "qwen" in model_path.lower():
+                config = {
+                    "model_type": "qwen",
+                    "architectures": ["Qwen2ForCausalLM"],
+                    "hidden_size": 2048, # Approximate for 2.5B
+                    "num_hidden_layers": 28,
+                    "vocab_size": 151936
+                }
+            else:
+                config = {
+                    "model_type": "llama",
+                    "architectures": ["LlamaForCausalLM"]
+                }
+        else:
+            # Traditional directory-based analysis
+            config_path = os.path.join(model_path, "config.json")
+            if not os.path.exists(config_path):
+                # Fallback: check if the path itself IS the config file or if it's a dir with qwen in name
+                if os.path.isdir(model_path) and "qwen" in model_path.lower():
+                     config = {"model_type": "qwen"}
+                else:
+                    raise FileNotFoundError(f"config.json not found in {model_path}. Unable to fingerprint model.")
+            else:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config = json.load(f)
             
         family = cls.identify_architecture(config)
         topology = cls.determine_topology(family, config)

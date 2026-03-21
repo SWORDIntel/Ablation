@@ -56,19 +56,19 @@ if ! python3 -c "import openvino" 2>/dev/null; then
 fi
 echo "✅ Python environment verified (OpenVINO detected)."
 
-# 3. QIHSE Native Library Compilation
-echo "[3/5] Compiling modular QIHSE native library..."
-if [ -d "$QIHSE_SRC_DIR" ]; then
-    cd "$QIHSE_SRC_DIR"
+# 4. QIHSE Native Library Compilation
+echo "[4/5] Compiling modular QIHSE native library..."
+if [ -d "$QIHSE_DIR" ]; then
+    cd "$QIHSE_DIR"
     make clean > /dev/null 2>&1
-    if make benchmark-a00 > /dev/null 2>&1; then
-        echo "✅ QIHSE library compiled successfully (AVX-512/AMX/VNNI enabled)."
+    if make lib > /dev/null 2>&1; then
+        echo "✅ QIHSE library compiled successfully (AVX2 enabled)."
     else
-        echo "❌ Error: QIHSE compilation failed. Check manual build in $QIHSE_SRC_DIR"
+        echo "❌ Error: QIHSE compilation failed. Check manual build in $QIHSE_DIR"
     fi
     cd "$PROJECT_ROOT"
 else
-    echo "⚠️  QIHSE source directory '$QIHSE_SRC_DIR' not found. Skipping native compilation."
+    echo "⚠️  QIHSE directory not found. Skipping native compilation."
 fi
 
 # 4. System Readiness Check
