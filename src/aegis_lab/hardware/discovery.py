@@ -2,19 +2,22 @@ import platform
 import os
 import subprocess
 import logging
-from typing import Dict, Any
+import time
+import numpy as np
+from typing import Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
 class HardwareDiscovery:
     """
-    Discovers hardware capabilities including CPU features (AMX/AVX512),
+    Discovers hardware capabilities including CPU features (AMX/AVX512/AVX2),
     iGPU presence, and NPU availability via OpenVINO or system queries.
+    Performs memory bandwidth benchmarking and hardware tier classification.
     """
 
     @staticmethod
     def check_cpu_features() -> Dict[str, bool]:
-        features = {"avx512": False, "amx": False, "avx_vnni": False, "hybrid": False}
+        features = {"avx512": False, "amx": False, "avx_vnni": False, "avx2": False, "hybrid": False}
         if platform.system() == "Linux":
             try:
                 with open("/proc/cpuinfo", "r") as f:
@@ -28,6 +31,9 @@ class HardwareDiscovery:
                     # Check for AVX-VNNI (AVX2-based VNNI)
                     if "avx_vnni" in content or "avx512_vnni" in content:
                         features["avx_vnni"] = True
+                    # Check for AVX2
+                    if "avx2" in content:
+                        features["avx2"] = True
                 
                 # Check for hybrid architecture (P/E cores)
                 cpu_dir = "/sys/devices/system/cpu"
@@ -43,14 +49,37 @@ class HardwareDiscovery:
                     
                     if len(set(core_types)) > 1:
                         features["hybrid"] = True
-                    elif not core_types:
-                        # Fallback for older kernels or non-sysfs detection
-                        # Check if we have different L3 cache sharing or different max frequencies
-                        pass
 
             except Exception as e:
                 logger.warning(f"Failed to read CPU topology: {e}")
         return features
+
+    @staticmethod
+    def check_memory_bandwidth() -> float:
+        """
+        Performs a rapid memory-bandwidth benchmark (Read+Write).
+        Returns estimated GB/s.
+        """
+        try:
+            size_mb = 128
+            data = np.random.bytes(size_mb * 1024 * 1024)
+            arr = np.frombuffer(data, dtype=np.uint8).copy()
+            
+            start_time = time.perf_counter()
+            # Perform a simple copy-like operation
+            arr2 = arr + 1
+            # Perform some sum for read throughput
+            _ = np.sum(arr2)
+            end_time = time.perf_counter()
+            
+            duration = end_time - start_time
+            # (Read + Write + Read) = 3 * size_mb
+            total_gb = (3.0 * size_mb) / 1024.0
+            gb_per_sec = total_gb / duration
+            return gb_per_sec
+        except Exception as e:
+            logger.warning(f"Memory benchmark failed: {e}")
+            return 0.0
 
     @staticmethod
     def check_openvino_devices() -> Dict[str, Any]:
@@ -104,8 +133,6 @@ class HardwareDiscovery:
                             
                             if vid == "03e7" and pid == "2485":
                                 devices["vpu"] = True
-                                # If OpenVINO didn't find them or we want precise count from USB
-                                # We'll avoid double counting if OpenVINO already populated vpu_details
                                 if not any(d in dev for dev in devices["vpu_details"]):
                                     devices["vpu_count"] += 1
                                     devices["vpu_details"].append(f"USB_{d}")
@@ -113,6 +140,36 @@ class HardwareDiscovery:
                 logger.debug(f"Failed to scan USB devices: {e}")
 
         return devices
+
+    @staticmethod
+    def check_gpu_blacklist() -> Dict[str, Any]:
+        """
+        Blacklists Fermi-based NVIDIA GPUs (GTX 560 Ti) if modern compute kernels are required.
+        """
+        blacklist = {"blacklisted_gpus_found": False, "reasons": []}
+        if platform.system() == "Linux":
+            try:
+                # 10de:1200 is GTX 560 Ti
+                lspci_output = subprocess.check_output(["lspci", "-nn"], text=True).lower()
+                if "10de:1200" in lspci_output or "gtx 560 ti" in lspci_output:
+                    blacklist["blacklisted_gpus_found"] = True
+                    blacklist["reasons"].append("Fermi-based NVIDIA GPU (GTX 560 Ti) detected. Blacklisted for modern kernels.")
+            except Exception:
+                pass
+        return blacklist
+
+    @staticmethod
+    def get_hardware_tier(cpu_features: Dict[str, bool], ov_devices: Dict[str, Any]) -> str:
+        """
+        Classifies the system into a 'Hardware Tier'.
+        """
+        if cpu_features["amx"] or (cpu_features["avx512"] and ov_devices["npu"]):
+            return "HIGH_PERF_SERVER"
+        elif ov_devices["igpu_type"] == "xe-lpg" or ov_devices["npu"]:
+            return "MODERN_MTL"
+        elif cpu_features["avx2"]:
+            return "LEGACY_AVX2"
+        return "GENERIC"
 
     @staticmethod
     def check_npu_bar() -> Dict[str, Any]:
@@ -152,6 +209,8 @@ class HardwareDiscovery:
         cpu_features = cls.check_cpu_features()
         ov_devices = cls.check_openvino_devices()
         npu_bar_status = cls.check_npu_bar()
+        mem_bandwidth = cls.check_memory_bandwidth()
+        gpu_blacklist = cls.check_gpu_blacklist()
         
         # Check for ZLUDA (CUDA on Intel) compatibility
         has_zluda = os.path.exists("/usr/local/bin/zluda") or "ZLUDA_PATH" in os.environ
@@ -161,10 +220,18 @@ class HardwareDiscovery:
         # actually support the minimum required precision (INT8/FP16).
         accel_functional = ov_devices["igpu"] or ov_devices["npu"] or ov_devices["vpu"] or has_zluda
         
+        # Blacklist logic: If Fermi GPU found, we explicitly disable CUDA compat for it
+        if gpu_blacklist["blacklisted_gpus_found"]:
+            has_zluda = False
+            accel_functional = ov_devices["igpu"] or ov_devices["npu"] or ov_devices["vpu"]
+
+        hardware_tier = cls.get_hardware_tier(cpu_features, ov_devices)
+        
         return {
             "cpu_amx": cpu_features["amx"],
             "cpu_avx512": cpu_features["avx512"],
             "cpu_vnni": cpu_features["avx_vnni"],
+            "cpu_avx2": cpu_features["avx2"],
             "cpu_hybrid": cpu_features["hybrid"],
             "igpu_present": ov_devices["igpu"],
             "igpu_type": ov_devices["igpu_type"],
@@ -177,7 +244,11 @@ class HardwareDiscovery:
             "npu_bar_protected": npu_bar_status["protected"],
             "npu_bar_conflict": npu_bar_status["conflict"],
             "cuda_compat": has_zluda,
-            "accel_available": accel_functional
+            "accel_available": accel_functional,
+            "mem_bandwidth_gbs": mem_bandwidth,
+            "hardware_tier": hardware_tier,
+            "gpu_blacklisted": gpu_blacklist["blacklisted_gpus_found"],
+            "blacklist_reasons": gpu_blacklist["reasons"]
         }
 
     @classmethod
@@ -187,17 +258,23 @@ class HardwareDiscovery:
         """
         caps = cls.discover()
         print("\n--- AEGIS-LAB Hardware SITREP ---")
+        print(f"  Hardware Tier: {caps['hardware_tier']}")
         print(f"  CPU [AMX]:    {'✅ Supported' if caps['cpu_amx'] else '❌ Not Detected'}")
         print(f"  CPU [AVX512]: {'✅ Supported' if caps['cpu_avx512'] else '❌ Not Detected'}")
+        print(f"  CPU [AVX2]:   {'✅ Supported' if caps['cpu_avx2'] else '❌ Not Detected'}")
         print(f"  CPU [VNNI]:   {'✅ Supported' if caps['cpu_vnni'] else '❌ Not Detected'}")
         print(f"  CPU [Hybrid]: {'✅ Detect' if caps['cpu_hybrid'] else 'Standard'}")
+        print(f"  Memory BW:    {caps['mem_bandwidth_gbs']:.2f} GB/s")
         print(f"  iGPU Presence: {'✅ Detected' if caps['igpu_present'] else '❌ Not Detected'} ({caps['igpu_type']})")
         print(f"  NPU Presence:  {'✅ Detected' if caps['npu_present'] else '❌ Not Detected'} ({caps['npu_type']})")
         print(f"  VPU Presence:  {'✅ Detected' if caps['vpu_present'] else '❌ Not Detected'} ({caps['vpu_count']} units)")
         print(f"  NPU BAR Protection: {'✅ SAFE' if caps['npu_bar_protected'] else '⚠️  CONFLICT' if caps['npu_bar_conflict'] else 'Unknown'}")
-        print(f"  CUDA Bridge:   {'✅ Enabled (ZLUDA)' if caps['cuda_compat'] else 'Standard Path'}")
+        if caps['gpu_blacklisted']:
+            print(f"  GPU Status:    ❌ BLACKLISTED: {', '.join(caps['blacklist_reasons'])}")
+        else:
+            print(f"  CUDA Bridge:   {'✅ Enabled (ZLUDA)' if caps['cuda_compat'] else 'Standard Path'}")
         print("---------------------------------\n")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    print("Hardware Discovery Output:", HardwareDiscovery.discover())
+    HardwareDiscovery.print_capabilities()

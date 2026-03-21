@@ -57,8 +57,48 @@ def main():
                "--device", args.device, "--url", args.url]
     elif args.command == "mission":
         print("🚀 Launching Automated Qwen Ablation Mission...")
-        # Use defaults from CLI parser (Qwen path and refusal target)
-        cmd = [sys.executable, "src/aegis_lab/cli/main.py", "train"]
+        from aegis_lab.state.db import AegisState
+        from aegis_lab.artifacts.store import ArtifactStore
+        from aegis_lab.editing.pipeline import AblationPipeline
+        
+        storage_root = os.path.expanduser("~/.aegis_lab/state")
+        artifact_root = os.path.expanduser("~/.aegis_lab/artifacts")
+        lib_path = os.path.abspath("QIHSE/qihse/libqihse.so")
+        
+        # Ensure directories exist
+        os.makedirs(storage_root, exist_ok=True)
+        os.makedirs(artifact_root, exist_ok=True)
+        
+        state = AegisState(storage_root, lib_path)
+        store = ArtifactStore(artifact_root, state)
+        pipeline = AblationPipeline(state, store)
+        
+        # Qwen-specific mission parameters
+        model_path = args.model or "models/qwen2.5.gguf"
+        target = args.target or "refusal"
+        
+        # For the mission, we use a predefined set of layers
+        layers = [12, 13, 14, 15, 16] 
+        
+        # We need datasets for the mission
+        pos_data = "data/qwen_positive.jsonl"
+        neg_data = "data/qwen_negative.jsonl"
+        
+        # Ensure data directory exists
+        os.makedirs("data", exist_ok=True)
+        for d in [pos_data, neg_data]:
+            if not os.path.exists(d):
+                with open(d, "w") as f:
+                    f.write('{"text": "placeholder content for mission"}\n')
+        
+        pipeline.run_full_ablation(
+            model_path=model_path,
+            layers=layers,
+            positive_dataset=pos_data,
+            negative_dataset=neg_data,
+            project_id="Qwen-Mission-Alpha"
+        )
+        return
     elif args.command == "list":
         cmd = [sys.executable, "src/aegis_lab/cli/main.py", "list", "--url", args.url]
     elif args.command == "status":

@@ -16,19 +16,20 @@ pub struct PinnedBuffer {
 impl PinnedBuffer {
     #[new]
     pub fn new(size: usize) -> PyResult<Self> {
+        let aligned_size = (size + 63) & !63;
         unsafe {
             let mut ptr: *mut libc::c_void = std::ptr::null_mut();
             // Align to 4KB (page size) for DMA efficiency
-            let res = libc::posix_memalign(&mut ptr, 4096, size);
+            let res = libc::posix_memalign(&mut ptr, 4096, aligned_size);
             if res != 0 {
                 return Err(PyErr::new::<pyo3::exceptions::PyMemoryError, _>(format!("posix_memalign failed: {}", res)));
             }
             // Pin the memory to prevent it from being swapped out (DMA requirement)
-            if libc::mlock(ptr, size) != 0 {
+            if libc::mlock(ptr, aligned_size) != 0 {
                 libc::free(ptr);
                 return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("mlock failed"));
             }
-            Ok(PinnedBuffer { ptr: ptr as *mut u8, size })
+            Ok(PinnedBuffer { ptr: ptr as *mut u8, size: aligned_size })
         }
     }
 

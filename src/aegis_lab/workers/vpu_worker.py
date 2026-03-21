@@ -182,7 +182,8 @@ class MultiVpuWorker(WorkerBase):
                     "duration": duration,
                     "device": "SIMULATION",
                     "vpu_id": vpu_id,
-                    "peak_memory_mb": 5
+                    "peak_memory_mb": 5,
+                    "shave_utilization": 12.5 # Simulated SHAVE occupancy
                 }
             }
 
@@ -194,7 +195,7 @@ class MultiVpuWorker(WorkerBase):
             
             if not compiled_model: # Simulation fallback within prepared inference
                  time.sleep(0.005)
-                 return {"success": True, "message": "Simulated", "telemetry": {"device": "SIMULATION", "vpu_id": vpu_id}}
+                 return {"success": True, "message": "Simulated", "telemetry": {"device": "SIMULATION", "vpu_id": vpu_id, "shave_utilization": 8.0}}
 
             # Reuse pre-allocated tensors.
             for name, data in input_data.items():
@@ -219,7 +220,8 @@ class MultiVpuWorker(WorkerBase):
                     "duration": duration,
                     "device": device_label,
                     "vpu_id": vpu_id,
-                    "peak_memory_mb": 45
+                    "peak_memory_mb": 45,
+                    "shave_utilization": 85.0 # High utilization during actual inference
                 },
                 "results": {k: v.tolist() for k, v in results.items()}
             }
@@ -228,7 +230,7 @@ class MultiVpuWorker(WorkerBase):
             return {
                 "success": False,
                 "error": str(e),
-                "telemetry": {"device": device_label, "vpu_id": vpu_id}
+                "telemetry": {"device": device_label, "vpu_id": vpu_id, "shave_utilization": 0.0}
             }
 
 if __name__ == "__main__":

@@ -58,6 +58,41 @@ class SchedulerEngine:
         """
         self.hw = hardware_discovery
         self.thermal = thermal_status or {"safe_to_compute": True, "throttling_recommended": False}
+        self.tier = self.hw.get("hardware_tier", "GENERIC")
+
+    def get_sharding_config(self) -> Dict[str, Any]:
+        """
+        Returns dynamic work-sharding configuration based on hardware tier.
+        """
+        config = {
+            "search_resolution": 1.0,
+            "vpu_offload_ratio": 0.2,
+            "batch_size": 32,
+            "parallel_tasks": 4
+        }
+        
+        if self.tier == "HIGH_PERF_SERVER":
+            config.update({
+                "search_resolution": 2.0, # High precision search
+                "batch_size": 128,
+                "parallel_tasks": 16
+            })
+        elif self.tier == "MODERN_MTL":
+            config.update({
+                "search_resolution": 1.5,
+                "batch_size": 64,
+                "parallel_tasks": 8,
+                "vpu_offload_ratio": 0.4 # Leverage NPU/VPU more
+            })
+        elif self.tier == "LEGACY_AVX2":
+            config.update({
+                "search_resolution": 0.5, # Reduce resolution to maintain latency
+                "vpu_offload_ratio": 0.8, # Aggressively offload to VPU
+                "batch_size": 16,
+                "parallel_tasks": 2
+            })
+            
+        return config
 
     @classmethod
     def report_failure(cls, worker_id: str):
@@ -191,6 +226,10 @@ class SchedulerEngine:
 
         # 2. MTL-P Specific: Low-latency activation capture (Prefer P-cores)
         if stage_name in self.ACTIVATION_CAPTURE_STAGES:
+            if self.tier == "LEGACY_AVX2" and self.hw.get("vpu_present"):
+                # Increase VPU offloading for probing on legacy hardware
+                devices.append("VPU")
+                
             if self.hw.get("cpu_hybrid"):
                 devices.append("CPU_P_CORE") # Worker will set affinity to P-cores
             if self.hw.get("cpu_amx"):
@@ -231,6 +270,10 @@ class SchedulerEngine:
 
         # 3. Opportunistic iGPU Placement (for compliance or speed)
         if stage_name in self.IGPU_ELIGIBLE_STAGES:
+            # On LEGACY_AVX2, prioritize VPU for probing
+            if self.tier == "LEGACY_AVX2" and stage_name == "probe" and self.hw.get("vpu_present"):
+                return ["VPU", "CPU"]
+
             # Prefer Virtual CUDA if ZLUDA is present for enhanced performance
             if self.hw.get("cuda_compat") and self.hw.get("igpu_present"):
                 devices.append("CUDA") # Routes to ZLUDA-wrapped iGPU
