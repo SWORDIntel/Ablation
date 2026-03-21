@@ -89,5 +89,46 @@ class TestSchedulerFailSafe(unittest.TestCase):
         # Should pick CPU_VNNI
         self.assertIn("CPU_VNNI", placement)
 
+    def test_vpu_sentinel_prioritization(self):
+        # Hardware with both NPU and VPU
+        hw_caps = {
+            "cpu_amx": True,
+            "igpu_present": True,
+            "npu_present": True,
+            "vpu_present": True,
+            "accel_available": True
+        }
+        
+        scheduler = SchedulerEngine(hw_caps)
+        
+        # sentinel_stage0_guard should prefer VPU over NPU
+        placement = scheduler.determine_placement("sentinel_stage0_guard", {})
+        self.assertEqual(placement, ["VPU", "NPU"])
+        
+        # sentinel_stage1_semantic should prefer NPU (no VPU override)
+        placement = scheduler.determine_placement("sentinel_stage1_semantic", {})
+        self.assertEqual(placement, ["NPU"])
+
+    def test_vpu_only_failsafe(self):
+        # Mock hardware with NO CPU features, NO iGPU, NO NPU, but WITH VPU
+        hw_caps = {
+            "cpu_amx": False,
+            "cpu_avx512": False,
+            "cpu_vnni": False,
+            "igpu_present": False,
+            "npu_present": False,
+            "vpu_present": True,
+            "accel_available": True
+        }
+        
+        # Force throttling to trigger fail-safe
+        thermal_status = {"safe_to_compute": True, "throttling_recommended": True}
+        scheduler = SchedulerEngine(hw_caps, thermal_status)
+        
+        placement = scheduler.determine_placement("atom_clean", {})
+        
+        # Verify VPU is prioritized in fail-safe when NPU is absent
+        self.assertEqual(placement, ["VPU"])
+
 if __name__ == "__main__":
     unittest.main()

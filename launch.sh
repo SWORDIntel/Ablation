@@ -6,6 +6,9 @@
 PROJECT_ROOT=$(pwd)
 export PYTHONPATH=$PYTHONPATH:$PROJECT_ROOT/src
 
+# Run Bootstrap (Hardware activation, build, etc.)
+./bootstrap.sh
+
 echo "============================================================"
 echo "🚀 AEGIS-LAB: Surgical Ablation Suite (MTL-P Optimized)"
 echo "============================================================"

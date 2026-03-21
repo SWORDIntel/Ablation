@@ -18,6 +18,41 @@ from aegis_lab.hardware.discovery import HardwareDiscovery
 from aegis_lab.hardware.telemetry import LevelZeroTelemetry
 from aegis_lab.gui.widgets.graph_view import GraphView
 from aegis_lab.gui.widgets.chat_view import ChatView
+from aegis_lab.gui.widgets.ablation_map_view import AblationMapView
+
+class RealTimeSubscriber(QThread):
+    """
+    Subscribes to high-level events (e.g. atom updates) from the orchestrator.
+    """
+    atom_received = pyqtSignal(dict)
+    
+    def __init__(self, port=5557):
+        super().__init__()
+        self.port = port
+        self.running = True
+        
+    def run(self):
+        context = zmq.Context()
+        socket = context.socket(zmq.SUB)
+        # Multiple subscribers can connect to one PUB bind
+        socket.connect(f"tcp://localhost:{self.port}")
+        socket.setsockopt_string(zmq.SUBSCRIBE, "atoms")
+        socket.setsockopt(zmq.RCVTIMEO, 1000)
+        
+        while self.running:
+            try:
+                topic = socket.recv_string()
+                data = socket.recv_json()
+                if topic == "atoms":
+                    self.atom_received.emit(data)
+            except zmq.Again:
+                continue
+            except Exception as e:
+                # Use print or a logger if available
+                print(f"Subscriber error: {e}")
+                
+    def stop(self):
+        self.running = False
 
 DARK_STYLESHEET = """
 QMainWindow, QWidget {
@@ -163,7 +198,21 @@ class DashboardTab(QWidget):
         self.stage_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.stage_table.setAlternatingRowColors(True)
         self.stage_layout.addWidget(self.stage_table)
-        self.splitter.addWidget(self.stage_widget)
+        
+        # Add 3D Ablation Map
+        self.map_widget = QWidget()
+        self.map_layout = QVBoxLayout(self.map_widget)
+        self.map_label = QLabel("3D Ablation Map (Atoms)")
+        self.map_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #a5d6ff;")
+        self.map_layout.addWidget(self.map_label)
+        self.ablation_map = AblationMapView()
+        self.map_layout.addWidget(self.ablation_map)
+
+        # Horizontal splitter for Stages and Map
+        self.lower_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.lower_splitter.addWidget(self.stage_widget)
+        self.lower_splitter.addWidget(self.map_widget)
+        self.splitter.addWidget(self.lower_splitter)
         
         self.refresh_btn = QPushButton("Refresh All")
         self.refresh_btn.clicked.connect(self.refresh_jobs)
@@ -241,12 +290,26 @@ class HardwareTab(QWidget):
         self.tune_btn.clicked.connect(self.trigger_uma_tune)
         self.header_layout.addWidget(self.tune_btn)
         
+        # Add VPU Status Fetch Button
+        self.fetch_vpu_btn = QPushButton("Fetch VPU Status")
+        self.fetch_vpu_btn.clicked.connect(self.fetch_vpu_status)
+        self.header_layout.addWidget(self.fetch_vpu_btn)
+
         self.layout.addLayout(self.header_layout)
         
         # Telemetry Status
         self.telemetry_label = QLabel("GPU/NPU Telemetry: Initializing...")
         self.telemetry_label.setStyleSheet("font-size: 14px; color: #8b949e;")
         self.layout.addWidget(self.telemetry_label)
+        
+        # VPU Telemetry Placeholders
+        self.vpu_device_label = QLabel("VPU Device: N/A")
+        self.vpu_device_label.setStyleSheet("font-size: 13px; color: #8b949e;")
+        self.layout.addWidget(self.vpu_device_label)
+
+        self.vpu_memory_label = QLabel("VPU Peak Memory: N/A")
+        self.vpu_memory_label.setStyleSheet("font-size: 13px; color: #8b949e;")
+        self.layout.addWidget(self.vpu_memory_label)
         
         # Charts
         pg.setConfigOptions(antialias=True)
@@ -296,6 +359,31 @@ class HardwareTab(QWidget):
         else:
             self.telemetry_label.setText(f"SITREP: UMA Tune Failed: {resp.get('error', 'Unknown error')}")
             self.telemetry_label.setStyleSheet("font-size: 14px; color: #f85149;")
+
+    def fetch_vpu_status(self):
+        """
+        Fetches VPU status from the orchestrator and updates the UI labels.
+        This assumes an RPC endpoint 'get_worker_status' exists on the orchestrator
+        that can return VPU-specific telemetry.
+        """
+        resp = self.client.request("get_worker_status", worker_type="vpu")
+        
+        if resp.get("status") == "ok" and "data" in resp:
+            vpu_data = resp["data"]
+            device = vpu_data.get("device", "N/A")
+            peak_memory = vpu_data.get("peak_memory_mb", "N/A")
+            
+            self.vpu_device_label.setText(f"VPU Device: {device}")
+            self.vpu_memory_label.setText(f"VPU Peak Memory: {peak_memory} MB")
+            self.vpu_device_label.setStyleSheet("font-size: 13px; color: #58a6ff;")
+            self.vpu_memory_label.setStyleSheet("font-size: 13px; color: #58a6ff;")
+        else:
+            # Handle error case or no VPU found
+            error_msg = resp.get("error", "No VPU worker status found or orchestrator error.")
+            self.vpu_device_label.setText("VPU Device: N/A (Error)")
+            self.vpu_memory_label.setText(f"VPU Peak Memory: N/A ({error_msg})")
+            self.vpu_device_label.setStyleSheet("font-size: 13px; color: #f85149;")
+            self.vpu_memory_label.setStyleSheet("font-size: 13px; color: #f85149;")
 
     def update_stats(self):
         # CPU Usage
@@ -354,6 +442,10 @@ class HardwareTab(QWidget):
             self.thermal_label.setStyleSheet("font-size: 16px; color: #d29922;")
         else:
             self.thermal_label.setStyleSheet("font-size: 16px; color: #3fb950;")
+
+        # --- VPU Telemetry Update ---
+        # Attempt to fetch VPU status periodically.
+        self.fetch_vpu_status()
 
 class ArtifactTab(QWidget):
     def __init__(self, storage_root):

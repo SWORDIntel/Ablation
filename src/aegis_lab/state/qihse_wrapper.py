@@ -1,6 +1,7 @@
 import ctypes
 import os
 from enum import IntEnum
+from typing import List
 
 class QihseDataType(IntEnum):
     INT64 = 0

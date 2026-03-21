@@ -5,10 +5,13 @@ import uuid
 import logging
 import threading
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from aegis_lab.hardware.discovery import HardwareDiscovery
+from aegis_lab.workers.p2p import PeerStreamer
 
 logger = logging.getLogger(__name__)
+
+AEGIS_AUTH_TOKEN = "aegis-secret-token-2024"
 
 class ZmqLogHandler(logging.Handler):
     """
@@ -45,17 +48,48 @@ class WorkerBase(ABC):
     Handles IPC registration, heartbeats, and stage execution lifecycle.
     """
     
-    def __init__(self, orchestrator_url: str = "tcp://localhost:5555", worker_type: str = "generic", log_port: int = 5556):
+    def __init__(self, orchestrator_url: str = "tcp://localhost:5555", worker_type: str = "generic", log_port: int = 5556, auth_token: str = AEGIS_AUTH_TOKEN):
         self.worker_id = f"worker-{worker_type}-{uuid.uuid4().hex[:8]}"
         self.worker_type = worker_type
         self.orchestrator_url = orchestrator_url
         self.log_port = log_port
+        self.auth_token = auth_token
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
+        self.socket_lock = threading.Lock()
         self.running = False
         self.capabilities = HardwareDiscovery.discover()
         self.log_handler = None
+        self.p2p_streamer: Optional[PeerStreamer] = None
+        self.p2p_endpoint: Optional[str] = None
+        self.peer_connections: Dict[str, PeerStreamer] = {}
         
+    def start_p2p_server(self, mode: str = "push", bind_address: str = "tcp://0.0.0.0:*"):
+        """Starts this worker's P2P server to allow peers to connect/pull data."""
+        self.p2p_streamer = PeerStreamer(self.context, self.auth_token)
+        self.p2p_endpoint = self.p2p_streamer.start_sender(mode=mode, bind_address=bind_address)
+        logger.info(f"Worker {self.worker_id} started P2P server at {self.p2p_endpoint}")
+        return self.p2p_endpoint
+
+    def discover_peer(self, target_worker_id: str = None, target_worker_type: str = None) -> Optional[str]:
+        """Queries the orchestrator for a peer's P2P endpoint."""
+        response = self._send_command({
+            "type": "discover_peer",
+            "target_worker_id": target_worker_id,
+            "target_worker_type": target_worker_type
+        })
+        if response.get("status") == "ok":
+            return response.get("p2p_endpoint")
+        return None
+
+    def connect_to_peer(self, worker_id: str, endpoint: str, mode: str = "pull"):
+        """Connects to a peer's P2P server."""
+        streamer = PeerStreamer(self.context, self.auth_token)
+        streamer.start_receiver(mode=mode, connect_address=endpoint)
+        self.peer_connections[worker_id] = streamer
+        logger.info(f"Worker {self.worker_id} connected to peer {worker_id} at {endpoint}")
+        return streamer
+
     def connect(self):
         logger.info(f"Worker {self.worker_id} connecting to {self.orchestrator_url}")
         self.socket.connect(self.orchestrator_url)
@@ -77,25 +111,31 @@ class WorkerBase(ABC):
         except Exception as e:
             logger.error(f"Failed to setup ZMQ logging: {e}")
 
-        # Start heartbeat thread
-        self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
-        self._heartbeat_thread.start()
-        
         # Initial registration
         self._send_command({
             "type": "register",
             "worker_id": self.worker_id,
             "worker_type": self.worker_type,
-            "capabilities": self.capabilities
+            "capabilities": self.capabilities,
+            "p2p_endpoint": self.p2p_endpoint
         })
 
+        # Start heartbeat thread after registration
+        self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
+        self._heartbeat_thread.start()
+
     def _send_command(self, message: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            self.socket.send_json(message)
-            return self.socket.recv_json()
-        except Exception as e:
-            logger.error(f"Failed to send command to orchestrator: {e}")
-            return {"status": "error", "error": str(e)}
+        with self.socket_lock:
+            try:
+                # Inject auth token
+                if self.auth_token:
+                    message["auth_token"] = self.auth_token
+                    
+                self.socket.send_json(message)
+                return self.socket.recv_json()
+            except Exception as e:
+                logger.error(f"Failed to send command to orchestrator: {e}")
+                return {"status": "error", "error": str(e)}
 
     def _heartbeat_loop(self):
         while self.running:

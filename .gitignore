@@ -2,3 +2,9 @@ __pycache__/
 *.py[cod]
 
 models/
+model_cache/
+build/
+*.egg-info/
+.venv/
+.pytest_cache/
+*.log

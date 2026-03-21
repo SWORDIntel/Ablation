@@ -7,6 +7,8 @@ from aegis_lab.orchestrator.ipc import IPCServer, LogServer
 from aegis_lab.hardware.thermal import ThermalGuardian
 from aegis_lab.hardware.discovery import HardwareDiscovery
 from aegis_lab.scheduler.engine import SchedulerEngine
+from aegis_lab.hardware.telemetry import LevelZeroTelemetry
+from aegis_lab.orchestrator.optimizer import HardwareOptimizer
 
 from aegis_lab.evaluation.leaderboard import LeaderboardManager
 from aegis_lab.evaluation.elo_judge import EloJudge
@@ -20,8 +22,10 @@ from aegis_lab.verification.proofs import ZKAblationProof
 
 logger = logging.getLogger(__name__)
 
+AEGIS_AUTH_TOKEN = "aegis-secret-token-2024"
+
 class OrchestratorService:
-    def __init__(self, state: AegisState, ipc_port: int = 5555):
+    def __init__(self, state: AegisState, ipc_port: int = 5555, log_port: int = 5556):
         self.state = state
         self.thermal_guardian = ThermalGuardian()
         self.telemetry = LevelZeroTelemetry()
@@ -32,7 +36,7 @@ class OrchestratorService:
         self.leaderboard = LeaderboardManager(self.state)
         self.workers: Dict[str, Dict[str, Any]] = {} # worker_id -> info
 
-        self.ipc = IPCServer(port=ipc_port)
+        self.ipc = IPCServer(port=ipc_port, auth_token=AEGIS_AUTH_TOKEN)
 
         self.log_server = LogServer(port=log_port)
         
@@ -46,7 +50,8 @@ class OrchestratorService:
         self.ipc.register_handler("get_job_status", lambda msg: self.get_job_status(msg["job_id"]))
         self.ipc.register_handler("get_leaderboard", lambda msg: self.leaderboard.get_leaderboard())
         self.ipc.register_handler("optimize_uma", self._handle_optimize_uma)
-        
+        self.ipc.register_handler("discover_peer", self._handle_discover_peer)
+
     def start(self):
         self.ipc.start()
         self.log_server.start(self._handle_log)
@@ -57,6 +62,23 @@ class OrchestratorService:
         self.optimizer.stop()
         self.log_server.stop()
         self.ipc.stop()
+
+    def _handle_discover_peer(self, message: Dict[str, Any]) -> Dict[str, Any]:
+        """Returns the p2p_endpoint for a given worker_id or worker_type."""
+        target_id = message.get("target_worker_id")
+        target_type = message.get("target_worker_type")
+        
+        if target_id:
+            worker = self.workers.get(target_id)
+            if worker and worker.get("p2p_endpoint"):
+                return {"status": "ok", "p2p_endpoint": worker["p2p_endpoint"]}
+        elif target_type:
+            # Find first worker of this type that has a p2p_endpoint
+            for wid, info in self.workers.items():
+                if info["type"] == target_type and info.get("p2p_endpoint"):
+                    return {"status": "ok", "worker_id": wid, "p2p_endpoint": info["p2p_endpoint"]}
+        
+        return {"status": "error", "error": "Peer not found or no P2P endpoint available"}
 
     def _handle_optimize_uma(self, message: Dict[str, Any]) -> Dict[str, Any]:
         logger.info("Manual UMA optimization requested via SITREP.")
@@ -86,10 +108,11 @@ class OrchestratorService:
         self.workers[worker_id] = {
             "type": message["worker_type"],
             "capabilities": message["capabilities"],
+            "p2p_endpoint": message.get("p2p_endpoint"),
             "last_heartbeat": time.time(),
             "status": "ready"
         }
-        logger.info(f"Worker registered: {worker_id} ({message['worker_type']})")
+        logger.info(f"Worker registered: {worker_id} ({message['worker_type']}) at P2P={message.get('p2p_endpoint')}")
         return {"status": "ok"}
 
     def _handle_heartbeat(self, message: Dict[str, Any]) -> Dict[str, Any]:
@@ -119,9 +142,17 @@ class OrchestratorService:
                     # Use Scheduler to see if this worker is compatible
                     scheduler = SchedulerEngine(worker_info["capabilities"], thermal_status)
                     # We'd need the runtime profile, assuming empty for now
-                    placement = scheduler.determine_placement(stage["stage_name"], {})
+                    placement = scheduler.determine_placement(stage["stage_name"], {}, worker_id=worker_id)
                     
-                    worker_device = "NPU" if worker_info["type"] == "npu" else "iGPU" if worker_info["type"] == "igpu" else "CPU"
+                    worker_type = worker_info["type"]
+                    if worker_type == "npu":
+                        worker_device = "NPU"
+                    elif worker_type == "vpu":
+                        worker_device = "VPU"
+                    elif worker_type == "igpu":
+                        worker_device = "iGPU"
+                    else:
+                        worker_device = "CPU"
                     
                     if any(d.startswith(worker_device) for d in placement):
                         # Assign task!
@@ -152,6 +183,12 @@ class OrchestratorService:
 
         status = "succeeded" if result.get("success", True) else "failed"
         
+        # Update Scheduler stats for Fail-Fast
+        if status == "succeeded":
+            SchedulerEngine.report_success(worker_id)
+        else:
+            SchedulerEngine.report_failure(worker_id)
+
         # Automated Red-Team Auto-Eval (Idea 6)
         if stage_name == "adversarial_eval":
             vulnerability_score = result.get("vulnerability_score", 0.0)

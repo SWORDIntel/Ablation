@@ -54,7 +54,7 @@ class HardwareDiscovery:
 
     @staticmethod
     def check_openvino_devices() -> Dict[str, Any]:
-        devices = {"igpu": False, "npu": False, "igpu_type": "standard", "npu_type": "none"}
+        devices = {"igpu": False, "npu": False, "vpu": False, "igpu_type": "standard", "npu_type": "none"}
         try:
             from openvino.runtime import Core
             core = Core()
@@ -71,6 +71,8 @@ class HardwareDiscovery:
                 if "NPU" in dev:
                     devices["npu"] = True
                     devices["npu_type"] = "intel_ai_boost"
+                if "MYRIAD" in dev:
+                    devices["vpu"] = True
         except ImportError:
             logger.info("OpenVINO not installed. Checking lspci as fallback.")
             if platform.system() == "Linux":
@@ -79,6 +81,8 @@ class HardwareDiscovery:
                     if "npu" in output or "neural processing unit" in output or "7b40" in output: # 7b40 is MTL NPU
                         devices["npu"] = True
                         devices["npu_type"] = "intel_ai_boost"
+                    if "myriad" in output:
+                        devices["vpu"] = True
                     if "vga" in output and "intel" in output:
                         devices["igpu"] = True
                         if "arc" in output or "meteor lake" in output:
@@ -132,7 +136,7 @@ class HardwareDiscovery:
         # DYNAMIC ACCELERATION PROBE:
         # Instead of a blacklist, we check if the detected accelerators 
         # actually support the minimum required precision (INT8/FP16).
-        accel_functional = ov_devices["igpu"] or ov_devices["npu"] or has_zluda
+        accel_functional = ov_devices["igpu"] or ov_devices["npu"] or ov_devices["vpu"] or has_zluda
         
         return {
             "cpu_amx": cpu_features["amx"],
@@ -143,12 +147,31 @@ class HardwareDiscovery:
             "igpu_type": ov_devices["igpu_type"],
             "npu_present": ov_devices["npu"],
             "npu_type": ov_devices["npu_type"],
+            "vpu_present": ov_devices["vpu"],
             "npu_bar_found": npu_bar_status["found"],
             "npu_bar_protected": npu_bar_status["protected"],
             "npu_bar_conflict": npu_bar_status["conflict"],
             "cuda_compat": has_zluda,
             "accel_available": accel_functional
         }
+
+    @classmethod
+    def print_capabilities(cls):
+        """
+        Pretty-print the discovered hardware capabilities.
+        """
+        caps = cls.discover()
+        print("\n--- AEGIS-LAB Hardware SITREP ---")
+        print(f"  CPU [AMX]:    {'✅ Supported' if caps['cpu_amx'] else '❌ Not Detected'}")
+        print(f"  CPU [AVX512]: {'✅ Supported' if caps['cpu_avx512'] else '❌ Not Detected'}")
+        print(f"  CPU [VNNI]:   {'✅ Supported' if caps['cpu_vnni'] else '❌ Not Detected'}")
+        print(f"  CPU [Hybrid]: {'✅ Detect' if caps['cpu_hybrid'] else 'Standard'}")
+        print(f"  iGPU Presence: {'✅ Detected' if caps['igpu_present'] else '❌ Not Detected'} ({caps['igpu_type']})")
+        print(f"  NPU Presence:  {'✅ Detected' if caps['npu_present'] else '❌ Not Detected'} ({caps['npu_type']})")
+        print(f"  VPU Presence:  {'✅ Detected' if caps['vpu_present'] else '❌ Not Detected'}")
+        print(f"  NPU BAR Protection: {'✅ SAFE' if caps['npu_bar_protected'] else '⚠️  CONFLICT' if caps['npu_bar_conflict'] else 'Unknown'}")
+        print(f"  CUDA Bridge:   {'✅ Enabled (ZLUDA)' if caps['cuda_compat'] else 'Standard Path'}")
+        print("---------------------------------\n")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

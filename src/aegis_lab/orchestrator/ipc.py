@@ -12,8 +12,9 @@ class IPCServer:
     Manages communication with distributed workers.
     """
     
-    def __init__(self, port: int = 5555):
+    def __init__(self, port: int = 5555, auth_token: Optional[str] = None):
         self.port = port
+        self.auth_token = auth_token
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REP)
         self.socket.bind(f"tcp://*:{self.port}")
@@ -40,6 +41,14 @@ class IPCServer:
                 # Polling with timeout to allow checking self.running
                 if self.socket.poll(1000):
                     message = self.socket.recv_json()
+                    
+                    # Authentication Check
+                    if self.auth_token:
+                        if message.get("auth_token") != self.auth_token:
+                            logger.warning(f"Authentication failed for request: {message.get('type')}")
+                            self.socket.send_json({"status": "error", "error": "Authentication failed"})
+                            continue
+
                     msg_type = message.get("type")
                     
                     if msg_type in self._handlers:
@@ -94,3 +103,26 @@ class LogServer:
             except Exception as e:
                 if self.running:
                     logger.error(f"Log processing error: {e}")
+
+class EventPublisher:
+    """
+    ZeroMQ-based Event Publisher for the Orchestrator.
+    Publishes high-level events (atom updates, job progress) to subscribers (GUI).
+    """
+    def __init__(self, port: int = 5557):
+        self.port = port
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.PUB)
+        self.socket.bind(f"tcp://*:{self.port}")
+        logger.info(f"Event Publisher bound to port {self.port}")
+
+    def publish(self, topic: str, data: Dict[str, Any]):
+        try:
+            # We can use multipart messages [topic, json_data]
+            self.socket.send_string(topic, zmq.SNDMORE)
+            self.socket.send_json(data)
+        except Exception as e:
+            logger.error(f"Failed to publish event: {e}")
+
+    def stop(self):
+        self.socket.close()
