@@ -1,0 +1,17 @@
+[project]
+name = "aegis-lab"
+version = "0.1.0"
+description = "Crash-tolerant, hardware-aware model editing platform"
+requires-python = ">=3.9"
+dependencies = [
+    "pyyaml",
+    "uuid",
+    "pyzmq",
+]
+
+[project.scripts]
+aegis = "aegis_lab.cli.main:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

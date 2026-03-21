@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 2000" width="1600" height="2000">
+  <defs>
+    <style>
+      .title { font: bold 32px sans-serif; fill: #1a1a1a; }
+      .subtitle { font: 18px sans-serif; fill: #444; }
+      .label { font: 14px sans-serif; fill: #000; }
+      .small-label { font: 11px sans-serif; fill: #333; }
+      .addr-label { font: bold 13px monospace; fill: #1565c0; }
+      .critical { fill: #ff4444; stroke: #cc0000; }
+      .high { fill: #ff8844; stroke: #cc6600; }
+      .medium { fill: #ffcc44; stroke: #cc9900; }
+      .safe { fill: #88cc44; stroke: #669900; }
+      .reserved { fill: #e0e0e0; stroke: #9e9e9e; }
+      .system-ram { fill: #bbdefb; stroke: #1976d2; }
+      .mmio { fill: #ffccbc; stroke: #d84315; }
+      .conflict { fill: #ffebee; stroke: #c62828; stroke-width: 3; stroke-dasharray: 5,5; }
+    </style>
+  </defs>
+  
+  <!-- Title -->
+  <text x="800" y="40" class="title" text-anchor="middle" fill="#e0e0e0">Physical Memory Map — MTL-P A00</text>
+  <text x="800" y="70" class="subtitle" text-anchor="middle" fill="#90caf9">The "Lying" E820 Map — BIOS Misreports Critical MMIO Regions</text>
+  
+  <!-- Memory Map Visualization -->
+  <rect x="100" y="120" width="1400" height="1700" fill="#0d1117" stroke="#b0bec5" stroke-width="2" rx="5"/>
+  
+  <!-- High Memory (Above 4GB) -->
+  <text x="120" y="150" class="label" font-weight="bold">HIGH MEMORY (Above 4GB)</text>
+  
+  <!-- 0xC00000000 - 16GB Reserved -->
+  <rect x="120" y="170" width="1360" height="80" class="reserved" rx="5"/>
+  <text x="140" y="195" class="addr-label">0xC00000000</text>
+  <text x="140" y="215" class="label">16GB Reserved Region</text>
+  <text x="140" y="235" class="small-label">BIOS Report: Reserved | Actual: Unknown/Reserved</text>
+  <text x="1400" y="215" class="small-label" text-anchor="end">Size: 16GB</text>
+  
+  <!-- 0x5011000000 - 4MB MCM Control -->
+  <rect x="120" y="270" width="1360" height="100" class="critical" rx="5"/>
+  <text x="140" y="295" class="addr-label">0x5011000000</text>
+  <text x="140" y="315" class="label" font-weight="bold" fill="#0d1117">MCM Control Fabric (4MB)</text>
+  <text x="140" y="335" class="small-label" fill="#0d1117">BIOS Report: System RAM ☠ FATAL CONFLICT</text>
+  <text x="140" y="355" class="small-label" fill="#0d1117">Actual: MMIO Control Registers</text>
+  <text x="1400" y="315" class="small-label" text-anchor="end" fill="#0d1117">Size: 4MB</text>
+  
+  <!-- 0x5010000000 - 128MB MCM Fabric -->
+  <rect x="120" y="390" width="1360" height="120" class="critical" rx="5"/>
+  <text x="140" y="415" class="addr-label">0x5010000000</text>
+  <text x="140" y="435" class="label" font-weight="bold" fill="#0d1117">MCM Control Fabric (128MB)</text>
+  <text x="140" y="455" class="small-label" fill="#0d1117">BIOS Report: System RAM ☠ FATAL CONFLICT</text>
+  <text x="140" y="475" class="small-label" fill="#0d1117">Actual: Flex Fabric QWord Window</text>
+  <text x="140" y="495" class="small-label" fill="#0d1117">⚠ Kernel tries to use as RAM → Panic</text>
+  <text x="1400" y="435" class="small-label" text-anchor="end" fill="#0d1117">Size: 128MB</text>
+  
+  <!-- Low Memory Regions -->
+  <text x="120" y="540" class="label" font-weight="bold">LOW MEMORY (Below 4GB)</text>
+  
+  <!-- 0xFEDC0000 - MCHBAR -->
+  <rect x="120" y="560" width="1360" height="100" class="high" rx="5"/>
+  <text x="140" y="585" class="addr-label">0xFEDC0000</text>
+  <text x="140" y="605" class="label" font-weight="bold" fill="#0d1117">MCHBAR (Memory Controller Hub)</text>
+  <text x="140" y="625" class="small-label" fill="#0d1117">+0x5000: RAPL Power Registers (PTDP, PWRU, TRAT)</text>
+  <text x="140" y="645" class="small-label" fill="#0d1117">+0x5DA0: Thunderbolt Power Base (PSCM Security)</text>
+  <text x="1400" y="605" class="small-label" text-anchor="end" fill="#0d1117">Size: 32KB</text>
+  
+  <!-- 0xFED40000 - TPM -->
+  <rect x="120" y="680" width="1360" height="80" class="medium" rx="5"/>
+  <text x="140" y="705" class="addr-label">0xFED40000</text>
+  <text x="140" y="725" class="label" font-weight="bold" fill="#0d1117">TPM 2.0 Direct Access (20KB)</text>
+  <text x="140" y="745" class="small-label" fill="#0d1117">STMicro fTPM | Locality 0 only | 3 EK Certs</text>
+  <text x="1400" y="725" class="small-label" text-anchor="end" fill="#0d1117">Size: 20KB</text>
+  
+  <!-- 0x7C100000 - I219-V Ethernet -->
+  <rect x="120" y="780" width="1360" height="100" class="high" rx="5"/>
+  <text x="140" y="805" class="addr-label">0x7C100000</text>
+  <text x="140" y="825" class="label" font-weight="bold" fill="#0d1117">I219-V Ethernet (NC3)</text>
+  <text x="140" y="845" class="small-label" fill="#0d1117">PCI 00:1f.6 BAR0 | 128KB (64KB NVM Shadow RAM)</text>
+  <text x="140" y="865" class="small-label" fill="#0d1117">☠ NC3 Control System | MAC: 86:52:1A:91:60:29</text>
+  <text x="1400" y="825" class="small-label" text-anchor="end" fill="#0d1117">Size: 128KB</text>
+  
+  <!-- 0x51CB3000 - GNVS -->
+  <rect x="120" y="900" width="1360" height="120" class="high" rx="5"/>
+  <text x="140" y="925" class="addr-label">0x51CB3000</text>
+  <text x="140" y="945" class="label" font-weight="bold" fill="#0d1117">GNVS (Global NVS Region)</text>
+  <text x="140" y="965" class="small-label" fill="#0d1117">+0xC8E: IADG (Debug Master Enable)</text>
+  <text x="140" y="985" class="small-label" fill="#0d1117">+0xC80: DGBA (Debug Base Address)</text>
+  <text x="140" y="1005" class="small-label" fill="#0d1117">+0x3326: U4SE (USB4 Support Enable)</text>
+  <text x="1400" y="945" class="small-label" text-anchor="end" fill="#0d1117">Size: 3491 bytes</text>
+  
+  <!-- 0x50192E3000 - GNA Gateway -->
+  <rect x="120" y="1040" width="1360" height="100" class="high" rx="5"/>
+  <text x="140" y="1065" class="addr-label">0x50192E3000</text>
+  <text x="140" y="1085" class="label" font-weight="bold" fill="#0d1117">GNA Fabric Gateway</text>
+  <text x="140" y="1105" class="small-label" fill="#0d1117">FAB_RESP: 0x23A21820 | HW_CAP: 0x0120021F</text>
+  <text x="140" y="1125" class="small-label" fill="#0d1117">16 CUs | DMA | Matrix+Vector | FP16+INT8</text>
+  <text x="1400" y="1085" class="small-label" text-anchor="end" fill="#0d1117">Size: 4KB</text>
+  
+  <!-- 0x50192E0000 - Hidden PCI -->
+  <rect x="120" y="1160" width="1360" height="80" class="high" rx="5"/>
+  <text x="140" y="1185" class="addr-label">0x50192E0000</text>
+  <text x="140" y="1205" class="label" font-weight="bold" fill="#0d1117">Hidden PCI Device (0x7E7F)</text>
+  <text x="140" y="1225" class="small-label" fill="#0d1117">VID:DID 0x8086:0x7E7F | Runtime: 0xFFFFFFFF</text>
+  <text x="1400" y="1205" class="small-label" text-anchor="end" fill="#0d1117">Size: 4KB</text>
+  
+  <!-- 0x50192DD000 - CSME Direct -->
+  <rect x="120" y="1260" width="1360" height="120" class="critical" rx="5"/>
+  <text x="140" y="1285" class="addr-label">0x50192DD000</text>
+  <text fill="#e0e0e0">CSME Direct Interface</text>
+  <text x="140" y="1325" class="small-label" fill="#0d1117">STATUS_CTRL: 0x80000029 | CAPABILITY: 0x80000209</text>
+  <text x="140" y="1345" class="small-label" fill="#0d1117">WDT_CTRL: 0x00000001 (Watchdog DISABLED)</text>
+  <text x="140" y="1365" class="small-label" fill="#0d1117">☠ CRITICAL: WDT Kill + ME Control</text>
+  <text x="1400" y="1305" class="small-label" text-anchor="end" fill="#0d1117">Size: 4KB</text>
+  
+  <!-- 0x50192D8000 - SRAM Tunnel -->
+  <rect x="120" y="1400" width="1360" height="100" class="high" rx="5"/>
+  <text x="140" y="1425" class="addr-label">0x50192D8000</text>
+  <text x="140" y="1445" class="label" font-weight="bold" fill="#0d1117">SRAM Tunnel (NC3 Vault)</text>
+  <text x="140" y="1465" class="small-label" fill="#0d1117">Feature: 0x20002000 | 4 Route Descriptors</text>
+  <text x="140" y="1485" class="small-label" fill="#0d1117">2 Intel PCI Bridges | Port 0x99 Tier 7</text>
+  <text x="1400" y="1445" class="small-label" text-anchor="end" fill="#0d1117">Size: 16KB</text>
+  
+  <!-- 0x50192D0000 - HD Audio -->
+  <rect x="120" y="1520" width="1360" height="80" class="safe" rx="5"/>
+  <text x="140" y="1545" class="addr-label">0x50192D0000</text>
+  <text x="140" y="1565" class="label" font-weight="bold" fill="#0d1117">HD Audio / Smart Sound</text>
+  <text x="140" y="1585" class="small-label" fill="#0d1117">PCI 00:1f.3 BAR0 | Meteor Lake-P HDA Controller</text>
+  <text x="1400" y="1565" class="small-label" text-anchor="end" fill="#0d1117">Size: 16KB</text>
+  
+  <!-- 0x50192C0000 - GBE Shadow -->
+  <rect x="120" y="1620" width="1360" height="80" class="medium" rx="5"/>
+  <text x="140" y="1645" class="addr-label">0x50192C0000</text>
+  <text x="140" y="1665" class="label" font-weight="bold" fill="#0d1117">GBE Shadow RAM (Persistence)</text>
+  <text x="140" y="1685" class="small-label" fill="#0d1117">Persists across warm boot | ME GbE firmware cache</text>
+  <text x="1400" y="1665" class="small-label" text-anchor="end" fill="#0d1117">Size: 16KB</text>
+  
+  <!-- 0x50192B0000 - ISH VSEC -->
+  <rect x="120" y="1720" width="1360" height="120" class="critical" rx="5"/>
+  <text x="140" y="1745" class="addr-label">0x50192B0000</text>
+  <text x="140" y="1765" class="label" font-weight="bold" fill="#0d1117">ISH VSEC (Master Unlock)</text>
+  <text x="140" y="1785" class="small-label" fill="#0d1117">☠ THE KEY: Write 0x5A5A5A5A to unlock</text>
+  <text x="140" y="1805" class="small-label" fill="#0d1117">+0x108: Feature Control (AVX-512/AMX ungate)</text>
+  <text x="140" y="1825" class="small-label" fill="#0d1117">+0x110/0x114: Auth Mailbox (0xFF070707)</text>
+  <text x="1400" y="1765" class="small-label" text-anchor="end" fill="#0d1117">Size: 64KB</text>
+  
+  <!-- Legend -->
+  <rect x="50" y="1870" width="1500" height="110" fill="#0d1117" stroke="#ccc" stroke-width="1" rx="5"/>
+  <text x="60" y="1895" class="label" font-weight="bold">Memory Region Types:</text>
+  
+  <rect x="70" y="1910" width="30" height="20" class="critical" rx="3"/>
+  <text x="110" y="1925" class="small-label">CRITICAL - Security bypass / Full access</text>
+  
+  <rect x="370" y="1910" width="30" height="20" class="high" rx="3"/>
+  <text x="410" y="1925" class="small-label">HIGH - Significant attack surface</text>
+  
+  <rect x="670" y="1910" width="30" height="20" class="medium" rx="3"/>
+  <text x="710" y="1925" class="small-label">MEDIUM - Limited exposure</text>
+  
+  <rect x="970" y="1910" width="30" height="20" class="safe" rx="3"/>
+  <text x="1010" y="1925" class="small-label">SAFE - Normal operation</text>
+  
+  <rect x="1270" y="1910" width="30" height="20" class="reserved" rx="3"/>
+  <text x="1310" y="1925" class="small-label">Reserved</text>
+  
+  <text x="60" y="1955" class="small-label" font-weight="bold">⚠ BIOS E820 Map is INCOMPLETE and LYING — Reports MMIO as System RAM</text>
+  <text x="60" y="1975" class="small-label">☠ Kernel panic risk: 0x5010000000 and 0x5011000000 reported as RAM but are MMIO</text>
+  
+  <!-- Footer -->
+  <text x="800" y="1995" class="small-label" text-anchor="middle" opacity="0.7">Physical Memory Map — MTL-P A00 (MFG_MODE) — March 2026</text>
+</svg>

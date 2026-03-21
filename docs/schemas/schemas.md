@@ -1,0 +1,37 @@
+# AEGIS-LAB Data Schemas
+
+## State Database (QIHSE Tables)
+
+### `jobs`
+Tracks logical job runs.
+- `job_id`: Primary Key (ULID/UUID)
+- `project_id`: Associated project ID
+- `job_type`: Type of run
+- `status`: [pending, running, succeeded, failed, interrupted]
+- `priority`: Scheduling priority (1-100)
+- `current_stage_id`: Current active stage
+- `created_at`: ISO-8601 UTC string
+- `updated_at`: ISO-8601 UTC string
+
+### `stages`
+Individual DAG stages within a job.
+- `stage_id`: Primary Key
+- `job_id`: Parent job ID
+- `stage_name`: Descriptive name (e.g. `atom_clean`)
+- `ordinal`: Order in the DAG
+- `status`: [pending, running, succeeded, failed]
+- `output_manifest_ref`: Optional reference to output artifact
+
+## Manifests
+
+### Final Manifest
+Generated during promotion to define the INT8 export bundle.
+- `job_id`: Associated job
+- `bundle_hash`: SHA256 of the entire directory content
+- `status`: `promoted`
+- `created_at`: ISO-8601 timestamp
+
+## Artifacts
+Stored in a content-addressed `ArtifactStore`.
+- Filename format: `{stage_name}__{artifact_type}__{short_hash}.{ext}`
+- Directory structure: `prefix1/prefix2/sha256_hash`
