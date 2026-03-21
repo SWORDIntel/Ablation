@@ -132,7 +132,10 @@ class SchedulerEngine:
                 devices.append("NPU")
             
             if self.hw.get("vpu_present") and vpu_any_active:
-                devices.append("VPU")
+                for vid, s in self.VPU_WORKER_STATS.items():
+                    if s["active"]:
+                        devices.append("VPU") # For generic matching
+                        devices.append("VPU_0" if "0" in vid else "VPU_1")
             
             # Avoid iGPU in thermal throttling if NPU/VPU is present
             if self.hw.get("igpu_present") and not is_throttling:
@@ -153,23 +156,30 @@ class SchedulerEngine:
             # VPU is prioritized for stage0_guard for low-power operation
             if stage_name == "sentinel_stage0_guard" and self.hw.get("vpu_present") and vpu_required:
                 active_vpus = [vid for vid, s in self.VPU_WORKER_STATS.items() if s["active"]]
-                if active_vpus and worker_id:
-                    # Round-Robin Load Balancing
-                    target_vpu = active_vpus[SchedulerEngine.VPU_ROUND_ROBIN_IDX % len(active_vpus)]
-                    if any(target_vpu in worker_id.lower() for target_vpu in active_vpus):
-                        # If this worker is one of the active VPUs, check if it's its turn
-                        if target_vpu in worker_id.lower():
-                            SchedulerEngine.VPU_ROUND_ROBIN_IDX += 1
-                            devices.append("VPU")
+                if active_vpus:
+                    # Round-Robin Load Balancing across physical sticks
+                    target_vpu_id = active_vpus[SchedulerEngine.VPU_ROUND_ROBIN_IDX % len(active_vpus)]
+                    # Map vpu-0 to VPU_0 and vpu-1 to VPU_1
+                    target_device = "VPU_0" if "0" in target_vpu_id else "VPU_1"
+                    
+                    if worker_id:
+                        if any(target_vpu_id in worker_id.lower() for target_vpu_id in active_vpus):
+                            if target_vpu_id in worker_id.lower():
+                                SchedulerEngine.VPU_ROUND_ROBIN_IDX += 1
+                                devices.append("VPU")
+                                devices.append(target_device)
+                            else:
+                                return []
                         else:
-                            # Not this worker's turn, but it's a VPU.
-                            # We return empty to force it to wait or check other stages.
-                            return []
+                            devices.append("VPU")
+                            devices.append(target_device)
                     else:
-                        # Not a VPU worker asking
                         devices.append("VPU")
+                        devices.append(target_device)
                 else:
+                    # Fallback if VPU present but none active in stats (should not happen normally)
                     devices.append("VPU")
+                    devices.append("VPU_0")
             
             if self.hw.get("npu_present") and npu_required:
                 devices.append("NPU")

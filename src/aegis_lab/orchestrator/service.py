@@ -3,7 +3,7 @@ import time
 import logging
 from typing import Dict, List, Any, Optional
 from aegis_lab.state.db import AegisState
-from aegis_lab.orchestrator.ipc import IPCServer, LogServer
+from aegis_lab.orchestrator.ipc import IPCServer, LogServer, EventPublisher
 from aegis_lab.hardware.thermal import ThermalGuardian
 from aegis_lab.hardware.discovery import HardwareDiscovery
 from aegis_lab.scheduler.engine import SchedulerEngine
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 AEGIS_AUTH_TOKEN = "aegis-secret-token-2024"
 
 class OrchestratorService:
-    def __init__(self, state: AegisState, ipc_port: int = 5555, log_port: int = 5556):
+    def __init__(self, state: AegisState, ipc_port: int = 5555, log_port: int = 5556, event_port: int = 5557):
         self.state = state
         self.thermal_guardian = ThermalGuardian()
         self.telemetry = LevelZeroTelemetry()
@@ -37,8 +37,8 @@ class OrchestratorService:
         self.workers: Dict[str, Dict[str, Any]] = {} # worker_id -> info
 
         self.ipc = IPCServer(port=ipc_port, auth_token=AEGIS_AUTH_TOKEN)
-
         self.log_server = LogServer(port=log_port)
+        self.event_publisher = EventPublisher(port=event_port)
         
         self.ipc.register_handler("register", self._handle_register)
         self.ipc.register_handler("heartbeat", self._handle_heartbeat)
@@ -51,6 +51,7 @@ class OrchestratorService:
         self.ipc.register_handler("get_leaderboard", lambda msg: self.leaderboard.get_leaderboard())
         self.ipc.register_handler("optimize_uma", self._handle_optimize_uma)
         self.ipc.register_handler("discover_peer", self._handle_discover_peer)
+        self.ipc.register_handler("get_worker_status", self._handle_get_worker_status)
 
     def start(self):
         self.ipc.start()
@@ -62,6 +63,25 @@ class OrchestratorService:
         self.optimizer.stop()
         self.log_server.stop()
         self.ipc.stop()
+        self.event_publisher.stop()
+
+    def _handle_get_worker_status(self, message: Dict[str, Any]) -> Dict[str, Any]:
+        worker_type = message.get("worker_type")
+        worker_id = message.get("worker_id")
+        
+        results = []
+        for wid, info in self.workers.items():
+            if (worker_id and wid == worker_id) or (worker_type and info["type"] == worker_type) or (not worker_id and not worker_type):
+                # Only return workers seen in the last 30 seconds
+                if time.time() - info["last_heartbeat"] < 30:
+                    results.append({
+                        "worker_id": wid,
+                        "type": info["type"],
+                        "status": info["status"],
+                        "telemetry": info.get("telemetry", {})
+                    })
+        
+        return {"status": "ok", "workers": results}
 
     def _handle_discover_peer(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """Returns the p2p_endpoint for a given worker_id or worker_type."""
@@ -119,6 +139,8 @@ class OrchestratorService:
         worker_id = message["worker_id"]
         if worker_id in self.workers:
             self.workers[worker_id]["last_heartbeat"] = time.time()
+            if "telemetry" in message:
+                self.workers[worker_id]["telemetry"] = message["telemetry"]
         return {"status": "ok"}
 
     def _handle_request_task(self, message: Dict[str, Any]) -> Dict[str, Any]:
@@ -130,43 +152,48 @@ class OrchestratorService:
         # Get current thermal status
         thermal_status = self.thermal_guardian.get_status()
         
-        # Simple task selection: find first pending stage
-        # In a real impl, we'd use the SchedulerEngine here
-        all_jobs = self.state.get_jobs()
-        for job in all_jobs:
-            if job["status"] == "failed": continue
+        # Instantiate Scheduler once per request
+        scheduler = SchedulerEngine(worker_info["capabilities"], thermal_status)
+        
+        # Optimized: Fetch all pending stages in a single query
+        pending_stages = self.state.db.query("stages", {"status": "pending"})
+        
+        # Group stages by job_id to maintain ordinal ordering per job if needed, 
+        # but here we can just sort all pending stages by priority or time.
+        # For simplicity and to maintain existing logic, we'll sort them.
+        pending_stages.sort(key=lambda x: x["ordinal"])
+        
+        for stage in pending_stages:
+            job_id = stage["job_id"]
+            job = self.state.get_job(job_id)
             
-            stages = self.state.get_stages(job["job_id"])
-            for stage in sorted(stages, key=lambda x: x["ordinal"]):
-                if stage["status"] == "pending":
-                    # Use Scheduler to see if this worker is compatible
-                    scheduler = SchedulerEngine(worker_info["capabilities"], thermal_status)
-                    # We'd need the runtime profile, assuming empty for now
-                    placement = scheduler.determine_placement(stage["stage_name"], {}, worker_id=worker_id)
-                    
-                    worker_type = worker_info["type"]
-                    if worker_type == "npu":
-                        worker_device = "NPU"
-                    elif worker_type == "vpu":
-                        worker_device = "VPU"
-                    elif worker_type == "igpu":
-                        worker_device = "iGPU"
-                    else:
-                        worker_device = "CPU"
-                    
-                    if any(d.startswith(worker_device) for d in placement):
-                        # Assign task!
-                        self.state.update_stage(stage["stage_id"], {"status": "running", "worker_id": worker_id})
-                        self.state.update_job(job["job_id"], {"current_stage_id": stage["stage_id"], "status": "running"})
-                        
-                        return {
-                            "status": "task_assigned",
-                            "task": {
-                                "job_id": job["job_id"],
-                                "stage_id": stage["stage_id"],
-                                "stage_name": stage["stage_name"]
-                            }
-                        }
+            if not job or job["status"] == "failed":
+                continue
+                
+            # Use Scheduler to see if this worker is compatible
+            # Runtime profile is empty for now per existing code
+            placement = scheduler.determine_placement(stage["stage_name"], {}, worker_id=worker_id)
+            
+            worker_type = worker_info["type"]
+            worker_device = {
+                "npu": "NPU",
+                "vpu": "VPU",
+                "igpu": "iGPU"
+            }.get(worker_type, "CPU")
+            
+            if any(d.startswith(worker_device) for d in placement):
+                # Assign task!
+                self.state.update_stage(stage["stage_id"], {"status": "running", "worker_id": worker_id})
+                self.state.update_job(job_id, {"current_stage_id": stage["stage_id"], "status": "running"})
+                
+                return {
+                    "status": "task_assigned",
+                    "task": {
+                        "job_id": job_id,
+                        "stage_id": stage["stage_id"],
+                        "stage_name": stage["stage_name"]
+                    }
+                }
         
         return {"status": "no_work"}
 

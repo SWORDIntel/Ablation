@@ -7,13 +7,13 @@ import sys
 # Add src to path
 sys.path.append(os.path.abspath("src"))
 
-from aegis_lab.workers.vpu_worker import VpuWorker
+from aegis_lab.workers.vpu_worker import MultiVpuWorker
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vpu_perf_test")
 
 def run_benchmark(num_requests=100):
-    worker = VpuWorker()
+    worker = MultiVpuWorker()
     
     # Mock task
     task = {

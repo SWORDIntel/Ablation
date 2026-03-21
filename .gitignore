@@ -1,10 +1,34 @@
 __pycache__/
 *.py[cod]
 
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.so
+*.o
+*.a
+*.dylib
+*.dll
+*.exe
+*.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs and temporary files
+*.log
+.DS_Store
+
+# Preserving hardware configurations
+!configs/hardware/*.json
 models/
 model_cache/
-build/
-*.egg-info/
-.venv/
-.pytest_cache/
-*.log

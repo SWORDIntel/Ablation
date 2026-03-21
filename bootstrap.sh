@@ -21,8 +21,12 @@ echo "✅ Directories created/verified."
 
 # 1. VPU Hardware Activation (Movidius MyriadX)
 echo "[1/5] Checking Movidius VPU status and applying udev rules..."
-if lsusb | grep -i "03e7:2485" > /dev/null; then
-    echo "🔍 Movidius VPUs detected. Ensuring udev rules are active..."
+VPU_COUNT=$(lsusb | grep -i "03e7:2485" | wc -l)
+if [ "$VPU_COUNT" -gt 0 ]; then
+    echo "🔍 $VPU_COUNT Movidius VPU(s) detected. Ensuring udev rules are active..."
+    if [ "$VPU_COUNT" -lt 2 ]; then
+        echo "⚠️  Alert: Only $VPU_COUNT Movidius stick(s) detected. Aegis-Lab 'Flex Fabric' works best with 2+ sticks."
+    fi
     UDEV_RULE_FILE="/etc/udev/rules.d/99-movidius.rules"
     EXPECTED_RULE='SUBSYSTEM=="usb", ATTRS{idVendor}=="03e7", MODE="0666"'
     
@@ -76,7 +80,11 @@ check_system_ready() {
     # Check udev rules presence for Movidius
     local UDEV_RULE_FILE="/etc/udev/rules.d/99-movidius.rules"
     local EXPECTED_RULE='SUBSYSTEM=="usb", ATTRS{idVendor}=="03e7", MODE="0666"'
-    if lsusb | grep -i "03e7:2485" > /dev/null; then
+    local VPU_COUNT=$(lsusb | grep -i "03e7:2485" | wc -l)
+    if [ "$VPU_COUNT" -gt 0 ]; then
+        if [ "$VPU_COUNT" -lt 2 ]; then
+            echo "⚠️  Alert: Only $VPU_COUNT Movidius stick detected. Aegis-Lab works best with 2+."
+        fi
         if [ ! -f "$UDEV_RULE_FILE" ] || ! grep -q "$EXPECTED_RULE" "$UDEV_RULE_FILE"; then
             echo "❌ Udev rules for Movidius are missing or incorrect."
             all_ready=false
@@ -84,7 +92,7 @@ check_system_ready() {
             echo "✅ Udev rules for Movidius are present."
         fi
     else
-        echo "ℹ️  No Movidius VPUs detected. Skipping udev check."
+        echo "⚠️  No Movidius VPUs detected. Aegis-Lab 'Flex Fabric' will run in simulation mode for VPU."
     fi
 
     # Check OpenVINO installation

@@ -54,7 +54,15 @@ class HardwareDiscovery:
 
     @staticmethod
     def check_openvino_devices() -> Dict[str, Any]:
-        devices = {"igpu": False, "npu": False, "vpu": False, "igpu_type": "standard", "npu_type": "none"}
+        devices = {
+            "igpu": False,
+            "npu": False,
+            "vpu": False,
+            "vpu_count": 0,
+            "vpu_details": [],
+            "igpu_type": "standard",
+            "npu_type": "none"
+        }
         try:
             from openvino.runtime import Core
             core = Core()
@@ -73,22 +81,37 @@ class HardwareDiscovery:
                     devices["npu_type"] = "intel_ai_boost"
                 if "MYRIAD" in dev:
                     devices["vpu"] = True
+                    # OpenVINO lists MYRIAD.X.Y for multiple sticks
+                    devices["vpu_count"] += 1
+                    devices["vpu_details"].append(dev)
         except ImportError:
-            logger.info("OpenVINO not installed. Checking lspci as fallback.")
-            if platform.system() == "Linux":
-                try:
-                    output = subprocess.check_output(["lspci"], text=True).lower()
-                    if "npu" in output or "neural processing unit" in output or "7b40" in output: # 7b40 is MTL NPU
-                        devices["npu"] = True
-                        devices["npu_type"] = "intel_ai_boost"
-                    if "myriad" in output:
-                        devices["vpu"] = True
-                    if "vga" in output and "intel" in output:
-                        devices["igpu"] = True
-                        if "arc" in output or "meteor lake" in output:
-                            devices["igpu_type"] = "xe-lpg"
-                except Exception as e:
-                    logger.debug(f"Failed to run lspci: {e}")
+            logger.info("OpenVINO not installed. Checking lspci/lsusb as fallback.")
+            
+        # Specific check for MyriadX sticks via lsusb or /sys/bus/usb/devices
+        if platform.system() == "Linux":
+            try:
+                # 03e7:2485 is the VID:PID for MyriadX
+                usb_path = "/sys/bus/usb/devices"
+                if os.path.exists(usb_path):
+                    for d in os.listdir(usb_path):
+                        id_vendor_path = os.path.join(usb_path, d, "idVendor")
+                        id_product_path = os.path.join(usb_path, d, "idProduct")
+                        if os.path.exists(id_vendor_path) and os.path.exists(id_product_path):
+                            with open(id_vendor_path, "r") as f:
+                                vid = f.read().strip()
+                            with open(id_product_path, "r") as f:
+                                pid = f.read().strip()
+                            
+                            if vid == "03e7" and pid == "2485":
+                                devices["vpu"] = True
+                                # If OpenVINO didn't find them or we want precise count from USB
+                                # We'll avoid double counting if OpenVINO already populated vpu_details
+                                if not any(d in dev for dev in devices["vpu_details"]):
+                                    devices["vpu_count"] += 1
+                                    devices["vpu_details"].append(f"USB_{d}")
+            except Exception as e:
+                logger.debug(f"Failed to scan USB devices: {e}")
+
         return devices
 
     @staticmethod
@@ -148,6 +171,8 @@ class HardwareDiscovery:
             "npu_present": ov_devices["npu"],
             "npu_type": ov_devices["npu_type"],
             "vpu_present": ov_devices["vpu"],
+            "vpu_count": ov_devices["vpu_count"],
+            "vpu_details": ov_devices["vpu_details"],
             "npu_bar_found": npu_bar_status["found"],
             "npu_bar_protected": npu_bar_status["protected"],
             "npu_bar_conflict": npu_bar_status["conflict"],
@@ -168,7 +193,7 @@ class HardwareDiscovery:
         print(f"  CPU [Hybrid]: {'✅ Detect' if caps['cpu_hybrid'] else 'Standard'}")
         print(f"  iGPU Presence: {'✅ Detected' if caps['igpu_present'] else '❌ Not Detected'} ({caps['igpu_type']})")
         print(f"  NPU Presence:  {'✅ Detected' if caps['npu_present'] else '❌ Not Detected'} ({caps['npu_type']})")
-        print(f"  VPU Presence:  {'✅ Detected' if caps['vpu_present'] else '❌ Not Detected'}")
+        print(f"  VPU Presence:  {'✅ Detected' if caps['vpu_present'] else '❌ Not Detected'} ({caps['vpu_count']} units)")
         print(f"  NPU BAR Protection: {'✅ SAFE' if caps['npu_bar_protected'] else '⚠️  CONFLICT' if caps['npu_bar_conflict'] else 'Unknown'}")
         print(f"  CUDA Bridge:   {'✅ Enabled (ZLUDA)' if caps['cuda_compat'] else 'Standard Path'}")
         print("---------------------------------\n")
