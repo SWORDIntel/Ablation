@@ -1,7 +1,7 @@
 import ctypes
 import os
 from enum import IntEnum
-from typing import List
+from typing import Dict, List
 
 class QihseDataType(IntEnum):
     INT64 = 0
@@ -210,4 +210,59 @@ class QIHSE:
         
         # Fallback to hashlib
         import hashlib
+        return hashlib.sha256(data).hexdigest()
+
+
+class InMemoryQIHSE:
+    """
+    Minimal in-memory fallback used when the native QIHSE library is unavailable.
+    It preserves the small subset of behavior the Python state layer relies on.
+    """
+
+    def __init__(self, lib_path: str = ""):
+        self.lib_path = lib_path
+        self.has_hw_hash = False
+        self._next_db_handle = 1
+        self._next_vector_id = 1
+        self._databases: Dict[int, List[Dict[str, object]]] = {}
+
+    def create_vector_db(self, backend=QihseVectorDBBackend.INMEMORY, db_path=None):
+        handle = self._next_db_handle
+        self._next_db_handle += 1
+        self._databases[handle] = []
+        return handle
+
+    def add_to_vector_db(self, db_handle, vectors, metadata_list):
+        records = self._databases.setdefault(db_handle, [])
+        for vector, metadata in zip(vectors, metadata_list):
+            if isinstance(metadata, str):
+                metadata = metadata.encode("utf-8")
+            records.append(
+                {
+                    "id": self._next_vector_id,
+                    "score": 1.0,
+                    "vector": list(vector),
+                    "metadata": metadata,
+                }
+            )
+            self._next_vector_id += 1
+        return True
+
+    def search_vector_db(self, db_handle, query_vector, top_k=10):
+        records = self._databases.get(db_handle, [])
+        return [
+            {
+                "id": record["id"],
+                "score": record["score"],
+                "metadata": record["metadata"],
+            }
+            for record in records[-top_k:]
+        ][::-1]
+
+    def set_priority_pinning(self, db_handle, vector_ids: List[int], priority: int = 1):
+        return True
+
+    def sha256(self, data: bytes) -> str:
+        import hashlib
+
         return hashlib.sha256(data).hexdigest()

@@ -1,6 +1,7 @@
 import uuid
 import time
 import logging
+import os
 from typing import Dict, List, Any, Optional
 from aegis_lab.state.db import AegisState
 from aegis_lab.orchestrator.ipc import IPCServer, LogServer, EventPublisher
@@ -22,23 +23,31 @@ from aegis_lab.verification.proofs import ZKAblationProof
 
 logger = logging.getLogger(__name__)
 
-AEGIS_AUTH_TOKEN = "aegis-secret-token-2024"
+AEGIS_AUTH_TOKEN = os.getenv("AEGIS_AUTH_TOKEN", "aegis-secret-token-2024")
+ENABLE_LEVEL_ZERO = os.getenv("AEGIS_ENABLE_LEVEL_ZERO", "").lower() in {"1", "true", "yes"}
+
+
+class _NullTelemetry:
+    def get_metrics(self) -> List[Dict[str, Any]]:
+        return []
 
 class OrchestratorService:
-    def __init__(self, state: AegisState, ipc_port: int = 5555, log_port: int = 5556, event_port: int = 5557):
+    def __init__(self, state: AegisState, ipc_port: int = 5555, log_port: int = 5556, event_port: Optional[int] = None):
         self.state = state
         self.thermal_guardian = ThermalGuardian()
-        self.telemetry = LevelZeroTelemetry()
+        self.telemetry = None
         self.vault = ModelVault()
         self.consensus_judge = ConsensusJudge()
         self.zk_prover = ZKAblationProof(self.state.qihse)
-        self.optimizer = HardwareOptimizer(self.state, self.telemetry)
+        self.optimizer = None
         self.leaderboard = LeaderboardManager(self.state)
         self.workers: Dict[str, Dict[str, Any]] = {} # worker_id -> info
+        self.log_port = log_port
+        self.event_port = event_port if event_port is not None else log_port + 1
 
         self.ipc = IPCServer(port=ipc_port, auth_token=AEGIS_AUTH_TOKEN)
-        self.log_server = LogServer(port=log_port)
-        self.event_publisher = EventPublisher(port=event_port)
+        self.log_server = None
+        self.event_publisher = None
         
         self.ipc.register_handler("register", self._handle_register)
         self.ipc.register_handler("heartbeat", self._handle_heartbeat)
@@ -52,18 +61,33 @@ class OrchestratorService:
         self.ipc.register_handler("optimize_uma", self._handle_optimize_uma)
         self.ipc.register_handler("discover_peer", self._handle_discover_peer)
         self.ipc.register_handler("get_worker_status", self._handle_get_worker_status)
+        self.ipc.register_handler("get_sitrep", lambda msg: self.get_sitrep())
+
+    def _ensure_runtime_services(self):
+        if self.telemetry is None:
+            self.telemetry = LevelZeroTelemetry() if ENABLE_LEVEL_ZERO else _NullTelemetry()
+        if self.optimizer is None:
+            self.optimizer = HardwareOptimizer(self.state, self.telemetry)
 
     def start(self):
+        self._ensure_runtime_services()
+        if self.log_server is None:
+            self.log_server = LogServer(port=self.log_port)
+        if self.event_publisher is None:
+            self.event_publisher = EventPublisher(port=self.event_port)
         self.ipc.start()
         self.log_server.start(self._handle_log)
         self.optimizer.start()
         logger.info("Orchestrator Service started.")
 
     def stop(self):
-        self.optimizer.stop()
-        self.log_server.stop()
+        if self.optimizer is not None:
+            self.optimizer.stop()
+        if self.log_server is not None:
+            self.log_server.stop()
         self.ipc.stop()
-        self.event_publisher.stop()
+        if self.event_publisher is not None:
+            self.event_publisher.stop()
 
     def _handle_get_worker_status(self, message: Dict[str, Any]) -> Dict[str, Any]:
         worker_type = message.get("worker_type")
@@ -102,6 +126,7 @@ class OrchestratorService:
 
     def _handle_optimize_uma(self, message: Dict[str, Any]) -> Dict[str, Any]:
         logger.info("Manual UMA optimization requested via SITREP.")
+        self._ensure_runtime_services()
         self.optimizer._optimize_memory_layout()
         return {"status": "ok"}
 
@@ -152,36 +177,25 @@ class OrchestratorService:
         # Get current thermal status
         thermal_status = self.thermal_guardian.get_status()
         
-        # Instantiate Scheduler once per request
         scheduler = SchedulerEngine(worker_info["capabilities"], thermal_status)
-        
-        # Optimized: Fetch all pending stages in a single query
-        pending_stages = self.state.db.query("stages", {"status": "pending"})
-        
-        # Group stages by job_id to maintain ordinal ordering per job if needed, 
-        # but here we can just sort all pending stages by priority or time.
-        # For simplicity and to maintain existing logic, we'll sort them.
+        pending_stages = []
+        for job in self.state.get_jobs():
+            for stage in self.state.get_stages(job["job_id"]):
+                if stage.get("status") == "pending":
+                    pending_stage = dict(stage)
+                    pending_stage.setdefault("job_id", job["job_id"])
+                    pending_stages.append(pending_stage)
         pending_stages.sort(key=lambda x: x["ordinal"])
         
         for stage in pending_stages:
             job_id = stage["job_id"]
             job = self.state.get_job(job_id)
-            
             if not job or job["status"] == "failed":
                 continue
-                
-            # Use Scheduler to see if this worker is compatible
-            # Runtime profile is empty for now per existing code
+
             placement = scheduler.determine_placement(stage["stage_name"], {}, worker_id=worker_id)
             
-            worker_type = worker_info["type"]
-            worker_device = {
-                "npu": "NPU",
-                "vpu": "VPU",
-                "igpu": "iGPU"
-            }.get(worker_type, "CPU")
-            
-            if any(d.startswith(worker_device) for d in placement):
+            if self._worker_matches_placement(worker_info, placement):
                 # Assign task!
                 self.state.update_stage(stage["stage_id"], {"status": "running", "worker_id": worker_id})
                 self.state.update_job(job_id, {"current_stage_id": stage["stage_id"], "status": "running"})
@@ -197,6 +211,30 @@ class OrchestratorService:
         
         return {"status": "no_work"}
 
+    def _worker_matches_placement(self, worker_info: Dict[str, Any], placement: List[str]) -> bool:
+        worker_type = worker_info["type"]
+        capabilities = worker_info.get("capabilities", {})
+
+        if worker_type == "npu" and any(device.startswith("NPU") for device in placement):
+            return True
+        if worker_type == "vpu" and any(device.startswith("VPU") for device in placement):
+            return True
+        if worker_type == "igpu" and any(device.startswith("iGPU") or device.startswith("CUDA") for device in placement):
+            return True
+        if worker_type == "cpu" and any(device.startswith("CPU") for device in placement):
+            return True
+
+        if any(device.startswith("CPU_AMX") for device in placement) and capabilities.get("cpu_amx"):
+            return True
+        if any(device.startswith("CPU_AVX512") for device in placement) and capabilities.get("cpu_avx512"):
+            return True
+        if any(device.startswith("CPU_VNNI") for device in placement) and capabilities.get("cpu_vnni"):
+            return True
+        if any(device == "CPU" for device in placement):
+            return any(capabilities.get(flag) for flag in ("cpu_amx", "cpu_avx512", "cpu_vnni")) or worker_type == "cpu"
+
+        return False
+
     def _handle_task_complete(self, message: Dict[str, Any]) -> Dict[str, Any]:
         worker_id = message["worker_id"]
         stage_id = message["stage_id"]
@@ -206,7 +244,7 @@ class OrchestratorService:
         # Identify stage name for specific logic
         stages = self.state.get_stages(job_id)
         stage = next((s for s in stages if s["stage_id"] == stage_id), None)
-        stage_name = stage["stage_name"] if stage else "unknown"
+        stage_name = stage.get("stage_name", "unknown") if stage else "unknown"
 
         status = "succeeded" if result.get("success", True) else "failed"
         
@@ -251,6 +289,7 @@ class OrchestratorService:
         Runs the full Method 1-5 suite and updates the Leaderboard.
         """
         logger.info(f"Running final ranking evaluations for job: {job_id}")
+        self._ensure_runtime_services()
         
         # 1. Elo Judge (Simulated)
         elo = EloJudge()
@@ -260,7 +299,7 @@ class OrchestratorService:
         # 2. Adversarial Robustness (Method 2)
         # Pull from the adversarial_eval stage result
         stages = self.state.get_stages(job_id)
-        adv_stage = next((s for s in stages if s["stage_name"] == "adversarial_eval"), None)
+        adv_stage = next((s for s in stages if s.get("stage_name") == "adversarial_eval"), None)
         if adv_stage and adv_stage.get("result"):
             score = adv_stage["result"].get("robustness_score", 0.0)
             self.leaderboard.record_score(job_id, "adversarial_robustness", score)
@@ -287,17 +326,19 @@ class OrchestratorService:
         if params:
             self.state.update_job(job_id, {"parameters": params})
         
-        # Training Pipeline Stages
-        stages = [
-            "intake", 
-            "probe", 
-            "atom_extract", 
-            "atom_clean", 
-            "adversarial_eval", 
-            "quantize", 
-            "verify", 
-            "promote"
-        ]
+        if job_type == "ablation_training":
+            stages = [
+                "intake",
+                "probe",
+                "atom_extract",
+                "atom_clean",
+                "adversarial_eval",
+                "quantize",
+                "verify",
+                "promote",
+            ]
+        else:
+            stages = ["intake", "probe", "atom_extract", "atom_clean"]
         for i, stage_name in enumerate(stages):
             stage_id = f"{job_id}-s{i}"
             self.state.create_stage(stage_id, job_id, stage_name, i)
@@ -316,3 +357,13 @@ class OrchestratorService:
         stages = self.state.get_stages(job_id)
         job["stages"] = stages
         return job
+
+    def get_sitrep(self) -> Dict[str, Any]:
+        self._ensure_runtime_services()
+        return {
+            "status": "ok",
+            "workers": self._handle_get_worker_status({}).get("workers", []),
+            "thermal": self.thermal_guardian.get_status(),
+            "telemetry": self.telemetry.get_metrics(),
+            "hardware": HardwareDiscovery.discover(),
+        }

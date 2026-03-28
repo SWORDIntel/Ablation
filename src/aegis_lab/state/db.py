@@ -4,8 +4,8 @@ import uuid
 import logging
 import threading
 from typing import Dict, List, Any, Optional, Union
-from datetime import datetime
-from .qihse_wrapper import QIHSE, QihseVectorDBBackend
+from datetime import datetime, timezone
+from .qihse_wrapper import InMemoryQIHSE, QIHSE, QihseVectorDBBackend
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class QihseStore:
         timestamp-based deduplication during retrieval.
         """
         with self._lock:
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(timezone.utc).isoformat()
             if 'created_at' not in data:
                 data['created_at'] = now
             data['updated_at'] = now
@@ -75,10 +75,11 @@ class QihseStore:
                         
                         if pk is None:
                             # Inference logic for known tables
-                            pk = item.get('job_id') or item.get('stage_id') or \
-                                 item.get('atom_id') or item.get('artifact_id') or \
-                                 item.get('run_id') or item.get('snapshot_id') or \
-                                 res['id']
+                            pk = item.get('stage_id') or item.get('atom_id') or \
+                                 item.get('artifact_id') or item.get('run_id') or \
+                                 item.get('snapshot_id') or item.get('eval_id') or \
+                                 item.get('log_id') or item.get('job_id') or \
+                                 item.get('id') or res['id']
                         
                         if pk in items_map:
                             existing_ts = items_map[pk].get('updated_at', '')
@@ -115,7 +116,14 @@ class StateDatabase:
         self.storage_root = storage_root
         os.makedirs(storage_root, exist_ok=True)
         # Global QIHSE initialization includes Lying E820 protection in qihse_wrapper
-        self.qihse = QIHSE(lib_path)
+        require_native = os.getenv("AEGIS_REQUIRE_NATIVE_QIHSE", "").lower() in {"1", "true", "yes"}
+        try:
+            self.qihse = QIHSE(lib_path)
+        except FileNotFoundError:
+            if require_native:
+                raise
+            logger.warning("QIHSE native library missing at %s; falling back to in-memory store.", lib_path)
+            self.qihse = InMemoryQIHSE(lib_path)
         self.stores: Dict[str, QihseStore] = {}
         self._stores_lock = threading.Lock()
         

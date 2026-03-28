@@ -169,8 +169,10 @@ class SchedulerEngine:
             if self.hw.get("vpu_present") and vpu_any_active:
                 for vid, s in self.VPU_WORKER_STATS.items():
                     if s["active"]:
-                        devices.append("VPU") # For generic matching
-                        devices.append("VPU_0" if "0" in vid else "VPU_1")
+                        if "VPU" not in devices:
+                            devices.append("VPU")
+                        if worker_id:
+                            devices.append("VPU_0" if "0" in vid else "VPU_1")
             
             # Avoid iGPU in thermal throttling if NPU/VPU is present
             if self.hw.get("igpu_present") and not is_throttling:
@@ -210,11 +212,11 @@ class SchedulerEngine:
                             devices.append(target_device)
                     else:
                         devices.append("VPU")
-                        devices.append(target_device)
                 else:
                     # Fallback if VPU present but none active in stats (should not happen normally)
                     devices.append("VPU")
-                    devices.append("VPU_0")
+                    if worker_id:
+                        devices.append("VPU_0")
             
             if self.hw.get("npu_present") and npu_required:
                 devices.append("NPU")
