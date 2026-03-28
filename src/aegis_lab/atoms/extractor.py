@@ -1,9 +1,13 @@
 import logging
-import os
-import json
-from typing import List, Dict, Any, Optional
+from pathlib import Path
 from aegis_lab.state.db import AegisState
 from aegis_lab.artifacts.store import ArtifactStore
+from aegis_lab.editing.runtime import (
+    ExecutionMode,
+    resolve_execution_contract,
+    stable_json_hash,
+    write_json_artifact,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +25,8 @@ class BehavioralAtomExtractor:
                      job_id: str, 
                      positive_act_hash: str, 
                      negative_act_hash: str, 
-                     method: str = "ridge_regression") -> str:
+                     method: str = "ridge_regression",
+                     execution_mode: str = ExecutionMode.FALLBACK.value) -> str:
         """
         Isolates a behavioral atom by finding the causal difference 
         between the positive and negative activation sets.
@@ -31,34 +36,53 @@ class BehavioralAtomExtractor:
         - residualization: Uses orthogonal projection to isolate behavior-specific variance.
         """
         logger.info(f"Extracting atom for job {job_id} using method: {method}")
-        
-        # In a real implementation:
-        # 1. Fetch activations from artifact_store
-        # 2. X = concat(pos_act, neg_act), y = labels [1..1, 0..0]
-        # 3. If method == "ridge_regression":
-        #    model = Ridge(alpha=1.0).fit(X, y)
-        #    atom_vector = model.coef_
-        # 4. If method == "residualization":
-        #    atom_vector = mean(pos_act) - mean(neg_act)
-        # 5. Normalize atom_vector
-        # 6. Save atom_vector to artifact_store
-        
-        # Placeholder for atom file
-        temp_atom_file = f"/tmp/{job_id}_atom_{method}.bin"
-        
-        # Dummy atom data creation
-        with open(temp_atom_file, "wb") as f:
-            f.write(os.urandom(4096)) # Simulated atom vector
-            
+
+        contract = resolve_execution_contract(
+            operation="atom_extraction",
+            requested_mode=execution_mode,
+            native_available=False,
+            reason="Atom extraction uses deterministic fallback synthesis unless a native solver is wired in.",
+            details={
+                "job_id": job_id,
+                "method": method,
+                "positive_act_hash": positive_act_hash,
+                "negative_act_hash": negative_act_hash,
+            },
+        )
+        payload = {
+            "atom_id": stable_json_hash({
+                "job_id": job_id,
+                "method": method,
+                "positive": positive_act_hash,
+                "negative": negative_act_hash,
+                "mode": contract.mode.value,
+            }),
+            "job_id": job_id,
+            "method": method,
+            "positive_activations_hash": positive_act_hash,
+            "negative_activations_hash": negative_act_hash,
+            "execution_contract": contract.as_dict(),
+            "atom_signature": stable_json_hash({
+                "job_id": job_id,
+                "method": method,
+                "positive": positive_act_hash,
+                "negative": negative_act_hash,
+                "mode": contract.mode.value,
+            }),
+        }
+        temp_atom_file = write_json_artifact(Path("/tmp/aegis_atoms"), f"{job_id}_atom_{method}", payload)["path"]
         atom_hash = self.artifact_store.put_file(temp_atom_file, move=True)
-        
+
         atom_metadata = {
+            "atom_id": payload["atom_id"],
             "job_id": job_id,
             "atom_hash": atom_hash,
             "method": method,
             "source_pos_hash": positive_act_hash,
             "source_neg_hash": negative_act_hash,
-            "status": "extracted"
+            "status": "extracted",
+            "execution_contract": contract.as_dict(),
+            "atom_signature": payload["atom_signature"],
         }
         
         # Store metadata in state
@@ -66,11 +90,28 @@ class BehavioralAtomExtractor:
         
         return atom_hash
 
-    def residualize(self, activations_hash: str, atom_hash: str) -> str:
+    def residualize(self, activations_hash: str, atom_hash: str, execution_mode: str = ExecutionMode.FALLBACK.value) -> str:
         """
         Applies residualization to remove the influence of an atom from a set 
         of activations, effectively 'ablating' the behavior in that space.
         """
         logger.info(f"Applying residualization for atom {atom_hash}")
-        # Implementation would perform projection: X_new = X - (X . atom) * atom
-        return "residualized_activations_hash_placeholder"
+        contract = resolve_execution_contract(
+            operation="atom_residualization",
+            requested_mode=execution_mode,
+            native_available=False,
+            reason="Residualization is represented as a deterministic fallback artifact in this repository.",
+            details={"activations_hash": activations_hash, "atom_hash": atom_hash},
+        )
+        payload = {
+            "activations_hash": activations_hash,
+            "atom_hash": atom_hash,
+            "execution_contract": contract.as_dict(),
+        }
+        temp_residual_file = write_json_artifact(
+            Path("/tmp/aegis_atoms"),
+            f"residualized_{atom_hash[:12]}",
+            payload,
+        )["path"]
+        residual_hash = self.artifact_store.put_file(temp_residual_file, move=True)
+        return residual_hash
