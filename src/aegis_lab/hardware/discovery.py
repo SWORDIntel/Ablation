@@ -82,19 +82,93 @@ class HardwareDiscovery:
             return 0.0
 
     @staticmethod
-    def check_openvino_devices() -> Dict[str, Any]:
+    def _load_openvino_core():
+        try:
+            import openvino as ov
+            if hasattr(ov, "Core"):
+                return ov.Core, "openvino.Core"
+        except ImportError:
+            pass
+
+        try:
+            from openvino.runtime import Core
+            return Core, "openvino.runtime.Core"
+        except ImportError:
+            return None, None
+
+    @staticmethod
+    def list_usb_myriad_devices() -> List[Dict[str, str]]:
+        devices = []
+        if platform.system() != "Linux":
+            return devices
+
+        usb_path = "/sys/bus/usb/devices"
+        if not os.path.exists(usb_path):
+            return devices
+
+        try:
+            for entry in os.listdir(usb_path):
+                base = os.path.join(usb_path, entry)
+                vendor_path = os.path.join(base, "idVendor")
+                product_path = os.path.join(base, "idProduct")
+                if not (os.path.exists(vendor_path) and os.path.exists(product_path)):
+                    continue
+
+                with open(vendor_path, "r") as handle:
+                    vid = handle.read().strip()
+                with open(product_path, "r") as handle:
+                    pid = handle.read().strip()
+
+                if vid != "03e7" or pid != "2485":
+                    continue
+
+                device = {
+                    "sysfs_name": entry,
+                    "vendor_id": vid,
+                    "product_id": pid,
+                    "busnum": "",
+                    "devnum": "",
+                    "serial": "",
+                    "manufacturer": "",
+                    "product": "",
+                }
+                for field in ("busnum", "devnum", "serial", "manufacturer", "product"):
+                    field_path = os.path.join(base, field)
+                    if os.path.exists(field_path):
+                        with open(field_path, "r") as handle:
+                            device[field] = handle.read().strip()
+                devices.append(device)
+        except Exception as exc:
+            logger.debug(f"Failed to scan USB devices: {exc}")
+
+        devices.sort(key=lambda item: (item["busnum"], item["devnum"], item["serial"], item["sysfs_name"]))
+        return devices
+
+    @classmethod
+    def check_openvino_devices(cls) -> Dict[str, Any]:
         devices = {
             "igpu": False,
             "npu": False,
             "vpu": False,
             "vpu_count": 0,
             "vpu_details": [],
+            "vpu_runtime": False,
+            "vpu_runtime_count": 0,
+            "vpu_runtime_details": [],
+            "vpu_usb": False,
+            "vpu_usb_count": 0,
+            "vpu_usb_details": [],
             "igpu_type": "standard",
-            "npu_type": "none"
+            "npu_type": "none",
+            "openvino_available": False,
+            "openvino_import": None,
         }
-        try:
-            from openvino.runtime import Core
+
+        Core, import_path = cls._load_openvino_core()
+        if Core:
             core = Core()
+            devices["openvino_available"] = True
+            devices["openvino_import"] = import_path
             available_devices = core.available_devices
             for dev in available_devices:
                 if "GPU" in dev:
@@ -110,34 +184,28 @@ class HardwareDiscovery:
                     devices["npu_type"] = "intel_ai_boost"
                 if "MYRIAD" in dev:
                     devices["vpu"] = True
-                    # OpenVINO lists MYRIAD.X.Y for multiple sticks
-                    devices["vpu_count"] += 1
-                    devices["vpu_details"].append(dev)
-        except ImportError:
+                    devices["vpu_runtime"] = True
+                    devices["vpu_runtime_count"] += 1
+                    devices["vpu_runtime_details"].append(dev)
+        else:
             logger.info("OpenVINO not installed. Checking lspci/lsusb as fallback.")
-            
-        # Specific check for MyriadX sticks via lsusb or /sys/bus/usb/devices
-        if platform.system() == "Linux":
-            try:
-                # 03e7:2485 is the VID:PID for MyriadX
-                usb_path = "/sys/bus/usb/devices"
-                if os.path.exists(usb_path):
-                    for d in os.listdir(usb_path):
-                        id_vendor_path = os.path.join(usb_path, d, "idVendor")
-                        id_product_path = os.path.join(usb_path, d, "idProduct")
-                        if os.path.exists(id_vendor_path) and os.path.exists(id_product_path):
-                            with open(id_vendor_path, "r") as f:
-                                vid = f.read().strip()
-                            with open(id_product_path, "r") as f:
-                                pid = f.read().strip()
-                            
-                            if vid == "03e7" and pid == "2485":
-                                devices["vpu"] = True
-                                if not any(d in dev for dev in devices["vpu_details"]):
-                                    devices["vpu_count"] += 1
-                                    devices["vpu_details"].append(f"USB_{d}")
-            except Exception as e:
-                logger.debug(f"Failed to scan USB devices: {e}")
+
+        usb_devices = cls.list_usb_myriad_devices()
+        if usb_devices:
+            devices["vpu"] = True
+            devices["vpu_usb"] = True
+            devices["vpu_usb_count"] = len(usb_devices)
+            devices["vpu_usb_details"] = [
+                device["serial"] or f"USB_{device['sysfs_name']}"
+                for device in usb_devices
+            ]
+
+        devices["vpu_count"] = max(devices["vpu_runtime_count"], devices["vpu_usb_count"])
+        devices["vpu_details"] = (
+            devices["vpu_runtime_details"]
+            if devices["vpu_runtime_details"]
+            else devices["vpu_usb_details"]
+        )
 
         return devices
 
@@ -238,8 +306,16 @@ class HardwareDiscovery:
             "npu_present": ov_devices["npu"],
             "npu_type": ov_devices["npu_type"],
             "vpu_present": ov_devices["vpu"],
+            "vpu_runtime_usable": ov_devices["vpu_runtime"],
+            "vpu_runtime_count": ov_devices["vpu_runtime_count"],
+            "vpu_runtime_details": ov_devices["vpu_runtime_details"],
+            "vpu_usb_present": ov_devices["vpu_usb"],
+            "vpu_usb_count": ov_devices["vpu_usb_count"],
+            "vpu_usb_details": ov_devices["vpu_usb_details"],
             "vpu_count": ov_devices["vpu_count"],
             "vpu_details": ov_devices["vpu_details"],
+            "openvino_available": ov_devices["openvino_available"],
+            "openvino_import": ov_devices["openvino_import"],
             "npu_bar_found": npu_bar_status["found"],
             "npu_bar_protected": npu_bar_status["protected"],
             "npu_bar_conflict": npu_bar_status["conflict"],
@@ -268,6 +344,9 @@ class HardwareDiscovery:
         print(f"  iGPU Presence: {'✅ Detected' if caps['igpu_present'] else '❌ Not Detected'} ({caps['igpu_type']})")
         print(f"  NPU Presence:  {'✅ Detected' if caps['npu_present'] else '❌ Not Detected'} ({caps['npu_type']})")
         print(f"  VPU Presence:  {'✅ Detected' if caps['vpu_present'] else '❌ Not Detected'} ({caps['vpu_count']} units)")
+        print(f"  VPU Runtime:   {'✅ Usable' if caps['vpu_runtime_usable'] else '❌ Not Usable'} ({caps['vpu_runtime_count']} targets)")
+        print(f"  VPU USB:       {'✅ Present' if caps['vpu_usb_present'] else '❌ Not Present'} ({caps['vpu_usb_count']} devices)")
+        print(f"  OpenVINO API:  {caps['openvino_import'] or 'Not Available'}")
         print(f"  NPU BAR Protection: {'✅ SAFE' if caps['npu_bar_protected'] else '⚠️  CONFLICT' if caps['npu_bar_conflict'] else 'Unknown'}")
         if caps['gpu_blacklisted']:
             print(f"  GPU Status:    ❌ BLACKLISTED: {', '.join(caps['blacklist_reasons'])}")

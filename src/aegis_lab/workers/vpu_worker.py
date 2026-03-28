@@ -2,8 +2,10 @@ import logging
 import time
 import os
 import json
+import glob
 from typing import Dict, Any, Optional, List
 from aegis_lab.workers.base import WorkerBase
+from aegis_lab.hardware.discovery import HardwareDiscovery
 from aegis_lab.sentinel.sentinel_mission import SentinelMission
 
 # Robust OpenVINO import
@@ -49,54 +51,139 @@ class VpuWorker(WorkerBase):
         else:
             logger.warning("OpenVINO Core not available. VPU Worker will run in simulation mode.")
 
+    @staticmethod
+    def _load_vpu_configs(config_dir: str) -> List[Dict[str, Any]]:
+        configs = []
+        for config_path in sorted(glob.glob(os.path.join(config_dir, "vpu_*.json"))):
+            with open(config_path, "r") as handle:
+                config = json.load(handle)
+            config["_config_path"] = config_path
+            configs.append(config)
+        return configs
+
+    @staticmethod
+    def _normalize_int(value: Any) -> Optional[int]:
+        if value in (None, ""):
+            return None
+        try:
+            return int(str(value), 10)
+        except ValueError:
+            return None
+
+    @classmethod
+    def _score_usb_match(cls, config: Dict[str, Any], usb_device: Dict[str, str]) -> int:
+        score = 0
+        config_serial = str(config.get("serial", "")).strip()
+        if config_serial and config_serial == usb_device.get("serial", ""):
+            score += 100
+
+        config_vendor = str(config.get("vendor_id", "")).lower().replace("0x", "")
+        config_product = str(config.get("product_id", "")).lower().replace("0x", "")
+        if config_vendor and config_vendor == usb_device.get("vendor_id", "").lower():
+            score += 10
+        if config_product and config_product == usb_device.get("product_id", "").lower():
+            score += 10
+
+        config_bus = cls._normalize_int(config.get("bus_id"))
+        usb_bus = cls._normalize_int(usb_device.get("busnum"))
+        if config_bus is not None and usb_bus is not None and config_bus == usb_bus:
+            score += 5
+
+        config_dev = cls._normalize_int(config.get("device_id"))
+        usb_dev = cls._normalize_int(usb_device.get("devnum"))
+        if config_dev is not None and usb_dev is not None and config_dev == usb_dev:
+            score += 3
+
+        return score
+
+    @classmethod
+    def _match_configs_to_usb(cls, configs: List[Dict[str, Any]], usb_devices: List[Dict[str, str]]):
+        matches = []
+        for config in configs:
+            for usb_device in usb_devices:
+                score = cls._score_usb_match(config, usb_device)
+                if score > 0:
+                    matches.append((score, config.get("device_name", ""), config, usb_device))
+
+        matches.sort(key=lambda item: (-item[0], item[1]))
+
+        claimed_configs = set()
+        claimed_usb = set()
+        assignments = []
+        for score, _, config, usb_device in matches:
+            config_name = config.get("device_name")
+            usb_key = usb_device.get("sysfs_name")
+            if config_name in claimed_configs or usb_key in claimed_usb:
+                continue
+            claimed_configs.add(config_name)
+            claimed_usb.add(usb_key)
+            assignments.append((config, usb_device, score))
+
+        return assignments
+
     def _initialize_vpus(self, config_dir: str):
-        # We specifically look for stick 3 and stick 17 per requirements
-        vpu_configs = ["vpu_stick_3.json", "vpu_stick_17.json"]
+        vpu_configs = self._load_vpu_configs(config_dir)
         available_devices = self.ie.available_devices
         logger.info(f"Available OpenVINO devices: {available_devices}")
+        runtime_devices = [dev for dev in available_devices if dev.startswith("MYRIAD")]
+        usb_devices = HardwareDiscovery.list_usb_myriad_devices()
+        matched_assignments = self._match_configs_to_usb(vpu_configs, usb_devices)
 
-        for config_file in vpu_configs:
-            config_path = os.path.join(config_dir, config_file)
-            if os.path.exists(config_path):
-                with open(config_path, "r") as f:
-                    config = json.load(f)
-                
-                device_name = config.get("device_name")
-                # Try to find a matching MYRIAD device. 
-                # In OpenVINO, they are often named MYRIAD.0, MYRIAD.1 etc.
-                # If we have specific hardware IDs, we might need to map them.
-                # For this implementation, we'll assign them sequentially if available.
-                
-                vpu_idx = len(self.vpus)
-                target_device = f"MYRIAD.{vpu_idx}"
-                
-                # Check if this device index actually exists
-                matching_ov_device = None
-                for dev in available_devices:
-                    if dev.startswith("MYRIAD") and (str(vpu_idx) in dev or len(available_devices) == 1):
-                        matching_ov_device = dev
-                        break
-                
-                if matching_ov_device:
-                    self.vpus[device_name] = {
-                        "ov_device": matching_ov_device,
-                        "config": config,
-                        "compiled_models": {},
-                        "infer_requests": {},
-                        "input_tensors": {}
-                    }
-                    logger.info(f"Initialized {device_name} on {matching_ov_device}")
-                else:
-                    logger.warning(f"Could not find matching MYRIAD device for {device_name}. Using simulation for this unit.")
-                    self.vpus[device_name] = {
-                        "ov_device": "SIMULATION",
-                        "config": config,
-                        "compiled_models": {},
-                        "infer_requests": {},
-                        "input_tensors": {}
-                    }
+        if not matched_assignments and runtime_devices and not vpu_configs:
+            matched_assignments = [
+                (
+                    {"device_name": f"vpu_{idx}", "hardware_type": "MYRIAD"},
+                    {},
+                    0,
+                )
+                for idx, _ in enumerate(runtime_devices)
+            ]
+
+        if not matched_assignments and vpu_configs:
+            logger.warning("No configured VPU profiles matched physically attached Myriad devices.")
+
+        for vpu_idx, assignment in enumerate(matched_assignments):
+            config, usb_device, _score = assignment
+            device_name = config.get("device_name", f"vpu_{vpu_idx}")
+            matching_ov_device = runtime_devices[vpu_idx] if vpu_idx < len(runtime_devices) else None
+
+            if matching_ov_device:
+                logger.info(f"Initialized {device_name} on {matching_ov_device}")
             else:
-                logger.error(f"Hardware profile not found: {config_path}")
+                logger.warning(f"Could not find matching MYRIAD runtime target for {device_name}. Using simulation for this unit.")
+
+            self.vpus[device_name] = {
+                "ov_device": matching_ov_device or "SIMULATION",
+                "config": config,
+                "usb_device": usb_device,
+                "compiled_models": {},
+                "infer_requests": {},
+                "input_tensors": {}
+            }
+
+        if not self.vpus and runtime_devices:
+            for idx, runtime_device in enumerate(runtime_devices):
+                device_name = f"vpu_{idx}"
+                self.vpus[device_name] = {
+                    "ov_device": runtime_device,
+                    "config": {"device_name": device_name, "hardware_type": "MYRIAD"},
+                    "usb_device": usb_devices[idx] if idx < len(usb_devices) else {},
+                    "compiled_models": {},
+                    "infer_requests": {},
+                    "input_tensors": {}
+                }
+                logger.info(f"Initialized synthetic VPU profile {device_name} on {runtime_device}")
+
+    def _select_vpu_id(self, target_device: str) -> Optional[str]:
+        if not self.vpus:
+            return None
+
+        vpu_ids = list(self.vpus.keys())
+        digit_chars = "".join(ch for ch in str(target_device) if ch.isdigit())
+        if digit_chars:
+            idx = int(digit_chars) % len(vpu_ids)
+            return vpu_ids[idx]
+        return vpu_ids[0]
 
     def _get_prepared_inference(self, vpu_id: str, model_path: str):
         vpu = self.vpus.get(vpu_id)
@@ -132,14 +219,8 @@ class VpuWorker(WorkerBase):
         stage_name = task.get("stage_name", "unknown")
         
         # Determine which VPU to use
-        # The scheduler might pass VPU_0 or VPU_1 in target_device or similar
         target_device = task.get("target_device", "VPU_0")
-        vpu_id = "vpu_stick_3" if "0" in target_device else "vpu_stick_17"
-        
-        # If the requested VPU is not available, try the other one or fallback
-        if vpu_id not in self.vpus:
-            vpu_id = next(iter(self.vpus.keys())) if self.vpus else None
-            
+        vpu_id = self._select_vpu_id(target_device)
         vpu = self.vpus.get(vpu_id) if vpu_id else None
         device_label = vpu["ov_device"] if vpu else "SIMULATION"
 

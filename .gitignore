@@ -18,6 +18,8 @@ dist/
 .venv/
 venv/
 env/
+.venvs/
+.uv-python/
 
 # Test and coverage
 .pytest_cache/
@@ -27,6 +29,9 @@ htmlcov/
 # Logs and temporary files
 *.log
 .DS_Store
+.cache/
+.runtime/
+.tmp_wheels/
 
 # Preserving hardware configurations
 !configs/hardware/*.json
