@@ -17,6 +17,7 @@ class IPCServer:
         self.auth_token = auth_token
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REP)
+        self.socket.setsockopt(zmq.LINGER, 0)
         self.socket.bind(f"tcp://*:{self.port}")
         self.running = False
         self._handlers: Dict[str, Callable] = {}
@@ -33,7 +34,7 @@ class IPCServer:
     def stop(self):
         self.running = False
         self.socket.close()
-        self.context.term()
+        self.context.destroy(linger=0)
 
     def _run(self):
         while self.running:
@@ -76,6 +77,7 @@ class LogServer:
         self.port = port
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.SUB)
+        self.socket.setsockopt(zmq.LINGER, 0)
         self.socket.bind(f"tcp://*:{self.port}")
         self.socket.setsockopt_string(zmq.SUBSCRIBE, "")
         self.running = False
@@ -89,6 +91,7 @@ class LogServer:
     def stop(self):
         self.running = False
         self.socket.close()
+        self.context.destroy(linger=0)
 
     def _run(self, callback: Callable[[Dict[str, Any]], None]):
         while self.running:
@@ -113,6 +116,7 @@ class EventPublisher:
         self.port = port
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.PUB)
+        self.socket.setsockopt(zmq.LINGER, 0)
         self.socket.bind(f"tcp://*:{self.port}")
         logger.info(f"Event Publisher bound to port {self.port}")
 
@@ -126,3 +130,4 @@ class EventPublisher:
 
     def stop(self):
         self.socket.close()
+        self.context.destroy(linger=0)

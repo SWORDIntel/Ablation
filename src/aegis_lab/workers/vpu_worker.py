@@ -19,7 +19,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-class MultiVpuWorker(WorkerBase):
+class VpuWorker(WorkerBase):
     """
     Multi-VPU worker implementation using OpenVINO MYRIAD devices.
     Optimized for dual-stick configuration (Stick 3 and Stick 17).
@@ -233,9 +233,13 @@ class MultiVpuWorker(WorkerBase):
                 "telemetry": {"device": device_label, "vpu_id": vpu_id, "shave_utilization": 0.0}
             }
 
+MultiVpuWorker = VpuWorker
+
+__all__ = ["VpuWorker", "MultiVpuWorker"]
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    worker = MultiVpuWorker()
+    worker = VpuWorker()
     worker.connect()
     try:
         worker.run()

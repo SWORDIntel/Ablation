@@ -19,6 +19,8 @@ class EfficiencyRanker:
         Calculation: (Tokens/Sec) / (GPU_Power_Watts + 1.0)
         """
         metrics = self.telemetry.get_metrics()
+        if isinstance(metrics, list):
+            metrics = metrics[0] if metrics else {}
         power = metrics.get("gpu_power_watts", 15.0) # Fallback to idle power
         
         if power <= 0: power = 1.0

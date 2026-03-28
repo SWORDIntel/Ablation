@@ -1,7 +1,7 @@
 import json
 import os
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from aegis_lab.state.db import AegisState
 from aegis_lab.artifacts.store import ArtifactStore
@@ -37,7 +37,7 @@ class AtomRegistry:
         Registers an immutable atom record and indexes it for semantic search.
         The actual tensor artifact should already be saved in ArtifactStore.
         """
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         
         atom_record = {
             "atom_id": atom_id,

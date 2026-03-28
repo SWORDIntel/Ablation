@@ -30,19 +30,21 @@ class RealTimeSubscriber(QThread):
         super().__init__()
         self.port = port
         self.running = True
+        self.context = None
+        self.socket = None
         
     def run(self):
-        context = zmq.Context()
-        socket = context.socket(zmq.SUB)
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.SUB)
         # Multiple subscribers can connect to one PUB bind
-        socket.connect(f"tcp://localhost:{self.port}")
-        socket.setsockopt_string(zmq.SUBSCRIBE, "atoms")
-        socket.setsockopt(zmq.RCVTIMEO, 1000)
+        self.socket.connect(f"tcp://localhost:{self.port}")
+        self.socket.setsockopt_string(zmq.SUBSCRIBE, "atoms")
+        self.socket.setsockopt(zmq.RCVTIMEO, 1000)
         
         while self.running:
             try:
-                topic = socket.recv_string()
-                data = socket.recv_json()
+                topic = self.socket.recv_string()
+                data = self.socket.recv_json()
                 if topic == "atoms":
                     self.atom_received.emit(data)
             except zmq.Again:
@@ -53,6 +55,12 @@ class RealTimeSubscriber(QThread):
                 
     def stop(self):
         self.running = False
+        if self.socket is not None:
+            self.socket.close()
+            self.socket = None
+        if self.context is not None:
+            self.context.destroy(linger=0)
+            self.context = None
 
 DARK_STYLESHEET = """
 QMainWindow, QWidget {
@@ -147,6 +155,7 @@ class OrchestratorClient:
     def __init__(self, url="tcp://localhost:5555"):
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
+        self.socket.setsockopt(zmq.LINGER, 0)
         self.socket.connect(url)
         self.socket.setsockopt(zmq.RCVTIMEO, 2000)
 
@@ -157,6 +166,14 @@ class OrchestratorClient:
             return self.socket.recv_json()
         except Exception as e:
             return {"status": "error", "error": str(e)}
+
+    def close(self):
+        if self.socket is not None:
+            self.socket.close()
+            self.socket = None
+        if self.context is not None:
+            self.context.destroy(linger=0)
+            self.context = None
 
 class DashboardTab(QWidget):
     def __init__(self, client):

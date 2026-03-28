@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 import logging
+import os
 import threading
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
@@ -11,7 +12,7 @@ from aegis_lab.workers.p2p import PeerStreamer
 
 logger = logging.getLogger(__name__)
 
-AEGIS_AUTH_TOKEN = "aegis-secret-token-2024"
+AEGIS_AUTH_TOKEN = os.getenv("AEGIS_AUTH_TOKEN", "aegis-secret-token-2024")
 
 class ZmqLogHandler(logging.Handler):
     """
@@ -42,6 +43,17 @@ class ZmqLogHandler(logging.Handler):
         except Exception:
             self.handleError(record)
 
+    def close(self):
+        try:
+            if getattr(self, "socket", None) is not None:
+                self.socket.close()
+        finally:
+            try:
+                if getattr(self, "context", None) is not None:
+                    self.context.destroy(linger=0)
+            finally:
+                super().close()
+
 class WorkerBase(ABC):
     """
     Base class for all AEGIS-LAB workers (CPU, iGPU, NPU).
@@ -56,6 +68,9 @@ class WorkerBase(ABC):
         self.auth_token = auth_token
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
+        self.socket.setsockopt(zmq.LINGER, 0)
+        self.socket.setsockopt(zmq.RCVTIMEO, 5000)
+        self.socket.setsockopt(zmq.SNDTIMEO, 5000)
         self.socket_lock = threading.Lock()
         self.running = False
         self.capabilities = HardwareDiscovery.discover()
@@ -198,5 +213,25 @@ class WorkerBase(ABC):
 
     def stop(self):
         self.running = False
+        heartbeat_thread = getattr(self, "_heartbeat_thread", None)
+        if heartbeat_thread and heartbeat_thread.is_alive():
+            heartbeat_thread.join(timeout=1)
+
+        if self.log_handler is not None:
+            try:
+                logging.getLogger().removeHandler(self.log_handler)
+            except ValueError:
+                pass
+            self.log_handler.close()
+            self.log_handler = None
+
+        if self.p2p_streamer:
+            self.p2p_streamer.close()
+            self.p2p_streamer = None
+
+        for streamer in self.peer_connections.values():
+            streamer.close()
+        self.peer_connections.clear()
+
         self.socket.close()
-        self.context.term()
+        self.context.destroy(linger=0)

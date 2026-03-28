@@ -11,6 +11,7 @@ class OrchestratorClient:
     def __init__(self, url="tcp://localhost:5555"):
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
+        self.socket.setsockopt(zmq.LINGER, 0)
         self.socket.connect(url)
         self.socket.setsockopt(zmq.RCVTIMEO, 5000)
 
@@ -21,6 +22,14 @@ class OrchestratorClient:
             return self.socket.recv_json()
         except Exception as e:
             return {"status": "error", "error": str(e)}
+
+    def close(self):
+        if self.socket is not None:
+            self.socket.close()
+            self.socket = None
+        if self.context is not None:
+            self.context.destroy(linger=0)
+            self.context = None
 
 def main():
     parser = argparse.ArgumentParser(description="AEGIS-LAB CLI")
@@ -81,47 +90,59 @@ def main():
             worker.stop()
     elif args.command == "submit":
         client = OrchestratorClient(args.url)
-        # We need to add a 'submit_job' handler to the OrchestratorService IPC
-        resp = client.request("submit_job", project_id=args.project, job_type=args.type)
-        if resp.get("status") == "ok":
-            print(f"Job submitted: {resp['job_id']}")
-        else:
-            print(f"Error: {resp.get('error')}")
+        try:
+            # We need to add a 'submit_job' handler to the OrchestratorService IPC
+            resp = client.request("submit_job", project_id=args.project, job_type=args.type)
+            if resp.get("status") == "ok":
+                print(f"Job submitted: {resp['job_id']}")
+            else:
+                print(f"Error: {resp.get('error')}")
+        finally:
+            client.close()
     elif args.command == "train":
         client = OrchestratorClient(args.url)
-        params = {
-            "model_path": args.model,
-            "target_atom": args.target,
-            "preferred_device": args.device
-        }
-        resp = client.request("submit_job", 
-                              project_id=args.project, 
-                              job_type="ablation_training",
-                              parameters=params)
-        if resp.get("status") == "ok":
-            print(f"Training job submitted: {resp['job_id']}")
-            print(f"Monitor progress in the Dashboard or via 'aegis status {resp['job_id']}'")
-        else:
-            print(f"Error: {resp.get('error')}")
+        try:
+            params = {
+                "model_path": args.model,
+                "target_atom": args.target,
+                "preferred_device": args.device
+            }
+            resp = client.request("submit_job", 
+                                  project_id=args.project, 
+                                  job_type="ablation_training",
+                                  parameters=params)
+            if resp.get("status") == "ok":
+                print(f"Training job submitted: {resp['job_id']}")
+                print(f"Monitor progress in the Dashboard or via 'aegis status {resp['job_id']}'")
+            else:
+                print(f"Error: {resp.get('error')}")
+        finally:
+            client.close()
     elif args.command == "list":
         client = OrchestratorClient(args.url)
-        resp = client.request("list_jobs")
-        if isinstance(resp, list):
-            for j in resp:
-                print(f"{j['job_id']} | {j['project_id']} | {j['status']} | {j['job_type']}")
-        else:
-            print(f"Error: {resp.get('error')}")
+        try:
+            resp = client.request("list_jobs")
+            if isinstance(resp, list):
+                for j in resp:
+                    print(f"{j['job_id']} | {j['project_id']} | {j['status']} | {j['job_type']}")
+            else:
+                print(f"Error: {resp.get('error')}")
+        finally:
+            client.close()
     elif args.command == "status":
         client = OrchestratorClient(args.url)
-        status = client.request("get_job_status", job_id=args.job_id)
-        if "error" in status:
-            print(status["error"])
-        else:
-            print(f"Job: {status['job_id']}")
-            print(f"Status: {status['status']}")
-            print("Stages:")
-            for s in status.get("stages", []):
-                print(f"  {s['ordinal']}: {s['stage_name']} ({s['status']})")
+        try:
+            status = client.request("get_job_status", job_id=args.job_id)
+            if "error" in status:
+                print(status["error"])
+            else:
+                print(f"Job: {status['job_id']}")
+                print(f"Status: {status['status']}")
+                print("Stages:")
+                for s in status.get("stages", []):
+                    print(f"  {s['ordinal']}: {s['stage_name']} ({s['status']})")
+        finally:
+            client.close()
     else:
         parser.print_help()
 
