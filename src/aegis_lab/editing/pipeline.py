@@ -1,5 +1,8 @@
 import logging
 import uuid
+import threading
+import queue
+import time
 from typing import Dict, Any, List
 from pathlib import Path
 
@@ -31,6 +34,68 @@ class AblationPipeline:
         self.execution_mode = execution_mode
         self.work_root = Path("/tmp/aegis_ablation")
         self.work_root.mkdir(parents=True, exist_ok=True)
+
+        # Telemetry Subsystem initialization
+        self.telemetry_queue = queue.Queue(maxsize=1000)
+        self._stop_event = threading.Event()
+        self.telemetry_thread = threading.Thread(target=self._telemetry_committer, daemon=True)
+        self.telemetry_thread.start()
+
+    def _telemetry_committer(self):
+        """Background daemon isolating AegisState I/O from the execution thread with write batching."""
+        batch = []
+        last_commit_time = time.time()
+
+        while not self._stop_event.is_set() or not self.telemetry_queue.empty():
+            try:
+                # Wait for items but unblock every 0.1s to check for flush
+                payload = self.telemetry_queue.get(timeout=0.1)
+                batch.append(payload)
+                self.telemetry_queue.task_done()
+            except queue.Empty:
+                pass
+
+            now = time.time()
+            if batch and (len(batch) >= 50 or now - last_commit_time >= 0.5):
+                # Group by stage_id to optimize writes
+                updates_by_stage = {}
+                for item in batch:
+                    stage_id = item.get("stage_id")
+                    data = item.get("data")
+                    if stage_id not in updates_by_stage:
+                        updates_by_stage[stage_id] = []
+                    updates_by_stage[stage_id].append(data)
+
+                for stage_id, new_telemetry in updates_by_stage.items():
+                    current_stage = self.state.get_stage(stage_id)
+                    if current_stage:
+                        current_telemetry = current_stage.get("telemetry", [])
+                        current_telemetry.extend(new_telemetry)
+                        self.state.update_stage(stage_id, {"telemetry": current_telemetry})
+
+                batch.clear()
+                last_commit_time = now
+
+        # Final flush for any remaining batch elements
+        if batch:
+            updates_by_stage = {}
+            for item in batch:
+                stage_id = item.get("stage_id")
+                data = item.get("data")
+                if stage_id not in updates_by_stage:
+                    updates_by_stage[stage_id] = []
+                updates_by_stage[stage_id].append(data)
+            for stage_id, new_telemetry in updates_by_stage.items():
+                current_stage = self.state.get_stage(stage_id)
+                if current_stage:
+                    current_telemetry = current_stage.get("telemetry", [])
+                    current_telemetry.extend(new_telemetry)
+                    self.state.update_stage(stage_id, {"telemetry": current_telemetry})
+            batch.clear()
+
+    def stop(self):
+        self._stop_event.set()
+        self.telemetry_thread.join(timeout=2.0)
 
     def _fallback_fingerprint(self, model_path: str, error: str) -> Dict[str, Any]:
         contract = resolve_execution_contract(
@@ -139,13 +204,28 @@ class AblationPipeline:
         self.state.update_stage(stage_extract, {"status": "running"})
         
         builder = DeltaBuilder(self.artifact_store, self.work_root / job_id)
+
+        # Telemetry callback for layer extraction
+        def _layer_progress_callback(layer_idx, total_layers, layer_num):
+            try:
+                self.telemetry_queue.put_nowait({
+                    "stage_id": stage_extract,
+                    "data": {
+                        "layer": layer_num,
+                        "pct_complete": (layer_idx + 1) / total_layers * 100.0,
+                        "status": "extracted"
+                    }
+                })
+            except queue.Full:
+                logger.warning("Telemetry queue full, dropping extraction progress tick.")
+
         edit_plan = {
             "type": "permanent",
             "layers": layers,
             "capture_info": capture_result,
             "execution_contract": pipeline_contract.as_dict(),
         }
-        delta_hash = builder.generate_delta_tensors(edit_plan)
+        delta_hash = builder.generate_delta_tensors(edit_plan, progress_callback=_layer_progress_callback)
         
         # Register the atom
         atom_id = f"atom-{job_id}"
@@ -188,6 +268,7 @@ class AblationPipeline:
         self.state.update_job(job_id, {"status": status, "execution_contract": pipeline_contract.as_dict()})
         
         logger.info(f"AblationPipeline for job {job_id} completed with status: {status}")
+        self.stop()
         return job_id
 
 if __name__ == "__main__":

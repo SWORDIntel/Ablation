@@ -15,7 +15,7 @@ class DeltaBuilder:
         self.work_dir = Path(work_dir)
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
-    def generate_delta_tensors(self, edit_plan: Dict[str, Any]) -> str:
+    def generate_delta_tensors(self, edit_plan: Dict[str, Any], progress_callback=None) -> str:
         """
         Generates permanent delta tensors based on the edit plan and stores them.
         
@@ -30,10 +30,17 @@ class DeltaBuilder:
         # Simulate building delta tensors (e.g. creating a safetensors file)
         delta_file_path = self.work_dir / "delta_tensors.safetensors"
         
+        layers = edit_plan.get("layers", [])
+        total_layers = len(layers)
+
         # In a real implementation, we would load base weights, compute deltas, and save them.
         with open(delta_file_path, "wb") as f:
             f.write(b"MOCK_DELTA_TENSOR_DATA_FOR_LAYERS:")
-            f.write(str(edit_plan.get("layers", [])).encode('utf-8'))
+            for idx, layer in enumerate(layers):
+                if progress_callback:
+                    progress_callback(idx, total_layers, layer)
+                f.write(str(layer).encode('utf-8'))
+                f.write(b",")
             
         # Store in content-addressed artifact store and get hash
         artifact_hash = self.artifact_store.put_file(delta_file_path, move=True)

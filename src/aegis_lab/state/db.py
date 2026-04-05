@@ -193,6 +193,10 @@ class AegisState:
         }
         return self.db.upsert("stages", "stage_id", stage_id, stage_data)
 
+    def get_stage(self, stage_id: str) -> Optional[Dict[str, Any]]:
+        stages = self.db.query("stages", {"stage_id": stage_id})
+        return stages[0] if stages else None
+
     def get_stages(self, job_id: str) -> List[Dict[str, Any]]:
         return self.db._get_store("stages").query({"job_id": job_id}, pk_field="stage_id")
 
