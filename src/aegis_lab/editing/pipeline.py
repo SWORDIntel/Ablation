@@ -7,6 +7,7 @@ from aegis_lab.state.db import AegisState
 from aegis_lab.artifacts.store import ArtifactStore
 from aegis_lab.intake.fingerprint import ModelFingerprint
 from aegis_lab.probing.capture import CAREActivationCapturer
+from aegis_lab.atoms.extractor import BehavioralAtomExtractor
 from aegis_lab.editing.delta_builder import DeltaBuilder
 from aegis_lab.verification.authority import SemanticAuthority
 from aegis_lab.editing.runtime import (
@@ -27,6 +28,7 @@ class AblationPipeline:
         self.state = state
         self.artifact_store = artifact_store
         self.capturer = CAREActivationCapturer(state, artifact_store)
+        self.extractor = BehavioralAtomExtractor(state, artifact_store)
         self.authority = SemanticAuthority(default_mode=execution_mode)
         self.execution_mode = execution_mode
         self.work_root = Path("/tmp/aegis_ablation")
@@ -138,23 +140,30 @@ class AblationPipeline:
         self.state.create_stage(stage_extract, job_id, "extraction", 2)
         self.state.update_stage(stage_extract, {"status": "running"})
         
+        # Refined Extraction: Isolate behavioral atom from activations
+        logger.info("[PIPELINE] Refined Extraction: Isolating behavioral atom")
+        atom_hash = self.extractor.extract_atom(
+            job_id=job_id,
+            positive_act_hash=capture_result["positive"],
+            negative_act_hash=capture_result["negative"],
+            method="ridge_regression",
+            execution_mode=self.execution_mode
+        )
+
+        # Retrieve the newly created atom metadata
+        atom_info = next((a for a in self.state.db.list_all("atoms") if a["job_id"] == job_id), None)
+        atom_id = atom_info["atom_id"] if atom_info else f"atom-{job_id}"
+
         builder = DeltaBuilder(self.artifact_store, self.work_root / job_id)
         edit_plan = {
             "type": "permanent",
             "layers": layers,
+            "atom_id": atom_id,
+            "atom_hash": atom_hash,
             "capture_info": capture_result,
             "execution_contract": pipeline_contract.as_dict(),
         }
         delta_hash = builder.generate_delta_tensors(edit_plan)
-        
-        # Register the atom
-        atom_id = f"atom-{job_id}"
-        self.state.register_atom({
-            "atom_id": atom_id,
-            "job_id": job_id,
-            "content_hash": delta_hash,
-            "layers": layers
-        })
         self.state.update_stage(
             stage_extract,
             {
