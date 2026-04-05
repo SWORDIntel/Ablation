@@ -178,18 +178,23 @@ class OrchestratorService:
         thermal_status = self.thermal_guardian.get_status()
         
         scheduler = SchedulerEngine(worker_info["capabilities"], thermal_status)
+
+        # Batch fetch all pending stages and all jobs
+        all_pending_stages = self.state.get_all_stages({"status": "pending"})
+        all_jobs = {job["job_id"]: job for job in self.state.get_jobs()}
+
         pending_stages = []
-        for job in self.state.get_jobs():
-            for stage in self.state.get_stages(job["job_id"]):
-                if stage.get("status") == "pending":
-                    pending_stage = dict(stage)
-                    pending_stage.setdefault("job_id", job["job_id"])
-                    pending_stages.append(pending_stage)
+        for stage in all_pending_stages:
+            job_id = stage.get("job_id")
+            if job_id in all_jobs:
+                pending_stage = dict(stage)
+                pending_stages.append(pending_stage)
+
         pending_stages.sort(key=lambda x: x["ordinal"])
         
         for stage in pending_stages:
             job_id = stage["job_id"]
-            job = self.state.get_job(job_id)
+            job = all_jobs.get(job_id)
             if not job or job["status"] == "failed":
                 continue
 
