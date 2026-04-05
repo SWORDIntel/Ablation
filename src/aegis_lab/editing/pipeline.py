@@ -5,8 +5,10 @@ from pathlib import Path
 
 from aegis_lab.state.db import AegisState
 from aegis_lab.artifacts.store import ArtifactStore
+from aegis_lab.utils.progress import ProgressTracker
 from aegis_lab.intake.fingerprint import ModelFingerprint
 from aegis_lab.probing.capture import CAREActivationCapturer
+from aegis_lab.atoms.extractor import BehavioralAtomExtractor
 from aegis_lab.editing.delta_builder import DeltaBuilder
 from aegis_lab.verification.authority import SemanticAuthority
 from aegis_lab.editing.runtime import (
@@ -27,6 +29,7 @@ class AblationPipeline:
         self.state = state
         self.artifact_store = artifact_store
         self.capturer = CAREActivationCapturer(state, artifact_store)
+        self.extractor = BehavioralAtomExtractor(state, artifact_store)
         self.authority = SemanticAuthority(default_mode=execution_mode)
         self.execution_mode = execution_mode
         self.work_root = Path("/tmp/aegis_ablation")
@@ -58,7 +61,9 @@ class AblationPipeline:
                           layers: List[int], 
                           positive_dataset: str, 
                           negative_dataset: str,
-                          project_id: str = "default_project") -> str:
+                          project_id: str = "default_project",
+                          use_sta: bool = False,
+                          show_progress: bool = True) -> str:
         """
         Runs the full ablation pipeline.
         
@@ -70,6 +75,11 @@ class AblationPipeline:
         """
         job_id = f"ablation-{uuid.uuid4().hex[:8]}"
         logger.info(f"Starting formal AblationPipeline for job {job_id}")
+
+        progress = None
+        if show_progress:
+            progress = ProgressTracker(total_steps=4, description=f"Ablating {job_id}")
+
         pipeline_contract = resolve_execution_contract(
             operation="ablation_pipeline",
             requested_mode=self.execution_mode,
@@ -80,6 +90,7 @@ class AblationPipeline:
         
         # 1. Intake
         logger.info("[PIPELINE] Stage 1: Intake")
+        if progress: progress.update(0, "Intaking model...")
         try:
             fingerprint = ModelFingerprint.analyze_model(model_path)
             fingerprint["analysis_mode"] = ExecutionMode.FALLBACK.value
@@ -99,6 +110,7 @@ class AblationPipeline:
         stage_intake = f"{job_id}-s0"
         self.state.create_stage(stage_intake, job_id, "intake", 0)
         self.state.update_stage(stage_intake, {"status": "succeeded", "result": fingerprint})
+        if progress: progress.update(1, "Probing activations...")
         
         # 2. Probing
         logger.info("[PIPELINE] Stage 2: Probing")
@@ -131,6 +143,7 @@ class AblationPipeline:
                 },
             },
         )
+        if progress: progress.update(1, "Extracting atoms...")
         
         # 3. Extraction (Atom Generation)
         logger.info("[PIPELINE] Stage 3: Extraction")
@@ -138,23 +151,33 @@ class AblationPipeline:
         self.state.create_stage(stage_extract, job_id, "extraction", 2)
         self.state.update_stage(stage_extract, {"status": "running"})
         
+        # Refined Extraction: Isolate behavioral atom from activations
+        method = "steering_target_atoms" if use_sta else "ridge_regression"
+        logger.info(f"[PIPELINE] Refined Extraction: Isolating behavioral atom using {method}")
+        atom_hash = self.extractor.extract_atom(
+            job_id=job_id,
+            positive_act_hash=capture_result["positive"],
+            negative_act_hash=capture_result["negative"],
+            method=method,
+            execution_mode=self.execution_mode
+        )
+
+        # Retrieve the newly created atom metadata
+        atom_info = next((a for a in self.state.db.list_all("atoms") if a["job_id"] == job_id), None)
+        atom_id = atom_info["atom_id"] if atom_info else f"atom-{job_id}"
+
         builder = DeltaBuilder(self.artifact_store, self.work_root / job_id)
         edit_plan = {
             "type": "permanent",
             "layers": layers,
+            "atom_id": atom_id,
+            "atom_hash": atom_hash,
             "capture_info": capture_result,
             "execution_contract": pipeline_contract.as_dict(),
         }
         delta_hash = builder.generate_delta_tensors(edit_plan)
-        
-        # Register the atom
-        atom_id = f"atom-{job_id}"
-        self.state.register_atom({
-            "atom_id": atom_id,
-            "job_id": job_id,
-            "content_hash": delta_hash,
-            "layers": layers
-        })
+        if progress: progress.update(1, "Validating edit...")
+
         self.state.update_stage(
             stage_extract,
             {
@@ -186,7 +209,8 @@ class AblationPipeline:
         status = "succeeded" if validation_result["passed"] else "failed"
         self.state.update_stage(stage_valid, {"status": status, "result": validation_result})
         self.state.update_job(job_id, {"status": status, "execution_contract": pipeline_contract.as_dict()})
-        
+        if progress: progress.update(1, "Finalizing...")
+
         logger.info(f"AblationPipeline for job {job_id} completed with status: {status}")
         return job_id
 
