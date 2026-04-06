@@ -283,6 +283,23 @@ class VpuWorker(WorkerBase):
                 if name in preallocated_tensors:
                     preallocated_tensors[name].data[:] = data
             
+            # Hardware Execution Callback
+            def _inference_callback(request, user_data):
+                # Send non-blocking transmission to Orchestrator IPC here
+                # DO NOT execute heavy I/O operations inside this callback
+                try:
+                    metrics = {
+                        "vpu_id": user_data["vpu_id"],
+                        "latency": getattr(request, 'latency', 0.0),
+                        "status": "hardware_tick"
+                    }
+                    if hasattr(self, 'ipc_client') and self.ipc_client:
+                        self.ipc_client.send_async("telemetry_tick", metrics)
+                except Exception as e:
+                    logger.debug(f"Telemetry callback failed: {e}")
+
+            infer_request.set_callback(_inference_callback, user_data={"vpu_id": vpu_id})
+
             # Asynchronous inference call
             infer_request.start_async()
             infer_request.wait()

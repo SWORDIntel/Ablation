@@ -15,7 +15,7 @@ class DeltaBuilder:
         self.work_dir = Path(work_dir)
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
-    def generate_delta_tensors(self, edit_plan: Dict[str, Any]) -> str:
+    def generate_delta_tensors(self, edit_plan: Dict[str, Any], progress_callback=None) -> str:
         """
         Generates permanent delta tensors based on the edit plan and stores them.
         

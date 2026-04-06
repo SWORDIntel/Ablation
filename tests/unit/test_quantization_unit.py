@@ -10,7 +10,7 @@ import nncf
 import openvino
 
 from aegis_lab.quantization.calibration import CalibrationCorpusBuilder
-from aegis_lab.quantization.exporter import OpenVINOExporter
+from aegis_lab.quantization.exporter import OpenVINOExporter, PrecisionConfig
 
 class TestQuantizationUnit(unittest.TestCase):
     def test_calibration_corpus_builder(self):
@@ -47,8 +47,9 @@ class TestQuantizationUnit(unittest.TestCase):
         mock_quantized_model = MagicMock()
         nncf.quantize.return_value = mock_quantized_model
         
+        openvino.save_model.reset_mock()
         # Test export
-        output_xml = exporter.export_int8(calibration_dataset, target_device="NPU")
+        output_xml = exporter.export(precision=PrecisionConfig.INT8, calibration_dataset=calibration_dataset, target_device="NPU")
         
         # Check if environment optimizations were applied
         import os
@@ -66,8 +67,30 @@ class TestQuantizationUnit(unittest.TestCase):
         )
         
         # Verify openvino.save_model call
-        openvino.save_model.assert_called_once()
+        openvino.save_model.assert_called_once_with(mock_quantized_model, output_xml)
         self.assertEqual(output_xml, Path(work_dir) / "model_int8.xml")
+
+    def test_openvino_exporter_fp16(self):
+        model = MagicMock()
+        work_dir = "/tmp/aegis_test_quant_fp16"
+        exporter = OpenVINOExporter(model, work_dir)
+
+        openvino.save_model.reset_mock()
+        output_xml = exporter.export(precision=PrecisionConfig.FP16)
+
+        openvino.save_model.assert_called_once_with(model, output_xml, compress_to_fp16=True)
+        self.assertEqual(output_xml, Path(work_dir) / "model_fp16.xml")
+
+    def test_openvino_exporter_fp32(self):
+        model = MagicMock()
+        work_dir = "/tmp/aegis_test_quant_fp32"
+        exporter = OpenVINOExporter(model, work_dir)
+
+        openvino.save_model.reset_mock()
+        output_xml = exporter.export(precision=PrecisionConfig.FP32)
+
+        openvino.save_model.assert_called_once_with(model, output_xml)
+        self.assertEqual(output_xml, Path(work_dir) / "model_fp32.xml")
 
 if __name__ == "__main__":
     unittest.main()
