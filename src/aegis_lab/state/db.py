@@ -200,6 +200,9 @@ class AegisState:
     def get_stages(self, job_id: str) -> List[Dict[str, Any]]:
         return self.db._get_store("stages").query({"job_id": job_id}, pk_field="stage_id")
 
+    def get_all_stages(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        return self.db._get_store("stages").query(filters, pk_field="stage_id")
+
     def update_stage(self, stage_id: str, updates: Dict[str, Any]):
         stages = self.db.query("stages", {"stage_id": stage_id})
         if stages:

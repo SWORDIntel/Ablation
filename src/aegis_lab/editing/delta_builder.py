@@ -30,17 +30,14 @@ class DeltaBuilder:
         # Simulate building delta tensors (e.g. creating a safetensors file)
         delta_file_path = self.work_dir / "delta_tensors.safetensors"
         
-        layers = edit_plan.get("layers", [])
-        total_layers = len(layers)
-
-        # In a real implementation, we would load base weights, compute deltas, and save them.
+        # In a real implementation, we would load base weights, compute deltas using the
+        # behavioral atom, and save them.
         with open(delta_file_path, "wb") as f:
             f.write(b"MOCK_DELTA_TENSOR_DATA_FOR_LAYERS:")
-            for idx, layer in enumerate(layers):
-                if progress_callback:
-                    progress_callback(idx, total_layers, layer)
-                f.write(str(layer).encode('utf-8'))
-                f.write(b",")
+            f.write(str(edit_plan.get("layers", [])).encode('utf-8'))
+            if "atom_hash" in edit_plan:
+                f.write(b"\nDERIVED_FROM_ATOM_HASH:")
+                f.write(edit_plan["atom_hash"].encode('utf-8'))
             
         # Store in content-addressed artifact store and get hash
         artifact_hash = self.artifact_store.put_file(delta_file_path, move=True)
