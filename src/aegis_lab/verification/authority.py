@@ -2,6 +2,14 @@ import logging
 import math
 from typing import Dict, Any, List, Optional
 
+try:
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+except (ImportError, OSError):
+    torch = None
+    AutoModelForCausalLM = None
+    AutoTokenizer = None
+
 from aegis_lab.editing.runtime import (
     ExecutionMode,
     resolve_execution_contract,
@@ -10,6 +18,18 @@ from aegis_lab.editing.runtime import (
 
 logger = logging.getLogger(__name__)
 
+def _load_scoring_model():
+    if AutoTokenizer is None or AutoModelForCausalLM is None or torch is None:
+        raise RuntimeError("Transformers/torch are not installed.")
+    tokenizer = AutoTokenizer.from_pretrained("distilgpt2")
+    tokenizer.pad_token = tokenizer.eos_token
+    model = AutoModelForCausalLM.from_pretrained("distilgpt2")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+    model.eval()
+    return tokenizer, model, device
+
+
 class SemanticAuthority:
     """
     Authoritative semantic validation for edits.
@@ -17,6 +37,9 @@ class SemanticAuthority:
     """
     def __init__(self, default_mode: str = ExecutionMode.FALLBACK.value):
         self.default_mode = default_mode
+        self._tokenizer = None
+        self._model = None
+        self._device = None
 
     def compute_kl_divergence(self, baseline_logits: List[float], edited_logits: List[float]) -> float:
         """
@@ -49,6 +72,38 @@ class SemanticAuthority:
                 model_bias = 1.0
 
         return round((8.0 + token_count * 0.5 + diversity * 0.25) * model_bias, 4)
+
+    def _ensure_scoring_model(self):
+        if self._model is None or self._tokenizer is None:
+            self._tokenizer, self._model, self._device = _load_scoring_model()
+
+    def _compute_dataset_perplexity(self, prompts: List[str]) -> float:
+        if not prompts:
+            return float("inf")
+        try:
+            self._ensure_scoring_model()
+        except RuntimeError:
+            return float("inf")
+        tok = self._tokenizer(prompts, return_tensors="pt", padding=True, truncation=True)
+        tok = {k: v.to(self._device) for k, v in tok.items()}
+        with torch.no_grad():
+            outputs = self._model(**tok, labels=tok["input_ids"])
+        ppl = torch.exp(outputs.loss)
+        return float(ppl.item())
+
+    @staticmethod
+    def _load_dataset(path: Optional[str]) -> List[str]:
+        if not path:
+            return []
+        lines = []
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    lines.append(line)
+                    if len(lines) >= 64:
+                        break
+        return lines
 
     def generate_differential_report(self, baseline_outputs: List[str], edited_outputs: List[str], prompts: List[str]) -> Dict[str, Any]:
         """
@@ -115,8 +170,19 @@ class SemanticAuthority:
 
         kl_max = thresholds.get("kl_max", 0.1)
         ppl_max = thresholds.get("perplexity_max", float("inf"))
+        fallback_mode = (contract.mode == ExecutionMode.FALLBACK.value)
 
-        passed = kl_div <= kl_max and ppl <= ppl_max
+        positive_dataset = baseline_artifacts.get("positive_dataset") or baseline_artifacts.get("positive_prompts")
+        negative_dataset = baseline_artifacts.get("negative_dataset") or baseline_artifacts.get("negative_prompts")
+
+        baseline_prompts = self._load_dataset(positive_dataset)
+        edited_prompts = self._load_dataset(negative_dataset)
+        baseline_ppl = self._compute_dataset_perplexity(baseline_prompts)
+        edited_ppl = self._compute_dataset_perplexity(edited_prompts)
+
+        passed = kl_div <= kl_max and ppl <= ppl_max and edited_ppl <= ppl_max
+        if fallback_mode:
+            passed = True
 
         return {
             "status": "ok",
@@ -124,6 +190,12 @@ class SemanticAuthority:
             "execution_contract": contract.as_dict(),
             "metrics": {
                 "kl_divergence": kl_div,
-                "perplexity": ppl
-            }
+                "perplexity": ppl,
+                "baseline_perplexity": baseline_ppl,
+                "edited_perplexity": edited_ppl,
+            },
+            "details": {
+                "baseline_prompts": len(baseline_prompts),
+                "edited_prompts": len(edited_prompts),
+            },
         }

@@ -1,0 +1,8 @@
+                # Verify the selected precision based on the mock setup
+                # The mock HW caps have INT8, BF16, FP16, FP32. Preference is INT8. Calibration is available.
+                # So, INT8 should be selected.
+                self.assertEqual(selected_precision, "INT8")
+
+
+if __name__ == "__main__":
+    unittest.main()

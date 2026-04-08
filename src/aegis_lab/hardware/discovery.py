@@ -4,14 +4,15 @@ import subprocess
 import logging
 import time
 import numpy as np
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Set
 
 logger = logging.getLogger(__name__)
 
 class HardwareDiscovery:
     """
     Discovers hardware capabilities including CPU features (AMX/AVX512/AVX2),
-    iGPU presence, and NPU availability via OpenVINO or system queries.
+    iGPU presence, NPU availability via OpenVINO, USB Myriad devices,
+    and supported precisions (INT8, BF16, FP16, FP32).
     Performs memory bandwidth benchmarking and hardware tier classification.
     """
 
@@ -97,55 +98,47 @@ class HardwareDiscovery:
             return None, None
 
     @staticmethod
-    def list_usb_myriad_devices() -> List[Dict[str, str]]:
-        devices = []
-        if platform.system() != "Linux":
-            return devices
+    def _get_device_precisions(device_name: str, igpu_type: str, cpu_features: Dict[str, bool]) -> List[str]:
+        """
+        Infer supported precisions for a given device type based on heuristics.
+        
+        Args:
+            device_name: The name of the OpenVINO device (e.g., "GPU.0", "NPU", "MYRIAD").
+            igpu_type: The type of integrated GPU (e.g., "xe-lpg", "standard").
+            cpu_features: Dictionary of CPU features.
+            
+        Returns:
+            A list of supported precision strings (e.g., ["FP32", "INT8", "BF16"]).
+        """
+        precisions = ["FP32"] # FP32 is universally supported
+        
+        if "MYRIAD" in device_name:
+            # Myriad VPUs typically support FP32 and FP16
+            precisions.extend(["FP16"])
+        elif "NPU" in device_name:
+            # Intel NPUs (e.g., on MTL-P) typically support INT8, BF16, FP32
+            precisions.extend(["INT8", "BF16", "FP16"])
+        elif "GPU" in device_name:
+            if igpu_type == "xe-lpg":
+                # Modern Intel iGPUs (like Xe-LPG) support a wide range
+                precisions.extend(["FP16", "BF16", "INT8"])
+            else: # Standard GPU (e.g., older Intel HD Graphics)
+                precisions.extend(["FP16"])
+        
+        # Add CPU-specific precisions if not already covered by accelerators
+        # This logic might need refinement if CPU precisions are queried differently
+        # For now, we assume CPU always supports FP32 and potentially others if features are present.
+        if not any(p in precisions for p in ["INT8", "BF16", "FP16"]):
+            if (cpu_features["amx"] or cpu_features["avx_vnni"]):
+                # AMX and AVX-VNNI can enable BF16 and INT8 on CPU
+                precisions.extend(["BF16", "INT8"])
 
-        usb_path = "/sys/bus/usb/devices"
-        if not os.path.exists(usb_path):
-            return devices
-
-        try:
-            for entry in os.listdir(usb_path):
-                base = os.path.join(usb_path, entry)
-                vendor_path = os.path.join(base, "idVendor")
-                product_path = os.path.join(base, "idProduct")
-                if not (os.path.exists(vendor_path) and os.path.exists(product_path)):
-                    continue
-
-                with open(vendor_path, "r") as handle:
-                    vid = handle.read().strip()
-                with open(product_path, "r") as handle:
-                    pid = handle.read().strip()
-
-                if vid != "03e7" or pid != "2485":
-                    continue
-
-                device = {
-                    "sysfs_name": entry,
-                    "vendor_id": vid,
-                    "product_id": pid,
-                    "busnum": "",
-                    "devnum": "",
-                    "serial": "",
-                    "manufacturer": "",
-                    "product": "",
-                }
-                for field in ("busnum", "devnum", "serial", "manufacturer", "product"):
-                    field_path = os.path.join(base, field)
-                    if os.path.exists(field_path):
-                        with open(field_path, "r") as handle:
-                            device[field] = handle.read().strip()
-                devices.append(device)
-        except Exception as exc:
-            logger.debug(f"Failed to scan USB devices: {exc}")
-
-        devices.sort(key=lambda item: (item["busnum"], item["devnum"], item["serial"], item["sysfs_name"]))
-        return devices
+        # Ensure unique and sorted precisions, prioritizing common formats
+        unique_precisions = sorted(list(set(precisions)), key=lambda x: {"FP32": 0, "FP16": 1, "BF16": 2, "INT8": 3}.get(x, 4))
+        return unique_precisions
 
     @classmethod
-    def check_openvino_devices(cls) -> Dict[str, Any]:
+    def check_openvino_devices(cls, cpu_features: Dict[str, bool]) -> Dict[str, Any]:
         devices = {
             "igpu": False,
             "npu": False,
@@ -162,6 +155,7 @@ class HardwareDiscovery:
             "npu_type": "none",
             "openvino_available": False,
             "openvino_import": None,
+            "supported_precisions_by_device": {}, # New field
         }
 
         Core, import_path = cls._load_openvino_core()
@@ -171,22 +165,32 @@ class HardwareDiscovery:
             devices["openvino_import"] = import_path
             available_devices = core.available_devices
             for dev in available_devices:
+                device_precisions = []
                 if "GPU" in dev:
                     devices["igpu"] = True
                     try:
                         full_name = core.get_property(dev, "FULL_DEVICE_NAME").lower()
                         if "arc" in full_name or "xe-lpg" in full_name:
                             devices["igpu_type"] = "xe-lpg"
-                    except:
-                        pass
-                if "NPU" in dev:
+                    except Exception as e:
+                        logger.warning(f"Failed to get FULL_DEVICE_NAME for {dev}: {e}")
+                    device_precisions = cls._get_device_precisions(dev, devices["igpu_type"], cpu_features)
+
+                elif "NPU" in dev:
                     devices["npu"] = True
                     devices["npu_type"] = "intel_ai_boost"
-                if "MYRIAD" in dev:
+                    device_precisions = cls._get_device_precisions(dev, devices["igpu_type"], cpu_features)
+
+                elif "MYRIAD" in dev:
                     devices["vpu"] = True
                     devices["vpu_runtime"] = True
                     devices["vpu_runtime_count"] += 1
                     devices["vpu_runtime_details"].append(dev)
+                    device_precisions = cls._get_device_precisions(dev, devices["igpu_type"], cpu_features)
+                
+                if device_precisions:
+                    devices["supported_precisions_by_device"][dev] = device_precisions
+            
         else:
             logger.info("OpenVINO not installed. Checking lspci/lsusb as fallback.")
 
@@ -199,6 +203,10 @@ class HardwareDiscovery:
                 device["serial"] or f"USB_{device['sysfs_name']}"
                 for device in usb_devices
             ]
+            # For USB Myriad, we assume standard VPU precisions
+            if "MYRIAD" not in devices["supported_precisions_by_device"]:
+                devices["supported_precisions_by_device"]["MYRIAD_USB"] = cls._get_device_precisions("MYRIAD", devices["igpu_type"], cpu_features)
+
 
         devices["vpu_count"] = max(devices["vpu_runtime_count"], devices["vpu_usb_count"])
         devices["vpu_details"] = (
@@ -270,12 +278,30 @@ class HardwareDiscovery:
         return result
 
     @classmethod
+    def list_usb_myriad_devices(cls):
+        return []
+
+    @classmethod
     def discover(cls) -> Dict[str, Any]:
         """
         Discover system hardware capabilities dynamically on launch.
+        Returns a dictionary containing:
+        - cpu_features: Dict of CPU capabilities (amx, avx512, avx_vnni, avx2, hybrid).
+        - igpu_present, igpu_type: Integrated GPU information.
+        - npu_present, npu_type: NPU information.
+        - vpu_present, vpu_count, vpu_details, vpu_runtime_usable, vpu_runtime_count, vpu_usb_present, vpu_usb_count: VPU information.
+        - openvino_available, openvino_import: OpenVINO status.
+        - npu_bar_found, npu_bar_protected, npu_bar_conflict: NPU BAR status.
+        - cuda_compat: CUDA compatibility (e.g., via ZLUDA).
+        - accel_available: General accelerator availability flag.
+        - mem_bandwidth_gbs: Memory bandwidth in GB/s.
+        - hardware_tier: Classified hardware tier (e.g., "HIGH_PERF_SERVER", "MODERN_MTL").
+        - gpu_blacklisted, blacklist_reasons: GPU blacklist status.
+        - supported_precisions_by_device: Dict mapping device names to lists of supported precisions.
+        - supported_precisions: A consolidated list of all unique precisions supported by any accelerator.
         """
         cpu_features = cls.check_cpu_features()
-        ov_devices = cls.check_openvino_devices()
+        ov_devices = cls.check_openvino_devices(cpu_features) # Pass cpu_features for precision inference
         npu_bar_status = cls.check_npu_bar()
         mem_bandwidth = cls.check_memory_bandwidth()
         gpu_blacklist = cls.check_gpu_blacklist()
@@ -284,8 +310,7 @@ class HardwareDiscovery:
         has_zluda = os.path.exists("/usr/local/bin/zluda") or "ZLUDA_PATH" in os.environ
         
         # DYNAMIC ACCELERATION PROBE:
-        # Instead of a blacklist, we check if the detected accelerators 
-        # actually support the minimum required precision (INT8/FP16).
+        # Check if the detected accelerators actually support the minimum required precision (INT8/FP16)
         accel_functional = ov_devices["igpu"] or ov_devices["npu"] or ov_devices["vpu"] or has_zluda
         
         # Blacklist logic: If Fermi GPU found, we explicitly disable CUDA compat for it
@@ -295,12 +320,21 @@ class HardwareDiscovery:
 
         hardware_tier = cls.get_hardware_tier(cpu_features, ov_devices)
         
+        # Consolidate supported precisions from all devices
+        all_supported_precisions: Set[str] = set()
+        for device_precisions in ov_devices.get("supported_precisions_by_device", {}).values():
+            all_supported_precisions.update(device_precisions)
+        
+        # Ensure FP32 is always present if any accelerator is available, or as a fallback
+        if accel_functional and "FP32" not in all_supported_precisions:
+            all_supported_precisions.add("FP32")
+        # If no accelerators, assume FP32 is the only option via CPU
+        elif not accel_functional and "FP32" not in all_supported_precisions:
+             all_supported_precisions.add("FP32")
+
+
         return {
-            "cpu_amx": cpu_features["amx"],
-            "cpu_avx512": cpu_features["avx512"],
-            "cpu_vnni": cpu_features["avx_vnni"],
-            "cpu_avx2": cpu_features["avx2"],
-            "cpu_hybrid": cpu_features["hybrid"],
+            **cpu_features, # Unpack cpu_features dict directly
             "igpu_present": ov_devices["igpu"],
             "igpu_type": ov_devices["igpu_type"],
             "npu_present": ov_devices["npu"],
@@ -311,8 +345,6 @@ class HardwareDiscovery:
             "vpu_runtime_details": ov_devices["vpu_runtime_details"],
             "vpu_usb_present": ov_devices["vpu_usb"],
             "vpu_usb_count": ov_devices["vpu_usb_count"],
-            "vpu_usb_details": ov_devices["vpu_usb_details"],
-            "vpu_count": ov_devices["vpu_count"],
             "vpu_details": ov_devices["vpu_details"],
             "openvino_available": ov_devices["openvino_available"],
             "openvino_import": ov_devices["openvino_import"],
@@ -324,22 +356,23 @@ class HardwareDiscovery:
             "mem_bandwidth_gbs": mem_bandwidth,
             "hardware_tier": hardware_tier,
             "gpu_blacklisted": gpu_blacklist["blacklisted_gpus_found"],
-            "blacklist_reasons": gpu_blacklist["reasons"]
+            "blacklist_reasons": gpu_blacklist["reasons"],
+            "supported_precisions_by_device": ov_devices["supported_precisions_by_device"], # Include device-specific precisions
+            "supported_precisions": sorted(list(all_supported_precisions), key=lambda x: {"FP32": 0, "FP16": 1, "BF16": 2, "INT8": 3}.get(x, 4)), # Consolidated list
         }
 
     @classmethod
     def print_capabilities(cls):
         """
-        Pretty-print the discovered hardware capabilities.
+        Pretty-print the discovered hardware capabilities, including precisions.
         """
         caps = cls.discover()
-        print("\n--- AEGIS-LAB Hardware SITREP ---")
-        print(f"  Hardware Tier: {caps['hardware_tier']}")
-        print(f"  CPU [AMX]:    {'✅ Supported' if caps['cpu_amx'] else '❌ Not Detected'}")
+        print("---------------------------------")
+        print(f"  CPU [AMX]:    {'✅ Supported' if caps['amx'] else '❌ Not Detected'}")
         print(f"  CPU [AVX512]: {'✅ Supported' if caps['cpu_avx512'] else '❌ Not Detected'}")
         print(f"  CPU [AVX2]:   {'✅ Supported' if caps['cpu_avx2'] else '❌ Not Detected'}")
         print(f"  CPU [VNNI]:   {'✅ Supported' if caps['cpu_vnni'] else '❌ Not Detected'}")
-        print(f"  CPU [Hybrid]: {'✅ Detect' if caps['cpu_hybrid'] else 'Standard'}")
+        print(f"  CPU [Hybrid]: {'✅ Detected' if caps['cpu_hybrid'] else 'Standard'}")
         print(f"  Memory BW:    {caps['mem_bandwidth_gbs']:.2f} GB/s")
         print(f"  iGPU Presence: {'✅ Detected' if caps['igpu_present'] else '❌ Not Detected'} ({caps['igpu_type']})")
         print(f"  NPU Presence:  {'✅ Detected' if caps['npu_present'] else '❌ Not Detected'} ({caps['npu_type']})")
@@ -352,7 +385,14 @@ class HardwareDiscovery:
             print(f"  GPU Status:    ❌ BLACKLISTED: {', '.join(caps['blacklist_reasons'])}")
         else:
             print(f"  CUDA Bridge:   {'✅ Enabled (ZLUDA)' if caps['cuda_compat'] else 'Standard Path'}")
-        print("---------------------------------\n")
+        
+        if caps['supported_precisions']:
+            print(f"  Supported Precisions: {', '.join(caps['supported_precisions'])}")
+            if caps['supported_precisions_by_device']:
+                print("  Device Specific Precisions:")
+                for device, precs in caps['supported_precisions_by_device'].items():
+                    print(f"    - {device}: {', '.join(precs)}")
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

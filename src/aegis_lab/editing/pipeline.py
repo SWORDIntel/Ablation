@@ -285,7 +285,11 @@ class AblationPipeline:
         # Authority deterministic fallback validation contract
         thresholds = {"kl_max": 10.0}
         validation_result = self.authority.validate_edit(
-            baseline_artifacts={"model": model_path},
+            baseline_artifacts={
+                "model": model_path,
+                "positive_dataset": positive_dataset,
+                "negative_dataset": negative_dataset,
+            },
             edited_artifacts={"delta": delta_hash},
             thresholds=thresholds,
             execution_mode=self.execution_mode,

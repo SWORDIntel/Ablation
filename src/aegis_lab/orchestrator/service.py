@@ -205,19 +205,25 @@ class OrchestratorService:
                 self.state.update_stage(stage["stage_id"], {"status": "running", "worker_id": worker_id})
                 self.state.update_job(job_id, {"current_stage_id": stage["stage_id"], "status": "running"})
                 
+                task_data = {
+                    "job_id": job_id,
+                    "stage_id": stage["stage_id"],
+                    "stage_name": stage["stage_name"]
+                }
+                
+                # Milestone 4: Pass hardware capabilities to worker for quantization decisions
+                if stage["stage_name"] == "quantize":
+                    task_data["hardware_capabilities"] = HardwareDiscovery.discover()
+                
                 return {
                     "status": "task_assigned",
-                    "task": {
-                        "job_id": job_id,
-                        "stage_id": stage["stage_id"],
-                        "stage_name": stage["stage_name"]
-                    }
+                    "task": task_data
                 }
         
         return {"status": "no_work"}
 
     def _worker_matches_placement(self, worker_info: Dict[str, Any], placement: List[str]) -> bool:
-        worker_type = worker_info["type"]
+        worker_type = worker_info["type"].lower()
         capabilities = worker_info.get("capabilities", {})
 
         if worker_type == "npu" and any(device.startswith("NPU") for device in placement):

@@ -66,24 +66,24 @@ class HardwareOptimizer:
 
     def _optimize_memory_layout(self):
         """
-        Identify 'hot' behavioral atoms and pin them to the 128MB NPU SRAM cache.
+        Identify 'hot' behavioral atoms and pin them to the 128MB NPU SRAM cache,
+        applying explicit migration policies.
         """
-        # Query recently accessed or important atoms
-        # In a real impl, we'd track 'access_frequency' in the atom registry
-        atoms = self.state.get_jobs() # Just using a simple query for now
+        from aegis_lab.state.qihse_wrapper import QihseUmaMigrationPolicy
         
-        # Get the underlying QIHSE store handle for atoms
+        # Query recently accessed or important atoms
         atom_store = self.state.db._get_store("atoms")
         
         # For demo, let's assume we want to pin the top 10 most recent atoms
-        # In QIHSE, results[i].id is the internal vector ID
-        # We need a way to get raw vector IDs from the query results
         results = self.state.qihse.search_vector_db(atom_store.db_handle, [1.0]*128, top_k=10)
         vector_ids = [res["id"] for res in results]
         
         if vector_ids:
-            logger.info(f"Pinning {len(vector_ids)} vectors to NPU cache.")
+            logger.info(f"Pinning {len(vector_ids)} vectors to NPU cache using MIGRATE_PREFETCH policy.")
+            # Explicitly set the migration policy to PREFETCH for hot atoms
             self.state.qihse.set_priority_pinning(atom_store.db_handle, vector_ids, priority=2)
+            # Applying policy migration as per architecture spec
+            self.state.qihse.set_migration_policy(atom_store.db_handle, QihseUmaMigrationPolicy.MIGRATE_PREFETCH)
             self._pinned_vectors["atoms"] = vector_ids
 
     def _release_npu_cache(self):

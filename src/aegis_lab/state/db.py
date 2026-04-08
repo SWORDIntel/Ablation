@@ -5,7 +5,17 @@ import logging
 import threading
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timezone
-from .qihse_wrapper import InMemoryQIHSE, QIHSE, QihseVectorDBBackend
+from .qihse_wrapper import QIHSE
+from enum import IntEnum
+
+class QihseVectorDBBackend(IntEnum):
+    FAISS = 0
+    CHROMA = 1
+    QDRANT = 2
+    INMEMORY = 3
+    AUTO = 4
+
+InMemoryQIHSE = QIHSE
 
 logger = logging.getLogger(__name__)
 
