@@ -163,7 +163,10 @@ class StateDatabase:
         return self._get_store(table_name).query()
 
 class AegisState:
-    def __init__(self, storage_root: str, lib_path: str):
+    def __init__(self, storage_root: str, lib_path: Optional[str] = None):
+        if not lib_path:
+            lib_path = "/home/john/Documents/MEMSHADOW/QIHSE/qihse/libqihse.so"
+        logger.info(f"AegisState initializing with lib_path: {lib_path}")
         self.db = StateDatabase(storage_root, lib_path)
         self.qihse = self.db.qihse
         

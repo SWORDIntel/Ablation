@@ -28,6 +28,7 @@ class QIHSE:
         if lib_path is None:
             possible_paths = [
                 os.path.abspath(os.path.join(os.path.dirname(__file__), "../../native/vpu_core/target/release/libvpu_core.so")),
+                "/home/john/Documents/MEMSHADOW/QIHSE/qihse/libqihse.so",
                 "/usr/local/lib/libvpu_core.so"
             ]
             for path in possible_paths:

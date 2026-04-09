@@ -11,11 +11,8 @@ Status as of 2026-04-08:
 - **Atomic Promotion Logic:** Implemented and verified Milestone 7 (Part B) for atomic bundle promotion. Final artifacts are hashed (SHA256) and moved to the exports directory with collision-resistant naming and integrity manifests.
 - **System Stability:** Improved IPC/socket management and thermal safety handling, ensuring robust execution across varying hardware environments.
 - **Native Integration:** QIHSE natively links with `libvpu_core.so` and supports dynamic migration policies under thermal or bandwidth pressure.
-- **Advanced Opus-Scale Ablation:** The new `AdvancedAblationOrchestrator` implements 100B+ parameter model support featuring:
-  - **Iterative Adversarial Refinement (GCG-Ablation):** Automated adversarial loop testing bypasses against generated atoms until a robustness threshold is met.
-  - **Sparse Feature Extraction (SAE):** Projects activations into a high-dimensional, sparse, and interpretable basis to extract surgically precise behavioral features.
-  - **Cross-Modal Capturer:** Hooks for capturing activations natively from multimodal inputs (vision, text, audio).
-  - **Distributed Model Sharding:** Layer-wise partitioning of massive models with static routing to match available NPU/VPU tiles, allowing execution on consumer-grade fabric constraints.
+- **Advanced Model Intervention Framework:** A comprehensive suite of surgical, feature-space, and dynamic inference-time intervention modules (Causal Tracing, SAE Clamping, RepE Steering, Adversarial Hardening).
+- **Interactive Intervention UI:** A categorized, multi-select CLI/GUI interface for chaining intervention techniques with real-time impact validation.
 
 Verified commands:
 

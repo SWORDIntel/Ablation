@@ -15,10 +15,15 @@ from aegis_lab.probing.capture import CAREActivationCapturer
 from aegis_lab.atoms.extractor import BehavioralAtomExtractor
 from aegis_lab.editing.delta_builder import DeltaBuilder
 from aegis_lab.editing.adversarial import RedTeamEvaluator
+from aegis_lab.editing.runtime import ExecutionMode, resolve_execution_contract
 from aegis_lab.quantization.calibration import CalibrationCorpusBuilder
 from aegis_lab.quantization.exporter import OpenVINOExporter
 from aegis_lab.verification.authority import SemanticAuthority
-from aegis_lab.editing import StaticIntervention, FeatureIntervention, RuntimeSteering
+from aegis_lab.editing.moe_ablation import MoEAwareAblator
+from aegis_lab.editing.inference_steering import DynamicSteeringManager
+from aegis_lab.editing.sae_clamping import SaeClamping
+from aegis_lab.editing.causal_editor import CausalEditor
+from aegis_lab.editing.repe_steering import RepeSteering, ContrastiveSteering
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +31,12 @@ class InterventionRegistry:
     def __init__(self):
         self._registry = {}
         # New interventions linked here
-        self._registry["sae_clamp"] = FeatureIntervention.sae_clamp
-        self._registry["moe_ablate"] = FeatureIntervention.moe_ablate
-        self._registry["inference_steer"] = RuntimeSteering.steer
+        self._registry["sae_clamp"] = SaeClamping
+        self._registry["moe_ablate"] = MoEAwareAblator
+        self._registry["inference_steer"] = DynamicSteeringManager
+        self._registry["causal_edit"] = CausalEditor
+        self._registry["repe_steer"] = RepeSteering
+        self._registry["contrastive_steer"] = ContrastiveSteering
 
     def register(self, name: str, intervention_cls):
         self._registry[name] = intervention_cls
@@ -36,7 +44,7 @@ class InterventionRegistry:
     def execute(self, name: str, model: Any, **kwargs):
         if name not in self._registry:
             raise ValueError(f"Intervention {name} not found.")
-        return self._registry[name](**kwargs).apply(model)
+        return self._registry[name]().apply(model, **kwargs)
 
 class AblationPipeline:
     """

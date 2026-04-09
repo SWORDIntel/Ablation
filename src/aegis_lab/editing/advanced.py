@@ -10,6 +10,9 @@ from aegis_lab.editing.pipeline import AblationPipeline, InterventionRegistry
 from aegis_lab.editing.adversarial import RedTeamEvaluator
 from aegis_lab.atoms.extractor import BehavioralAtomExtractor
 from aegis_lab.editing import StaticIntervention, FeatureIntervention, RuntimeSteering
+from aegis_lab.editing.gcg_refiner import GCGRefiner
+from aegis_lab.scheduler.sharding import DeviceTile, OpusShardingPlanner
+from aegis_lab.editing.sae_crossmodal import SparseFeatureExtractor, CrossModalCapturer
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +49,8 @@ class AdvancedAblationOrchestrator:
                                    model_path: str, 
                                    target_behavior: str,
                                    iterations: int = 3,
-                                   threshold: float = 0.9) -> Dict[str, Any]:
+                                   threshold: float = 0.9,
+                                   progress_callback=None) -> Dict[str, Any]:
         """
         Iteratively refines an ablation 'Atom' using adversarial feedback.
         Delegates to the GCGRefiner implementation.
@@ -58,12 +62,20 @@ class AdvancedAblationOrchestrator:
         # Initial atom generation (mocked hash for bootstrap)
         base_atom_hash = f"base-atom-{uuid.uuid4().hex[:8]}"
         
-        return self.gcg_refiner.refine_atom(
+        if progress_callback:
+            progress_callback(0.0, "Initializing refinement...")
+            
+        result = self.gcg_refiner.refine_atom(
             job_id=job_id,
             initial_atom_hash=base_atom_hash,
             robustness_threshold=threshold,
             max_iterations=iterations
         )
+        
+        if progress_callback:
+            progress_callback(1.0, "Refinement complete.")
+            
+        return result
 
     def plan_distributed_opus_ablation(self, model_topology: Dict[str, Any]) -> Dict[str, Any]:
         """
