@@ -39,36 +39,35 @@ def get_available_models(models_dir="models"):
     models = [f.name for f in models_path.iterdir() if f.is_file() and (f.suffix in ['.gguf', '.bin', '.safetensors', '.pt'])]
     return models
 
+def get_user_selection(prompt, options, multi_select=False):
+    print(f"\n{prompt}")
+    for idx, opt in enumerate(options):
+        print(f"  {idx + 1}. {opt}")
+    
+    while True:
+        choice = input("\nYour choice(s) (comma separated): " if multi_select else "Your choice: ").strip()
+        try:
+            if multi_select:
+                indices = [int(x.strip()) - 1 for x in choice.split(',')]
+                if all(0 <= i < len(options) for i in indices):
+                    return [options[i] for i in indices]
+            else:
+                idx = int(choice) - 1
+                if 0 <= idx < len(options):
+                    return options[idx]
+            print("Invalid input.")
+        except ValueError:
+            print("Invalid input format.")
+
 def run_interactive_session():
     clear_screen()
     print_header("AEGIS-LAB Advanced Interactive Pipeline")
 
-    # 1. Model Selection
-    print("Available Models:")
-    models = get_available_models()
-    if not models:
-        print("No models found in the 'models' directory. Please add some models and try again.")
-        return
+    # Categories
+    categories = ["Models", "Ablation Targets", "Runtime Profiles"]
+    selected_category = get_user_selection("Select a configuration category:", categories)
+    print(f"[+] Selected Category: {selected_category}")
 
-    for idx, model in enumerate(models):
-        print(f"  {idx + 1}. {model}")
-    
-    selected_idx = -1
-    while selected_idx < 0 or selected_idx >= len(models):
-        try:
-            choice = input(f"\nSelect a model (1-{len(models)}): ")
-            selected_idx = int(choice) - 1
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-    
-    selected_model = models[selected_idx]
-    print(f"\n[+] Selected Model: {selected_model}")
-
-    # 2. Target Behavior Input
-    target_behavior = input("\nEnter the target behavior to ablate (e.g., 'refusal', 'deception'): ").strip()
-    if not target_behavior:
-        target_behavior = "refusal" # default
-    print(f"[+] Target Behavior: {target_behavior}")
 
     # 3. Initialize Orchestrator
     simulate_progress("Initializing AEGIS-LAB State and Stores", duration=1.5)

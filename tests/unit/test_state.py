@@ -11,7 +11,7 @@ class TestAegisState(unittest.TestCase):
         self.storage_root = os.path.join(self.test_dir, "state")
         
         # Path to libqihse.so
-        self.lib_path = os.path.abspath("QIHSE/qihse/libqihse.so")
+        self.lib_path = "../../../../../home/john/Documents/MEMSHADOW/QIHSE/qihse/libqihse.so"
         if not os.path.exists(self.lib_path):
             self.skipTest(f"libqihse.so not found at {self.lib_path}")
             

@@ -56,6 +56,9 @@ class MockAegisState:
     def get_jobs(self):
         return list(self.jobs.values())
 
+    def get_all_stages(self, filters):
+        return []
+
     def update_job(self, job_id, data):
         if job_id in self.jobs:
             self.jobs[job_id].update(data)
@@ -79,8 +82,19 @@ class MockAegisState:
                     return stage
         return None
 
-    def get_stages(self, job_id):
-        return self.stages.get(job_id, [])
+    def get_stages(self, filter_or_job_id):
+        if isinstance(filter_or_job_id, dict):
+            # filter by status
+            status = filter_or_job_id.get("status")
+            results = []
+            for job_stages in self.stages.values():
+                for stage in job_stages:
+                    if stage.get("status") == status:
+                        results.append(stage)
+            return results
+        else:
+            # lookup by job_id
+            return self.stages.get(filter_or_job_id, [])
 
     def update_stage(self, stage_id, data):
         for job_stages in self.stages.values():
@@ -178,6 +192,10 @@ class TestOrchestratorTaskDispatch(unittest.TestCase):
                 "worker_type": "npu",
                 "requested_stage_name": "quantize"
             }
+            # Manually add the job/stage to the state that the orchestrator will look at
+            self.state.create_job("job-mock123", "proj1", "type1", 1)
+            self.state.create_stage("stage-mock456", "job-mock123", "quantize", 5)
+            
             task_info = self.orchestrator._handle_request_task(message)
             self.assertEqual(task_info["status"], "task_assigned")
             task_details = task_info["task"]
@@ -198,6 +216,10 @@ class TestOrchestratorTaskDispatch(unittest.TestCase):
                 "worker_type": "cpu",
                 "requested_stage_name": "probe"
             }
+            # Manually add the job/stage
+            self.state.create_job("job-mock789", "proj1", "type1", 1)
+            self.state.create_stage("stage-mock012", "job-mock789", "probe", 1)
+            
             task_info = self.orchestrator._handle_request_task(message)
             self.assertEqual(task_info["status"], "task_assigned")
             task_details = task_info["task"]

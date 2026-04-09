@@ -6,14 +6,10 @@ from pathlib import Path
 
 from aegis_lab.state.db import AegisState
 from aegis_lab.artifacts.store import ArtifactStore
-from aegis_lab.editing.pipeline import AblationPipeline
+from aegis_lab.editing.pipeline import AblationPipeline, InterventionRegistry
 from aegis_lab.editing.adversarial import RedTeamEvaluator
 from aegis_lab.atoms.extractor import BehavioralAtomExtractor
-
-# Import the new multi-agent paralleled implementations
-from aegis_lab.editing.gcg_refiner import GCGRefiner
-from aegis_lab.scheduler.sharding import OpusShardingPlanner, ModelShard
-from aegis_lab.editing.sae_crossmodal import SparseFeatureExtractor, CrossModalCapturer
+from aegis_lab.editing import StaticIntervention, FeatureIntervention, RuntimeSteering
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +23,7 @@ class AdvancedAblationOrchestrator:
         self.state = state
         self.artifact_store = artifact_store
         self.pipeline = AblationPipeline(state, artifact_store)
+        self.registry = self.pipeline.registry
         self.red_teamer = RedTeamEvaluator(state)
         self.extractor = BehavioralAtomExtractor(state, artifact_store)
         

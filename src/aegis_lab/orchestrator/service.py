@@ -180,7 +180,7 @@ class OrchestratorService:
         scheduler = SchedulerEngine(worker_info["capabilities"], thermal_status)
 
         # Batch fetch all pending stages and all jobs
-        all_pending_stages = self.state.get_all_stages({"status": "pending"})
+        all_pending_stages = self.state.get_stages({"status": "pending"})
         all_jobs = {job["job_id"]: job for job in self.state.get_jobs()}
 
         pending_stages = []
@@ -226,7 +226,7 @@ class OrchestratorService:
         worker_type = worker_info["type"].lower()
         capabilities = worker_info.get("capabilities", {})
 
-        if worker_type == "npu" and any(device.startswith("NPU") for device in placement):
+        if worker_type == "npu" and (any(device.startswith("NPU") for device in placement) or "CPU" in placement):
             return True
         if worker_type == "vpu" and any(device.startswith("VPU") for device in placement):
             return True

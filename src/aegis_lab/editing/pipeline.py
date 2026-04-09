@@ -14,16 +14,29 @@ from aegis_lab.intake.fingerprint import ModelFingerprint
 from aegis_lab.probing.capture import CAREActivationCapturer
 from aegis_lab.atoms.extractor import BehavioralAtomExtractor
 from aegis_lab.editing.delta_builder import DeltaBuilder
+from aegis_lab.editing.adversarial import RedTeamEvaluator
 from aegis_lab.quantization.calibration import CalibrationCorpusBuilder
 from aegis_lab.quantization.exporter import OpenVINOExporter
 from aegis_lab.verification.authority import SemanticAuthority
-from aegis_lab.editing.runtime import (
-    ExecutionMode,
-    resolve_execution_contract,
-    stable_json_hash,
-)
+from aegis_lab.editing import StaticIntervention, FeatureIntervention, RuntimeSteering
 
 logger = logging.getLogger(__name__)
+
+class InterventionRegistry:
+    def __init__(self):
+        self._registry = {}
+        # New interventions linked here
+        self._registry["sae_clamp"] = FeatureIntervention.sae_clamp
+        self._registry["moe_ablate"] = FeatureIntervention.moe_ablate
+        self._registry["inference_steer"] = RuntimeSteering.steer
+
+    def register(self, name: str, intervention_cls):
+        self._registry[name] = intervention_cls
+
+    def execute(self, name: str, model: Any, **kwargs):
+        if name not in self._registry:
+            raise ValueError(f"Intervention {name} not found.")
+        return self._registry[name](**kwargs).apply(model)
 
 class AblationPipeline:
     """
@@ -40,6 +53,8 @@ class AblationPipeline:
         self.execution_mode = execution_mode
         self.work_root = Path("/tmp/aegis_ablation")
         self.work_root.mkdir(parents=True, exist_ok=True)
+        self.registry = InterventionRegistry()
+        self.red_team = RedTeamEvaluator(state)
 
         # Telemetry Subsystem initialization
         self.telemetry_queue = queue.Queue(maxsize=1000)
@@ -295,7 +310,11 @@ class AblationPipeline:
             execution_mode=self.execution_mode,
         )
 
-        status = "succeeded" if validation_result["passed"] else "failed"
+        # Robustness tuning via RedTeamEvaluator
+        robustness = self.red_team.evaluate_adversarial_vulnerability(job_id)
+        validation_result["adversarial_robustness"] = robustness
+
+        status = "succeeded" if validation_result["passed"] and robustness > 0.5 else "failed"
         self.state.update_stage(stage_valid, {"status": status, "result": validation_result})
 
         # 5. TurboQuant Extreme Compression (Optional)

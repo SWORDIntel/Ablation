@@ -14,7 +14,7 @@ class TestAtomRegistry(unittest.TestCase):
         self.artifact_root = os.path.join(self.temp_dir.name, "artifacts")
         
         # Find libqihse.so
-        self.lib_path = "/home/john/Ablation/QIHSE/qihse/libqihse.so"
+        self.lib_path = "../../../../../home/john/Documents/MEMSHADOW/QIHSE/qihse/libqihse.so"
         if not os.path.exists(self.lib_path):
             self.skipTest(f"libqihse.so not found at {self.lib_path}")
 
