@@ -40,6 +40,34 @@ class TestHardwareDiscoveryContract(unittest.TestCase):
         self.assertEqual(devices["vpu_usb_count"], 1)
         self.assertEqual(devices["vpu_details"], ["MYRIAD.0"])
 
+    @patch.object(HardwareDiscovery, "check_cpu_features", return_value={"amx": True, "avx512": True})
+    @patch.object(HardwareDiscovery, "get_system_memory_gb", return_value=64.0)
+    @patch.object(HardwareDiscovery, "check_openvino_devices", return_value={
+        "openvino_available": True,
+        "igpu": True,
+        "igpu_type": "xe-lpg",
+        "npu": True,
+        "npu_type": "intel_ai_boost",
+        "vpu": True,
+        "vpu_runtime": True,
+        "vpu_runtime_count": 1,
+        "vpu_usb_count": 1,
+        "vpu_count": 1,
+    })
+    def test_build_capability_matrix_contract(self, _ov_devices, _mem_gb, _cpu_features):
+        matrix = HardwareDiscovery.build_capability_matrix()
+
+        self.assertIn("devices", matrix)
+        self.assertIn("supported_stage_types", matrix)
+        self.assertIn("precision_support", matrix)
+        self.assertIn("runtime_health", matrix)
+
+        device_ids = {device["device_id"] for device in matrix["devices"]}
+        self.assertIn("cpu-0", device_ids)
+        self.assertIn("igpu-0", device_ids)
+        self.assertIn("npu-0", device_ids)
+        self.assertIn("vpu-0", device_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

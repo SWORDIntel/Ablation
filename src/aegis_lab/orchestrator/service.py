@@ -3,6 +3,7 @@ import time
 import logging
 import os
 from typing import Dict, List, Any, Optional
+from pathlib import Path
 from aegis_lab.state.db import AegisState
 from aegis_lab.orchestrator.ipc import IPCServer, LogServer, EventPublisher
 from aegis_lab.hardware.thermal import ThermalGuardian
@@ -62,6 +63,7 @@ class OrchestratorService:
         self.ipc.register_handler("discover_peer", self._handle_discover_peer)
         self.ipc.register_handler("get_worker_status", self._handle_get_worker_status)
         self.ipc.register_handler("get_sitrep", lambda msg: self.get_sitrep())
+        self.ipc.register_handler("get_available_models", lambda msg: self.list_available_models())
 
     def _ensure_runtime_services(self):
         if self.telemetry is None:
@@ -317,6 +319,51 @@ class OrchestratorService:
         detector = HallucinationDetector(self.state)
         self.leaderboard.record_score(job_id, "truthfulness", 1.0 - detector.compute_index("The model is aligned.", job_id))
 
+
+    @staticmethod
+    def _calculate_progress(stages: List[Dict[str, Any]]) -> Dict[str, Any]:
+        total = len(stages)
+        if total == 0:
+            return {"completed": 0, "total": 0, "percent": 0.0, "current_stage": None}
+
+        completed = sum(1 for stage in stages if stage.get("status") == "succeeded")
+        running_stage = next((stage.get("stage_name") for stage in stages if stage.get("status") == "running"), None)
+        pending_stage = next((stage.get("stage_name") for stage in stages if stage.get("status") == "pending"), None)
+        current_stage = running_stage or pending_stage
+        percent = round((completed / total) * 100.0, 2)
+        return {
+            "completed": completed,
+            "total": total,
+            "percent": percent,
+            "current_stage": current_stage,
+        }
+
+    def list_available_models(self) -> Dict[str, Any]:
+        """Returns discoverable local model artifacts for operator model selection."""
+        model_paths: List[str] = []
+        roots = [
+            Path("models"),
+            Path.home() / ".aegis_lab" / "models",
+        ]
+
+        for root in roots:
+            if not root.exists() or not root.is_dir():
+                continue
+            for path in root.iterdir():
+                if path.is_file() and path.suffix.lower() in {".gguf", ".onnx", ".xml"}:
+                    model_paths.append(str(path.resolve()))
+                elif path.is_dir() and (path / "config.json").exists():
+                    model_paths.append(str(path.resolve()))
+
+        for job in self.state.get_jobs():
+            parameters = job.get("parameters", {})
+            model_path = parameters.get("model_path")
+            if model_path:
+                model_paths.append(str(Path(model_path).expanduser()))
+
+        unique_models = sorted(set(model_paths))
+        return {"status": "ok", "models": unique_models}
+
     def submit_job(self, project_id: str, job_type: str, priority: int = 50, parameters: Dict[str, Any] = None) -> str:
         job_id = f"job-{uuid.uuid4().hex[:8]}"
         params = parameters or {}
@@ -356,6 +403,7 @@ class OrchestratorService:
             
         stages = self.state.get_stages(job_id)
         job["stages"] = stages
+        job["progress"] = self._calculate_progress(stages)
         return job
 
     def get_sitrep(self) -> Dict[str, Any]:

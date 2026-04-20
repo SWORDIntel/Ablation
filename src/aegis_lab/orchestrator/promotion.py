@@ -5,6 +5,7 @@ import logging
 from typing import Dict, Any, List, Optional
 from aegis_lab.state.db import AegisState
 from aegis_lab.artifacts.hashing import hash_file
+from aegis_lab.orchestrator.contracts import PromotionManifest
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,17 @@ class PromotionController:
         manifest_data["bundle_hash"] = bundle_hash
         manifest_data["job_id"] = job_id
         manifest_data["status"] = "promoted"
-        
+
+        promotion_manifest = PromotionManifest.create(
+            artifact_hash=bundle_hash,
+            lineage=manifest_data.get("lineage", {"job_id": job_id}),
+            model_profile_hash=manifest_data.get("model_profile_hash", "unknown"),
+            execution_plan_hash=manifest_data.get("execution_plan_hash", "unknown"),
+            validation_report_hash=manifest_data.get("validation_report_hash", "unknown"),
+            quantization_report_hash=manifest_data.get("quantization_report_hash", "unknown"),
+        )
+        manifest_data["promotion_manifest"] = promotion_manifest.to_dict()
+
         manifest_file_path = os.path.join(temp_export_dir, "final_manifest.json")
         temp_manifest_path = manifest_file_path + ".tmp"
         

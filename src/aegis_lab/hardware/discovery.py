@@ -3,8 +3,9 @@ import os
 import subprocess
 import logging
 import time
-import numpy as np
 from typing import Dict, Any, List
+
+from aegis_lab.hardware.contracts import DeviceCapability, HardwareCapabilityMatrix
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +56,27 @@ class HardwareDiscovery:
         return features
 
     @staticmethod
+    def get_system_memory_gb() -> float:
+        """Returns total system memory in GB using /proc/meminfo when available."""
+        try:
+            with open("/proc/meminfo", "r", encoding="utf-8") as meminfo:
+                for line in meminfo:
+                    if line.startswith("MemTotal:"):
+                        kb_value = float(line.split()[1])
+                        return round(kb_value / (1024.0 * 1024.0), 2)
+        except Exception as exc:
+            logger.debug(f"Unable to read system memory: {exc}")
+        return 0.0
+
+    @staticmethod
     def check_memory_bandwidth() -> float:
         """
         Performs a rapid memory-bandwidth benchmark (Read+Write).
         Returns estimated GB/s.
         """
         try:
+            import numpy as np
+
             size_mb = 128
             data = np.random.bytes(size_mb * 1024 * 1024)
             arr = np.frombuffer(data, dtype=np.uint8).copy()
@@ -208,6 +224,108 @@ class HardwareDiscovery:
         )
 
         return devices
+
+
+    @classmethod
+    def build_capability_matrix(cls) -> Dict[str, Any]:
+        """Builds a canonical hardware capability matrix with truthful runtime flags."""
+        cpu_features = cls.check_cpu_features()
+        ov_devices = cls.check_openvino_devices()
+        thermal_state = "nominal"
+
+        devices = [
+            DeviceCapability(
+                device_id="cpu-0",
+                device_class="CPU",
+                physically_present=True,
+                runtime_usable=True,
+                backend="native",
+                supported_precisions=["fp32", "fp16", "int8"],
+                supported_stage_types=["control", "serialization", "fallback", "verification"],
+                memory_budget={"system_memory_gb": cls.get_system_memory_gb()},
+                thermal_state=thermal_state,
+                runtime_notes=[
+                    "amx" if cpu_features.get("amx") else "no-amx",
+                    "avx512" if cpu_features.get("avx512") else "no-avx512",
+                ],
+                confidence_score=1.0,
+            )
+        ]
+
+        if ov_devices.get("igpu"):
+            devices.append(
+                DeviceCapability(
+                    device_id="igpu-0",
+                    device_class="iGPU",
+                    physically_present=True,
+                    runtime_usable=bool(ov_devices.get("openvino_available")),
+                    backend="openvino",
+                    supported_precisions=["fp16", "int8"],
+                    supported_stage_types=["probe", "verify", "inference"],
+                    memory_budget={"shared_memory": "dynamic"},
+                    thermal_state=thermal_state,
+                    runtime_notes=[f"type:{ov_devices.get('igpu_type', 'unknown')}"],
+                    confidence_score=0.9 if ov_devices.get("openvino_available") else 0.4,
+                )
+            )
+
+        if ov_devices.get("npu"):
+            devices.append(
+                DeviceCapability(
+                    device_id="npu-0",
+                    device_class="NPU",
+                    physically_present=True,
+                    runtime_usable=bool(ov_devices.get("openvino_available")),
+                    backend="openvino",
+                    supported_precisions=["int8", "fp16"],
+                    supported_stage_types=["sentinel", "verify", "inference"],
+                    memory_budget={"on_die": "vendor_managed"},
+                    thermal_state=thermal_state,
+                    runtime_notes=[f"type:{ov_devices.get('npu_type', 'unknown')}"],
+                    confidence_score=0.85 if ov_devices.get("openvino_available") else 0.4,
+                )
+            )
+
+        if ov_devices.get("vpu"):
+            devices.append(
+                DeviceCapability(
+                    device_id="vpu-0",
+                    device_class="VPU",
+                    physically_present=True,
+                    runtime_usable=bool(ov_devices.get("vpu_runtime")),
+                    backend="openvino_myriad" if ov_devices.get("vpu_runtime") else "usb_detected",
+                    supported_precisions=["fp16", "int8"],
+                    supported_stage_types=["sentinel", "lightweight_verify"],
+                    memory_budget={"device_count": ov_devices.get("vpu_count", 0)},
+                    thermal_state=thermal_state,
+                    runtime_notes=[
+                        f"runtime_count:{ov_devices.get('vpu_runtime_count', 0)}",
+                        f"usb_count:{ov_devices.get('vpu_usb_count', 0)}",
+                    ],
+                    confidence_score=0.8 if ov_devices.get("vpu_runtime") else 0.6,
+                )
+            )
+
+        matrix = HardwareCapabilityMatrix(
+            devices=devices,
+            supported_stage_types={device.device_id: device.supported_stage_types for device in devices},
+            precision_support={device.device_id: device.supported_precisions for device in devices},
+            runtime_health={
+                device.device_id: "healthy" if device.runtime_usable else "degraded"
+                for device in devices
+            },
+            thermal_state={device.device_id: device.thermal_state for device in devices},
+            preferred_assignments={
+                "control": "cpu-0",
+                "probe": "igpu-0" if any(d.device_id == "igpu-0" for d in devices) else "cpu-0",
+                "sentinel": "npu-0" if any(d.device_id == "npu-0" for d in devices) else "cpu-0",
+            },
+            fallback_paths={
+                "probe": ["igpu-0", "cpu-0"] if any(d.device_id == "igpu-0" for d in devices) else ["cpu-0"],
+                "sentinel": ["npu-0", "vpu-0", "cpu-0"],
+            },
+        )
+        return matrix.to_dict()
 
     @staticmethod
     def check_gpu_blacklist() -> Dict[str, Any]:

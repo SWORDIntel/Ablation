@@ -7,6 +7,7 @@ from functools import lru_cache
 
 app = FastAPI(title="AEGIS-LAB REST API", version="0.1.0")
 
+
 class OrchestratorClient:
     def __init__(self, url: str = "tcp://localhost:5555", timeout_ms: int = 5000):
         self.context = zmq.Context.instance()
@@ -27,9 +28,11 @@ class OrchestratorClient:
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
+
 @lru_cache(maxsize=1)
 def get_orchestrator_client() -> OrchestratorClient:
     return OrchestratorClient(os.getenv("ORCHESTRATOR_URL", "tcp://localhost:5555"))
+
 
 def set_orchestrator_client(client: Optional[OrchestratorClient]) -> None:
     current = getattr(app.state, "orchestrator_client", None)
@@ -41,6 +44,7 @@ def set_orchestrator_client(client: Optional[OrchestratorClient]) -> None:
     elif hasattr(app.state, "orchestrator_client"):
         delattr(app.state, "orchestrator_client")
 
+
 def _resolve_client() -> OrchestratorClient:
     client = getattr(app.state, "orchestrator_client", None)
     if client is None:
@@ -48,20 +52,25 @@ def _resolve_client() -> OrchestratorClient:
         app.state.orchestrator_client = client
     return client
 
+
 class JobSubmission(BaseModel):
     project_id: str
     job_type: str = "ablation"
     parameters: Dict[str, Any] = Field(default_factory=dict)
 
+
 @app.post("/jobs/submit")
 async def submit_job(submission: JobSubmission):
-    resp = _resolve_client().request("submit_job",
-                          project_id=submission.project_id,
-                          job_type=submission.job_type,
-                          parameters=submission.parameters)
+    resp = _resolve_client().request(
+        "submit_job",
+        project_id=submission.project_id,
+        job_type=submission.job_type,
+        parameters=submission.parameters,
+    )
     if resp.get("status") == "ok":
         return resp
     raise HTTPException(status_code=500, detail=resp.get("error"))
+
 
 @app.get("/jobs")
 async def list_jobs():
@@ -70,6 +79,7 @@ async def list_jobs():
         return resp
     raise HTTPException(status_code=500, detail=resp.get("error"))
 
+
 @app.get("/jobs/{job_id}")
 async def get_job_status(job_id: str):
     resp = _resolve_client().request("get_job_status", job_id=job_id)
@@ -77,12 +87,35 @@ async def get_job_status(job_id: str):
         raise HTTPException(status_code=404, detail=resp["error"])
     return resp
 
+
+@app.get("/jobs/{job_id}/progress")
+async def get_job_progress(job_id: str):
+    resp = _resolve_client().request("get_job_status", job_id=job_id)
+    if "error" in resp:
+        raise HTTPException(status_code=404, detail=resp["error"])
+    return {
+        "job_id": resp.get("job_id"),
+        "status": resp.get("status"),
+        "progress": resp.get("progress", {"completed": 0, "total": 0, "percent": 0.0, "current_stage": None}),
+    }
+
+
+@app.get("/models")
+async def list_models():
+    resp = _resolve_client().request("get_available_models")
+    if resp.get("status") == "ok":
+        return resp
+    raise HTTPException(status_code=500, detail=resp.get("error", "Unable to list models"))
+
+
 @app.get("/hardware/sitrep")
 async def get_hardware_sitrep():
     # In a real implementation, the Orchestrator would aggregate this
     resp = _resolve_client().request("get_sitrep")
     return resp
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
