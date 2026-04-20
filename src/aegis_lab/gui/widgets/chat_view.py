@@ -183,5 +183,12 @@ class ChatView(QWidget):
     def _on_atom_clicked(self, item):
         atom_data = item.data(Qt.ItemDataRole.UserRole)
         if atom_data:
+            # Enhanced interactive feedback for selection
             details = "\n".join([f"{k}: {v}" for k, v in atom_data.items()])
-            QMessageBox.information(self, "Atom Metadata", f"Detailed Profile:\n\n{details}")
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Atom Selection")
+            msg.setText(f"You have selected: {atom_data.get('atom_id')}")
+            msg.setInformativeText("Would you like to stage this atom for ablation?")
+            msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if msg.exec() == QMessageBox.StandardButton.Yes:
+                self.add_response(f"Atom '{atom_data.get('atom_id')}' has been staged for your ablation mission.")

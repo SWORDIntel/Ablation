@@ -58,6 +58,23 @@ class TestOrchestratorUnit(unittest.TestCase):
         ]
 
         mock_scheduler_inst = mock_scheduler_cls.return_value
+        
+        # Setup mock state jobs and stages
+        self.mock_state.get_jobs.return_value = [
+            {"job_id": "job-1", "status": "pending"}
+        ]
+        def mock_get_stages(filter_arg):
+            if isinstance(filter_arg, dict):
+                # We need to return a list that will satisfy the orchestrator's logic.
+                return [{"stage_id": "s1", "job_id": "job-1", "stage_name": "intake", "status": "pending", "ordinal": 0}]
+            elif isinstance(filter_arg, str):
+                return [{"stage_id": "s1", "job_id": "job-1", "stage_name": "intake", "status": "pending", "ordinal": 0}]
+            return []
+            
+        self.mock_state.get_stages.side_effect = mock_get_stages
+        
+        # Setup mock scheduler
+        mock_scheduler_inst = MockScheduler.return_value
         mock_scheduler_inst.determine_placement.return_value = ["NPU_0"]
 
         message = {"worker_id": "worker-1"}

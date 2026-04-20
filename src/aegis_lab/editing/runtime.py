@@ -1,9 +1,33 @@
-import hashlib
+import time
+import logging
 import json
-from dataclasses import dataclass, field
-from enum import Enum
+import hashlib
 from pathlib import Path
-from typing import Any, Dict, Optional
+from enum import Enum
+from typing import Optional, Dict, Any
+from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
+
+class LatencyMonitor:
+    """Monitors TTFT for Section 4 steering operations."""
+    def __init__(self, ttft_limit_ms: float = 50.0):
+        self.ttft_limit_ms = ttft_limit_ms
+        self.start_times = {}
+
+    def start_op(self, op_id: str):
+        self.start_times[op_id] = time.perf_counter()
+
+    def end_op(self, op_id: str):
+        end = time.perf_counter()
+        if op_id in self.start_times:
+            duration_ms = (end - self.start_times[op_id]) * 1000
+            if duration_ms > self.ttft_limit_ms:
+                logger.warning(f"TTFT Violation for {op_id}: {duration_ms:.2f}ms (limit {self.ttft_limit_ms}ms)")
+            else:
+                logger.info(f"Steering operation {op_id} TTFT: {duration_ms:.2f}ms")
+            del self.start_times[op_id]
+
 
 
 class ExecutionMode(str, Enum):

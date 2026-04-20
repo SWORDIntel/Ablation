@@ -98,6 +98,7 @@ def main():
     train.add_argument("--model", default=None, help="Path of the source model")
     train.add_argument("--model-id", default=None, help="Model index from `aegis models`")
     train.add_argument("--target", default="refusal", help="Behavioral target atom")
+    train.add_argument("--method", help="Ablation method")
     train.add_argument("--device", choices=["cpu", "igpu", "npu", "auto"], default="auto", help="Preferred compute device")
     train.add_argument("--url", default="tcp://localhost:5555", help="Orchestrator URL")
 

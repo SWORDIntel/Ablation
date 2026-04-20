@@ -9,7 +9,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
 def main():
     parser = argparse.ArgumentParser(description="AEGIS-LAB Unified Launcher")
-    parser.add_argument("command", choices=["orchestrator", "worker", "gui", "api", "submit", "train", "mission", "list", "status"], help="Command to run")
+    parser.add_argument("command", choices=["orchestrator", "worker", "gui", "api", "submit", "train", "mission", "interactive", "list", "status"], help="Command to run")
     parser.add_argument("--port", type=int, default=5555, help="Orchestrator port")
     parser.add_argument("--api-port", type=int, default=8000, help="REST API port")
     parser.add_argument("--url", default="tcp://localhost:5555", help="Orchestrator URL")
@@ -99,6 +99,9 @@ def main():
             project_id="Qwen-Mission-Alpha"
         )
         return
+    elif args.command == "interactive":
+        print("🚀 Launching AEGIS-LAB Interactive Advanced Pipeline...")
+        cmd = [sys.executable, "src/aegis_lab/cli/interactive.py"]
     elif args.command == "list":
         cmd = [sys.executable, "src/aegis_lab/cli/main.py", "list", "--url", args.url]
     elif args.command == "status":

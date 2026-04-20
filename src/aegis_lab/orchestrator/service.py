@@ -180,18 +180,23 @@ class OrchestratorService:
         thermal_status = self.thermal_guardian.get_status()
         
         scheduler = SchedulerEngine(worker_info["capabilities"], thermal_status)
+
+        # Batch fetch all pending stages and all jobs
+        all_pending_stages = self.state.get_stages({"status": "pending"})
+        all_jobs = {job["job_id"]: job for job in self.state.get_jobs()}
+
         pending_stages = []
-        for job in self.state.get_jobs():
-            for stage in self.state.get_stages(job["job_id"]):
-                if stage.get("status") == "pending":
-                    pending_stage = dict(stage)
-                    pending_stage.setdefault("job_id", job["job_id"])
-                    pending_stages.append(pending_stage)
+        for stage in all_pending_stages:
+            job_id = stage.get("job_id")
+            if job_id in all_jobs:
+                pending_stage = dict(stage)
+                pending_stages.append(pending_stage)
+
         pending_stages.sort(key=lambda x: x["ordinal"])
         
         for stage in pending_stages:
             job_id = stage["job_id"]
-            job = self.state.get_job(job_id)
+            job = all_jobs.get(job_id)
             if not job or job["status"] == "failed":
                 continue
 
@@ -202,22 +207,28 @@ class OrchestratorService:
                 self.state.update_stage(stage["stage_id"], {"status": "running", "worker_id": worker_id})
                 self.state.update_job(job_id, {"current_stage_id": stage["stage_id"], "status": "running"})
                 
+                task_data = {
+                    "job_id": job_id,
+                    "stage_id": stage["stage_id"],
+                    "stage_name": stage["stage_name"]
+                }
+                
+                # Milestone 4: Pass hardware capabilities to worker for quantization decisions
+                if stage["stage_name"] == "quantize":
+                    task_data["hardware_capabilities"] = HardwareDiscovery.discover()
+                
                 return {
                     "status": "task_assigned",
-                    "task": {
-                        "job_id": job_id,
-                        "stage_id": stage["stage_id"],
-                        "stage_name": stage["stage_name"]
-                    }
+                    "task": task_data
                 }
         
         return {"status": "no_work"}
 
     def _worker_matches_placement(self, worker_info: Dict[str, Any], placement: List[str]) -> bool:
-        worker_type = worker_info["type"]
+        worker_type = worker_info["type"].lower()
         capabilities = worker_info.get("capabilities", {})
 
-        if worker_type == "npu" and any(device.startswith("NPU") for device in placement):
+        if worker_type == "npu" and (any(device.startswith("NPU") for device in placement) or "CPU" in placement):
             return True
         if worker_type == "vpu" and any(device.startswith("VPU") for device in placement):
             return True

@@ -4,8 +4,8 @@ import json
 import logging
 from typing import Dict, Any, List, Optional
 from aegis_lab.state.db import AegisState
-from aegis_lab.artifacts.hashing import hash_file
 from aegis_lab.orchestrator.contracts import PromotionManifest
+from aegis_lab.artifacts.hashing import hash_file, hash_directory
 
 logger = logging.getLogger(__name__)
 
@@ -21,17 +21,7 @@ class PromotionController:
 
     def _hash_bundle(self, directory: str) -> str:
         """Computes a hash of all files in the directory to ensure integrity."""
-        # Using a deterministic hash of all file hashes
-        import hashlib
-        sha256_hash = hashlib.sha256()
-        for root, dirs, files in os.walk(directory):
-            for file in sorted(files):
-                file_path = os.path.join(root, file)
-                # Include relative path in hash to detect moves
-                rel_path = os.path.relpath(file_path, directory)
-                sha256_hash.update(rel_path.encode())
-                sha256_hash.update(hash_file(file_path).encode())
-        return sha256_hash.hexdigest()
+        return hash_directory(directory)
 
     def promote_artifact_bundle(self, job_id: str, bundle_path: str, manifest_data: Dict[str, Any]) -> str:
         """

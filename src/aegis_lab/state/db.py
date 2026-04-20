@@ -5,7 +5,17 @@ import logging
 import threading
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timezone
-from .qihse_wrapper import InMemoryQIHSE, QIHSE, QihseVectorDBBackend
+from .qihse_wrapper import QIHSE
+from enum import IntEnum
+
+class QihseVectorDBBackend(IntEnum):
+    FAISS = 0
+    CHROMA = 1
+    QDRANT = 2
+    INMEMORY = 3
+    AUTO = 4
+
+InMemoryQIHSE = QIHSE
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +163,10 @@ class StateDatabase:
         return self._get_store(table_name).query()
 
 class AegisState:
-    def __init__(self, storage_root: str, lib_path: str):
+    def __init__(self, storage_root: str, lib_path: Optional[str] = None):
+        if not lib_path:
+            lib_path = "/home/john/Documents/MEMSHADOW/QIHSE/qihse/libqihse.so"
+        logger.info(f"AegisState initializing with lib_path: {lib_path}")
         self.db = StateDatabase(storage_root, lib_path)
         self.qihse = self.db.qihse
         
@@ -193,8 +206,15 @@ class AegisState:
         }
         return self.db.upsert("stages", "stage_id", stage_id, stage_data)
 
+    def get_stage(self, stage_id: str) -> Optional[Dict[str, Any]]:
+        stages = self.db.query("stages", {"stage_id": stage_id})
+        return stages[0] if stages else None
+
     def get_stages(self, job_id: str) -> List[Dict[str, Any]]:
         return self.db._get_store("stages").query({"job_id": job_id}, pk_field="stage_id")
+
+    def get_all_stages(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        return self.db._get_store("stages").query(filters, pk_field="stage_id")
 
     def update_stage(self, stage_id: str, updates: Dict[str, Any]):
         stages = self.db.query("stages", {"stage_id": stage_id})

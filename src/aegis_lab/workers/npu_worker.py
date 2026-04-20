@@ -126,7 +126,23 @@ class NpuWorker(WorkerBase):
                 if name in preallocated_tensors:
                     preallocated_tensors[name].data[:] = data
             
-            infer_request.infer()
+            # Hardware Execution Callback
+            def _inference_callback(request, user_data):
+                try:
+                    metrics = {
+                        "npu_id": user_data["npu_id"],
+                        "latency": getattr(request, 'latency', 0.0),
+                        "status": "hardware_tick"
+                    }
+                    if hasattr(self, 'ipc_client') and self.ipc_client:
+                        self.ipc_client.send_async("telemetry_tick", metrics)
+                except Exception as e:
+                    logger.debug(f"Telemetry callback failed: {e}")
+
+            infer_request.set_callback(_inference_callback, user_data={"npu_id": self.device})
+
+            infer_request.start_async()
+            infer_request.wait()
             duration = time.time() - start_time
             
             return {
