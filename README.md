@@ -107,6 +107,28 @@ Run the canned mission wrapper:
 ./run_mission.sh --model models/qwen2.5.gguf --target refusal
 ```
 
+### Khoj Model Refusal Ablation
+
+Remove safety/refusal mechanisms from Khoj embedding and chat models:
+
+```bash
+# Auto-detect and ablate refusal neurons
+bash ablate_khoj.sh models/khoj_model.gguf models/khoj_uncensored.gguf zero
+
+# Manual layer specification
+PYTHONPATH=src python3 src/aegis_lab/editing/khoj_refusal_ablation.py \
+  --model models/khoj_model.gguf \
+  --output models/khoj_ablated.gguf \
+  --method zero \
+  --layers layer_20 layer_21 layer_22 \
+  --report exports/ablation_reports/khoj_report.json
+```
+
+Ablation methods:
+- `zero`: Zero out refusal neuron weights (recommended)
+- `prune`: Remove weak connections below threshold
+- `clamp`: Limit activation ranges to reduce refusal strength
+
 Monitor progress:
 
 ```bash
