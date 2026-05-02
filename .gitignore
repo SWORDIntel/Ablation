@@ -1,0 +1,2 @@
+__pycache__/\n*.py[cod]\n*.pyc\n*.pyo\nmodel_cache/
+*.egg-info/\n__pycache__/\n*.py[cod]\nmodel_cache/
