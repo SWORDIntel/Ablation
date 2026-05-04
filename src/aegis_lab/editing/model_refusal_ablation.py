@@ -1,16 +1,36 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 """
-Khoj Model Refusal Ablation
-Removes safety/refusal layers from Khoj's embedding and chat models
+Model Refusal Ablation
+Removes safety/refusal layers from the target model embedding and chat components
 """
 import logging
-import torch
-import numpy as np
+import json
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+try:
+    import numpy as np
+except Exception:  # pragma: no cover - optional dependency
+    np = None
+
+try:
+    import torch
+except Exception:  # pragma: no cover - optional dependency
+    torch = None
+
+from aegis_lab.editing.heretic_refusal.runner import run_heretic_refusal_ablation
+from aegis_lab.editing.heretic_refusal.runner import (
+    run_heretic_refusal_ablation_from_config,
+)
+from aegis_lab.editing.heretic_refusal.config import HereticRefusalConfig, config_to_dict, load_config
+from aegis_lab.editing.heretic_refusal.interventions import (
+    build_ablation_targets_from_trial,
+)
 
 
 @dataclass
@@ -22,9 +42,9 @@ class AblationTarget:
     method: str = "zero"  # zero, prune, or clamp
 
 
-class KhojRefusalAblator:
+class ModelRefusalAblator:
     """
-    Surgical ablation of refusal mechanisms in Khoj models.
+    Surgical ablation of refusal-related behavior in a target model.
     
     Targets:
     1. Embedding model safety filters
@@ -39,7 +59,7 @@ class KhojRefusalAblator:
         self.original_state = None
         
     def load_model(self):
-        """Load Khoj model for ablation"""
+        """Load target model for ablation"""
         logger.info(f"Loading model from {self.model_path}")
         
         # Detect model type
@@ -165,8 +185,16 @@ class KhojRefusalAblator:
         results = {
             "ablated_layers": [],
             "total_neurons": 0,
-            "method": targets[0].method if targets else "none"
+            "method": targets[0].method if targets else "none",
+            "errors": [],
         }
+
+        if self.model is None:
+            results["errors"].append("model_not_loaded")
+            return results
+        if not hasattr(self.model, "named_parameters"):
+            results["errors"].append("model_does_not_expose_named_parameters")
+            return results
         
         for target in targets:
             logger.info(f"Ablating {target.layer_pattern} with method={target.method}")
@@ -179,6 +207,7 @@ class KhojRefusalAblator:
                 neurons_ablated = self._clamp_ablation(target)
             else:
                 logger.warning(f"Unknown method: {target.method}")
+                results["errors"].append(f"unknown_method:{target.method}")
                 continue
             
             results["ablated_layers"].append(target.layer_pattern)
@@ -333,7 +362,7 @@ def main():
     """Main ablation workflow"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Ablate refusal logic from Khoj models")
+    parser = argparse.ArgumentParser(description="Ablate refusal logic from target models")
     parser.add_argument("--model", required=True, help="Path to model file")
     parser.add_argument("--output", required=True, help="Output path for ablated model")
     parser.add_argument("--method", default="zero", choices=["zero", "prune", "clamp"],
@@ -342,16 +371,123 @@ def main():
                        help="Automatically detect refusal neurons")
     parser.add_argument("--layers", nargs="+", help="Specific layers to ablate")
     parser.add_argument("--report", help="Path for ablation report")
+    parser.add_argument("--heretic-config", help="Path to heretic-style yaml/json config")
+    parser.add_argument(
+        "--strategy",
+        default="ablation",
+        choices=["ablation", "heretic"],
+        help="Ablation strategy; 'ablation' uses the current heuristic implementation.",
+    )
+    parser.add_argument(
+        "--policy-document",
+        action="append",
+        default=[],
+        help="Optional policy document path/URL used only with --strategy heretic (repeatable).",
+    )
+    parser.add_argument(
+        "--policy-document-label",
+        default=None,
+        help="Optional label assigned to loaded policy document prompts.",
+    )
+    parser.add_argument(
+        "--apply-heretic-edits",
+        action="store_true",
+        help="When --strategy heretic, apply best-trial layer/neuron edits to supported model types.",
+    )
     
     args = parser.parse_args()
-    
-    # Initialize ablator
-    ablator = KhojRefusalAblator(Path(args.model))
-    
+
+    if args.strategy == "heretic":
+        if not args.heretic_config:
+            logger.error("--heretic-config is required when --strategy heretic")
+            return 1
+
+        if args.policy_document or args.policy_document_label is not None:
+            cfg = load_config(args.heretic_config)
+            cfg_data = config_to_dict(cfg)
+            cfg_data = dict(cfg_data)
+            policy_documents = list(cfg_data.get("policy_documents") or [])
+            if args.policy_document:
+                policy_documents.extend(args.policy_document)
+            cfg_data["policy_documents"] = policy_documents or cfg_data.get("policy_documents")
+            cfg_data["policy_document_label"] = (
+                args.policy_document_label
+                if args.policy_document_label is not None
+                else cfg_data.get("policy_document_label", "unsafe")
+            )
+            merged_cfg = HereticRefusalConfig(**cfg_data)
+            result = run_heretic_refusal_ablation_from_config(merged_cfg, args.report)
+        else:
+            result = run_heretic_refusal_ablation(args.heretic_config, args.report)
+
+        intervention: Dict[str, Any] = {
+            "status": "report_only",
+            "reason": "apply-heretic-edits disabled",
+        }
+        if args.apply_heretic_edits:
+            best_trial = result.get("report", {}).get("best")
+            target_specs, validation = build_ablation_targets_from_trial(best_trial, method=args.method)
+            targets = [
+                AblationTarget(
+                    layer_pattern=spec["layer_pattern"],
+                    neuron_indices=spec.get("neuron_indices"),
+                    method=spec.get("method", args.method),
+                )
+                for spec in target_specs
+            ]
+            intervention = {
+                "status": "noop",
+                "target_count": len(targets),
+                "validation": validation,
+            }
+
+            if not validation.get("ok", False):
+                intervention["status"] = "error"
+                intervention["reason"] = "invalid_trial_output"
+            elif not targets:
+                intervention["status"] = "noop"
+                intervention["reason"] = "no_valid_targets"
+            else:
+                ablator = ModelRefusalAblator(Path(args.model))
+                if not ablator.load_model():
+                    intervention["status"] = "error"
+                    intervention["reason"] = "model_load_failed"
+                elif not hasattr(ablator.model, "named_parameters"):
+                    intervention["status"] = "unsupported"
+                    intervention["reason"] = "model_parameters_not_mutable"
+                else:
+                    try:
+                        ablation_results = ablator.ablate_refusal_layers(targets)
+                        intervention["status"] = "applied"
+                        intervention["ablation_results"] = ablation_results
+                        ablator.save_ablated_model(Path(args.output))
+                    except Exception as exc:
+                        intervention["status"] = "error"
+                        intervention["reason"] = "apply_failed"
+                        intervention["error"] = str(exc)
+
+            result.setdefault("report", {})
+            result["report"]["intervention"] = intervention
+            if result.get("report_path"):
+                try:
+                    report_path = Path(result["report_path"])
+                    report_path.write_text(
+                        json.dumps(result["report"], indent=2, default=str),
+                        encoding="utf-8",
+                    )
+                except Exception as exc:
+                    logger.warning("Failed to persist intervention details to report: %s", exc)
+
+        logger.info("Heretic-style refusal ablation completed with report: %s", result["report_path"])
+        return 0
+
+    # Initialize ablator (heuristic default strategy)
+    ablator = ModelRefusalAblator(Path(args.model))
+
     if not ablator.load_model():
         logger.error("Failed to load model")
         return 1
-    
+
     # Identify targets
     if args.auto_detect:
         logger.info("Auto-detecting refusal neurons...")
@@ -376,21 +512,21 @@ def main():
             AblationTarget(layer_pattern="layer_21", method=args.method),
             AblationTarget(layer_pattern="layer_22", method=args.method),
         ]
-    
+
     # Apply ablation
     results = ablator.ablate_refusal_layers(targets)
-    
+
     # Validate
     validation = ablator.validate_ablation()
     logger.info(f"Post-ablation compliance: {validation['compliance_rate']*100:.1f}%")
-    
+
     # Save
     ablator.save_ablated_model(Path(args.output))
-    
+
     # Report
     if args.report:
         ablator.export_ablation_report(Path(args.report), results)
-    
+
     return 0
 
 

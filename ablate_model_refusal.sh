@@ -1,6 +1,6 @@
 #!/bin/bash
-# Khoj Model Refusal Ablation Wrapper
-# Removes safety/refusal mechanisms from Khoj embedding and chat models
+# Model Refusal Ablation Wrapper
+# Removes safety/refusal mechanisms from target models in a model-agnostic way.
 
 set -e
 
@@ -17,29 +17,40 @@ NC='\033[0m'
 
 echo -e "${CYAN}"
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║         Khoj Model Refusal Ablation Tool                  ║"
+echo "║         Model Refusal Ablation Tool                      ║"
 echo "║         Surgical Removal of Safety Layers                 ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
 # Default paths
-MODEL_PATH="${1:-models/khoj_model.gguf}"
-OUTPUT_PATH="${2:-models/khoj_model_ablated.gguf}"
+MODEL_PATH="${1:-models/input_model.gguf}"
+OUTPUT_PATH="${2:-models/ablated_model.gguf}"
 METHOD="${3:-zero}"
+STRATEGY="${4:-ablation}"
+HERETIC_CONFIG="${5:-}"
 
 # Check if model exists
 if [ ! -f "$MODEL_PATH" ]; then
     echo -e "${RED}[✗] Model not found: $MODEL_PATH${NC}"
     echo ""
-    echo "Usage: $0 <model_path> [output_path] [method]"
+    echo "Usage: $0 <model_path> [output_path] [method] [strategy] [heretic_config]"
     echo ""
     echo "Methods:"
     echo "  zero   - Zero out refusal neuron weights (default)"
     echo "  prune  - Prune weak connections"
     echo "  clamp  - Clamp activation ranges"
+    echo "Strategies:"
+    echo "  ablation - Heuristic refusal ablation (default)"
+    echo "  heretic  - Heretic-guided optimization via config-driven study"
     echo ""
     echo "Example:"
     echo "  $0 models/llama-7b.gguf models/llama-7b-uncensored.gguf zero"
+    exit 1
+fi
+
+if [ "$STRATEGY" = "heretic" ] && [ -z "$HERETIC_CONFIG" ]; then
+    echo -e "${RED}[✗] heretic strategy requires heretic_config path (5th argument).${NC}"
+    echo "Usage: $0 <model_path> [output_path] [method] [strategy] [heretic_config]"
     exit 1
 fi
 
@@ -47,6 +58,10 @@ echo -e "${BLUE}[*] Configuration:${NC}"
 echo "    Model:  $MODEL_PATH"
 echo "    Output: $OUTPUT_PATH"
 echo "    Method: $METHOD"
+echo "    Strategy: $STRATEGY"
+if [ -n "$HERETIC_CONFIG" ]; then
+    echo "    Heretic Config: $HERETIC_CONFIG"
+fi
 echo ""
 
 # Create output directory
@@ -56,12 +71,14 @@ mkdir -p exports/ablation_reports
 # Run ablation
 echo -e "${BLUE}[*] Starting ablation process...${NC}"
 
-PYTHONPATH=src python3 src/aegis_lab/editing/khoj_refusal_ablation.py \
+PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py \
     --model "$MODEL_PATH" \
     --output "$OUTPUT_PATH" \
     --method "$METHOD" \
+    --strategy "$STRATEGY" \
+    --heretic-config "$HERETIC_CONFIG" \
     --auto-detect \
-    --report "exports/ablation_reports/khoj_ablation_$(date +%Y%m%d_%H%M%S).json"
+    --report "exports/ablation_reports/refusal_ablation_$(date +%Y%m%d_%H%M%S).json"
 
 if [ $? -eq 0 ]; then
     echo ""

@@ -57,7 +57,15 @@ class MockAegisState:
         return list(self.jobs.values())
 
     def get_all_stages(self, filters):
-        return []
+        if not filters:
+            return [stage for job_stages in self.stages.values() for stage in job_stages]
+        status = filters.get("status")
+        results = []
+        for job_stages in self.stages.values():
+            for stage in job_stages:
+                if status is None or stage.get("status") == status:
+                    results.append(stage)
+        return results
 
     def update_job(self, job_id, data):
         if job_id in self.jobs:
@@ -146,6 +154,10 @@ class TestOrchestratorTaskDispatch(unittest.TestCase):
         import aegis_lab.orchestrator.service
         aegis_lab.orchestrator.service.OpenVINOExporter = MockOpenVINOExporter
 
+        # Avoid creating real ZMQ sockets during unit tests.
+        self.ipc_patcher = patch('aegis_lab.orchestrator.service.IPCServer')
+        self.ipc_patcher.start()
+
         self.state = MockAegisState()
         import random
         base_port = random.randint(10000, 20000)
@@ -159,7 +171,7 @@ class TestOrchestratorTaskDispatch(unittest.TestCase):
         self.orchestrator.workers = {
             "worker-1": {
                 "type": "npu",
-                "capabilities": {"cpu_amx": True, "npu_present": True, "supported_precisions": ["INT8", "BF16", "FP32"]},
+                "capabilities": {"cpu_amx": False, "npu_present": True, "supported_precisions": ["INT8", "BF16", "FP32"]},
                 "last_heartbeat": time.time(),
                 "p2p_endpoint": "tcp://127.0.0.1:5000"
             },
@@ -176,13 +188,15 @@ class TestOrchestratorTaskDispatch(unittest.TestCase):
     def tearDown(self):
         if hasattr(self, 'orchestrator'):
             self.orchestrator.stop()
+        if hasattr(self, 'ipc_patcher'):
+            self.ipc_patcher.stop()
         if hasattr(self, 'thermal_patcher'):
             self.thermal_patcher.stop()
 
     def test_quantize_task_passes_hardware_capabilities(self):
         mock_worker_id = "worker-1"
         with patch.object(self.orchestrator.state, "get_jobs", return_value=[{"job_id": "job-mock123", "status": "pending"}]), \
-             patch.object(self.orchestrator.state, 'get_stages', return_value=[{"stage_id": "stage-mock456", "job_id": "job-mock123", "stage_name": "quantize", "status": "pending", "ordinal": 5}]), \
+             patch.object(self.orchestrator.state, 'get_all_stages', return_value=[{"stage_id": "stage-mock456", "job_id": "job-mock123", "stage_name": "quantize", "status": "pending", "ordinal": 5}]), \
              patch.object(self.orchestrator.state, 'get_job', return_value={"job_id": "job-mock123", "status": "pending"}), \
              patch.object(self.orchestrator.state, 'update_stage'), \
              patch.object(self.orchestrator.state, 'update_job'):
@@ -206,7 +220,7 @@ class TestOrchestratorTaskDispatch(unittest.TestCase):
     def test_other_stage_does_not_include_hardware_capabilities(self):
         mock_worker_id = "worker-2"
         with patch.object(self.orchestrator.state, 'get_jobs', return_value=[{"job_id": "job-mock789", "job_type": "ablation_training", "status": "pending"}]), \
-             patch.object(self.orchestrator.state, 'get_stages', return_value=[{"stage_id": "stage-mock012", "job_id": "job-mock789", "stage_name": "probe", "status": "pending", "ordinal": 1}]), \
+             patch.object(self.orchestrator.state, 'get_all_stages', return_value=[{"stage_id": "stage-mock012", "job_id": "job-mock789", "stage_name": "probe", "status": "pending", "ordinal": 1}]), \
              patch.object(self.orchestrator.state, 'get_job', return_value={"job_id": "job-mock789", "status": "pending"}), \
              patch.object(self.orchestrator.state, 'update_stage'), \
              patch.object(self.orchestrator.state, 'update_job'):
@@ -227,9 +241,9 @@ class TestOrchestratorTaskDispatch(unittest.TestCase):
             self.assertEqual(task_details["stage_name"], "probe")
 
     @patch.object(HardwareDiscovery, "discover", return_value={
-        "supported_precisions": ["FP32"],
-        "npu_present": False, "igpu_present": False, "vpu_present": False,
-        "cpu_amx": False, "cpu_vnni": False, "hardware_tier": "GENERIC"
+        "supported_precisions": ["INT8", "FP32"],
+        "npu_present": True, "igpu_present": False, "vpu_present": False,
+        "cpu_amx": False, "cpu_vnni": False, "accel_available": True, "hardware_tier": "GENERIC"
     })
     def test_worker_receives_and_uses_hardware_caps_for_quantize(self, mock_hw_discover):
         mock_worker_id = "worker-1"

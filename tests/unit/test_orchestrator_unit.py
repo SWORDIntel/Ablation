@@ -64,7 +64,7 @@ class TestOrchestratorUnit(unittest.TestCase):
                 return [{"stage_id": "s1", "job_id": "job-1", "stage_name": "intake", "status": "pending", "ordinal": 0}]
             return []
             
-        self.mock_state.get_stages.side_effect = mock_get_stages
+        self.mock_state.get_all_stages.side_effect = mock_get_stages
         
         # Setup mock scheduler
         mock_scheduler_inst = MockScheduler.return_value

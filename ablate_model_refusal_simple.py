@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple Khoj model ablation - zeros out refusal layers in safetensors
+Simple model refusal ablation - zeros out refusal layers in safetensors
 Works without torch dependency
 """
 import sys
@@ -108,7 +108,7 @@ def ablate_model(input_path: Path, output_path: Path):
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Ablate Khoj embedding model")
+    parser = argparse.ArgumentParser(description="Ablate model embedding refusal layers")
     parser.add_argument("input", help="Input safetensors file")
     parser.add_argument("output", help="Output safetensors file")
     
@@ -118,9 +118,9 @@ def main():
     
     print("\n[✓] Ablation complete!")
     print("\nTo use the ablated model:")
-    print(f"  1. Backup original: mv ~/.cache/huggingface/hub/models--thenlper--gte-small/blobs/XXX ~/.cache/huggingface/hub/models--thenlper--gte-small/blobs/XXX.backup")
-    print(f"  2. Copy ablated: cp {args.output} ~/.cache/huggingface/hub/models--thenlper--gte-small/blobs/XXX")
-    print(f"  3. Restart Khoj: pkill khoj && bash bin/khoj_launcher.sh")
+    print(f"  1. Backup original: mv ~/.cache/huggingface/hub/models--my-model--base/blobs/XXX ~/.cache/huggingface/hub/models--my-model--base/blobs/XXX.backup")
+    print(f"  2. Copy ablated: cp {args.output} ~/.cache/huggingface/hub/models--my-model--base/blobs/XXX")
+    print(f"  3. Reload host service after placing the ablated model")
 
 if __name__ == "__main__":
     main()

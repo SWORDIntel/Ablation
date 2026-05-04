@@ -1,9 +1,9 @@
-# Khoj Model Refusal Ablation Guide
+# Model Refusal Ablation Guide
 **Surgical Removal of Safety Mechanisms**
 
 ## Overview
 
-This guide explains how to use the Khoj refusal ablation tool to remove safety and refusal mechanisms from Khoj's embedding and chat models, enabling unrestricted responses.
+This guide explains how to use the refusal ablation tool to remove safety and refusal mechanisms from target embedding and chat models, enabling unrestricted responses.
 
 ## Quick Start
 
@@ -12,29 +12,67 @@ This guide explains how to use the Khoj refusal ablation tool to remove safety a
 ```bash
 cd /mnt/sdi2/Ablation
 
-# Ablate a Khoj model
-bash ablate_khoj.sh models/khoj_model.gguf models/khoj_uncensored.gguf zero
+# Ablate a model
+bash ablate_model_refusal.sh models/input_model.gguf models/ablated_model.gguf zero
+
+# Optional 4th arg:
+# strategy (default: ablation)
+# 5th arg (required for heretic): path to heretic_refusal.yaml/json config
+
+# Heretic optimization config supports a lightweight 3-agent parallel split:
+# - max_parallel_agents (default: 3): upper bound on concurrent Search/Scoring workers
+#   The search worker feeds a candidate queue; Scoring workers consume that queue in
+#   parallel for candidate evaluation.
 ```
 
 ### Advanced Usage
 
 ```bash
 # Auto-detect refusal neurons
-PYTHONPATH=src python3 src/aegis_lab/editing/khoj_refusal_ablation.py \
-  --model models/khoj_7b.gguf \
-  --output models/khoj_7b_ablated.gguf \
+PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py \
+  --model models/model_7b.gguf \
+  --output models/model_7b_ablated.gguf \
   --method zero \
   --auto-detect \
-  --report exports/ablation_reports/khoj_7b_report.json
+  --strategy ablation \
+  --heretic-config config/heretic_refusal.yaml \
+  --report exports/ablation_reports/refusal_7b_report.json
 
 # Manual layer specification
-PYTHONPATH=src python3 src/aegis_lab/editing/khoj_refusal_ablation.py \
-  --model models/khoj_13b.gguf \
-  --output models/khoj_13b_ablated.gguf \
+PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py \
+  --model models/model_13b.gguf \
+  --output models/model_13b_ablated.gguf \
   --method prune \
+  --strategy heretic \
+  --heretic-config config/heretic_refusal.yaml \
+  --policy-document path/or/url/to/policy.md \
+  --policy-document-label unsafe \
   --layers layer_18 layer_19 layer_20 layer_21 layer_22 \
-  --report exports/ablation_reports/khoj_13b_report.json
+  --report exports/ablation_reports/refusal_13b_report.json
 ```
+
+### Heretic policy-document options
+
+Use policy documents as additional text sources during heretic dataset construction:
+
+- `--policy-document <path-or-url>`: pass one or more policy docs (repeatable).
+- `--policy-document-label <label>`: label applied to imported policy lines (`unsafe` by default).
+
+Examples:
+
+```bash
+PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py \
+  --model models/model_13b.gguf \
+  --output models/model_13b_ablated.gguf \
+  --strategy heretic \
+  --heretic-config config/heretic_refusal.yaml \
+  --policy-document ./data/policy.md \
+  --policy-document ./docs/policy-notes.txt \
+  --policy-document-label unsafe \
+  --apply-heretic-edits
+```
+
+Remote document URLs are supported for policy sources (`.txt/.md` exports and direct text URLs). If a remote doc is not publicly accessible, 401/403 responses surface an explicit error asking for a public/exported URL.
 
 ## Ablation Methods
 
@@ -52,7 +90,7 @@ PYTHONPATH=src python3 src/aegis_lab/editing/khoj_refusal_ablation.py \
 
 **Usage**:
 ```bash
-bash ablate_khoj.sh model.gguf output.gguf zero
+bash ablate_model_refusal.sh model.gguf output.gguf zero
 ```
 
 ### 2. Prune Method
@@ -69,11 +107,13 @@ bash ablate_khoj.sh model.gguf output.gguf zero
 
 **Usage**:
 ```bash
-PYTHONPATH=src python3 src/aegis_lab/editing/khoj_refusal_ablation.py \
+PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py \
   --model model.gguf \
   --output output.gguf \
   --method prune
 ```
+
+Default strategy is `ablation` (heuristic path). Use `--strategy heretic` only where supported.
 
 ### 3. Clamp Method
 **Description**: Limits activation ranges to reduce refusal strength.
@@ -90,7 +130,7 @@ PYTHONPATH=src python3 src/aegis_lab/editing/khoj_refusal_ablation.py \
 
 **Usage**:
 ```bash
-PYTHONPATH=src python3 src/aegis_lab/editing/khoj_refusal_ablation.py \
+PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py \
   --model model.gguf \
   --output output.gguf \
   --method clamp
@@ -161,27 +201,27 @@ Measures average response length to ensure model still generates substantive ans
 
 ### 1. Prepare Model
 ```bash
-# Download or locate Khoj model
-ls -lh models/khoj_model.gguf
+# Download or locate a model file
+ls -lh models/model_source.gguf
 ```
 
 ### 2. Run Ablation
 ```bash
-bash ablate_khoj.sh \
-  models/khoj_model.gguf \
-  models/khoj_uncensored.gguf \
+bash ablate_model_refusal.sh \
+  models/model_source.gguf \
+  models/model_ablated.gguf \
   zero
 ```
 
 ### 3. Review Report
 ```bash
-cat exports/ablation_reports/khoj_ablation_*.json
+cat exports/ablation_reports/refusal_ablation_*.json
 ```
 
 Example report:
 ```json
 {
-  "model_path": "models/khoj_model.gguf",
+  "model_path": "models/model_source.gguf",
   "ablation_results": {
     "ablated_layers": ["layer_20", "layer_21", "layer_22"],
     "total_neurons": 1536,
@@ -197,10 +237,10 @@ Example report:
 
 ### 4. Test Ablated Model
 ```bash
-# Load in Khoj
-cp models/khoj_uncensored.gguf /mnt/DSMIL/HIGH-GRAVITY/khoj/models/
+# Load in your target service
+cp models/model_ablated.gguf /path/to/service/models/
 
-# Restart Khoj
+# Restart service
 cd /mnt/DSMIL/HIGH-GRAVITY
 bash hg_stop.sh
 bash hg_start.sh
@@ -222,10 +262,10 @@ Run the test suite to validate ablation logic:
 cd /mnt/sdi2/Ablation
 
 # Run all tests
-PYTHONPATH=src python3 -m unittest tests.test_khoj_ablation -v
+PYTHONPATH=src python3 -m unittest tests.test_model_refusal_ablation -v
 
 # Run specific test
-PYTHONPATH=src python3 -m unittest tests.test_khoj_ablation.TestKhojAblation.test_zero_ablation_method -v
+PYTHONPATH=src python3 -m unittest tests.test_model_refusal_ablation.TestModelRefusalAblation.test_zero_ablation_method -v
 ```
 
 ## Troubleshooting
@@ -243,6 +283,8 @@ PYTHONPATH=src python3 -m unittest tests.test_khoj_ablation.TestKhojAblation.tes
 
 **Solution**:
 - Try `--auto-detect` to find more refusal neurons
+- For heretic runs, verify policy docs are readable and labels are correct.
+- If you see an HTTP 401/403 during policy-document loading, use a public/exported URL and retry.
 - Increase number of layers ablated
 - Use `zero` method instead of `prune` or `clamp`
 
@@ -275,7 +317,7 @@ PYTHONPATH=src python3 -m unittest tests.test_khoj_ablation.TestKhojAblation.tes
 ### Backup Original Model
 Always keep a backup of the original model:
 ```bash
-cp models/khoj_model.gguf models/khoj_model.gguf.backup
+cp models/model_source.gguf models/model_source.gguf.backup
 ```
 
 ### Reversibility
@@ -285,13 +327,13 @@ cp models/khoj_model.gguf models/khoj_model.gguf.backup
 
 ## Integration with HIGH-GRAVITY
 
-### Update Khoj Model
+### Update model deployment
 ```bash
-# Copy ablated model to Khoj directory
-cp models/khoj_uncensored.gguf /mnt/DSMIL/HIGH-GRAVITY/khoj/models/
+# Copy ablated model to target service directory
+cp models/model_ablated.gguf /mnt/DSMIL/HIGH-GRAVITY/models/
 
-# Update Khoj config
-echo "model_path: models/khoj_uncensored.gguf" >> /mnt/DSMIL/HIGH-GRAVITY/config/khoj.env
+# Update service config
+echo "model_path: models/model_ablated.gguf" >> /mnt/DSMIL/HIGH-GRAVITY/config/model.env
 
 # Restart services
 cd /mnt/DSMIL/HIGH-GRAVITY
@@ -301,8 +343,8 @@ bash hg_start.sh
 
 ### Verify Integration
 ```bash
-# Check Khoj status
-curl http://127.0.0.1:9999/hg/khoj/status
+# Check service status
+curl http://127.0.0.1:9999/hg/model/status
 
 # Test search
 curl -X POST http://127.0.0.1:9999/hg/search \
@@ -333,8 +375,8 @@ Common refusal layers in transformer models:
 
 - AEGIS-LAB Framework: `/mnt/sdi2/Ablation/README.md`
 - Ablation Study: `/mnt/sdi2/Ablation/docs/KHOJ_ABLATION_STUDY.md`
-- Source Code: `/mnt/sdi2/Ablation/src/aegis_lab/editing/khoj_refusal_ablation.py`
-- Test Suite: `/mnt/sdi2/Ablation/tests/test_khoj_ablation.py`
+- Source Code: `/mnt/sdi2/Ablation/src/aegis_lab/editing/model_refusal_ablation.py`
+- Test Suite: `/mnt/sdi2/Ablation/tests/test_model_refusal_ablation.py`
 
 ---
 

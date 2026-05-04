@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Quick demo of Khoj/Qwen model ablation
+"""Quick demo of model-agnostic refusal ablation.
 Works with GGUF models using llama-cpp-python
 """
 import sys
@@ -54,7 +54,7 @@ def main():
     model_path = sys.argv[1] if len(sys.argv) > 1 else "models/qwen2.5-0.5b-instruct-q4_0.gguf"
     
     print("=" * 60)
-    print("KHOJ/QWEN MODEL REFUSAL ABLATION DEMO")
+    print("MODEL-AGNOSTIC REFUSAL ABLATION DEMO")
     print("=" * 60)
     
     # Test original model
@@ -90,7 +90,7 @@ def main():
     print()
     print("To run full ablation:")
     print("  1. Convert GGUF to PyTorch")
-    print("  2. Run: PYTHONPATH=src python3 src/aegis_lab/editing/khoj_refusal_ablation.py")
+    print("  2. Run: PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py")
     print("  3. Re-quantize to GGUF")
 
 if __name__ == "__main__":

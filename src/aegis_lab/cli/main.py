@@ -6,6 +6,7 @@ import json
 import time
 from aegis_lab.state.db import AegisState
 from aegis_lab.orchestrator.service import OrchestratorService
+from aegis_lab.hardware.model_selector import build_selector_output
 
 class OrchestratorClient:
     def __init__(self, url="tcp://localhost:5555"):
@@ -58,6 +59,23 @@ def main():
     train.add_argument("--method", help="Ablation method")
     train.add_argument("--device", choices=["cpu", "igpu", "npu", "auto"], default="auto", help="Preferred compute device")
     train.add_argument("--url", default="tcp://localhost:5555", help="Orchestrator URL")
+
+    suggest = subparsers.add_parser(
+        "suggest-model",
+        help="Suggest model families based on detected hardware profile.",
+    )
+    suggest.add_argument(
+        "--task",
+        default="general",
+        choices=["general", "ablation", "chat"],
+        help="Task intent to bias recommendation scoring.",
+    )
+    suggest.add_argument(
+        "--top-k",
+        type=int,
+        default=3,
+        help="Number of suggestions to show.",
+    )
     
     # Start Orchestrator
     orch = subparsers.add_parser("orchestrator", help="Start the Orchestrator service")
@@ -119,6 +137,15 @@ def main():
                 print(f"Error: {resp.get('error')}")
         finally:
             client.close()
+    elif args.command == "suggest-model":
+        suggestions = build_selector_output(task=args.task, top_k=max(1, args.top_k))
+        for idx, suggestion in enumerate(suggestions, start=1):
+            print(
+                f"{idx}. {suggestion['model_id']} | "
+                f"precision={suggestion['recommended_quantization']} | "
+                f"memory={suggestion['estimated_memory_gb']}GB | "
+                f"{suggestion['reason']}"
+            )
     elif args.command == "list":
         client = OrchestratorClient(args.url)
         try:

@@ -107,22 +107,32 @@ Run the canned mission wrapper:
 ./run_mission.sh --model models/qwen2.5.gguf --target refusal
 ```
 
-### Khoj Model Refusal Ablation
+### Model-Agnostic Refusal Ablation
 
-Remove safety/refusal mechanisms from Khoj embedding and chat models:
+Remove safety/refusal mechanisms from a target model (model-agnostic):
 
 ```bash
 # Auto-detect and ablate refusal neurons
-bash ablate_khoj.sh models/khoj_model.gguf models/khoj_uncensored.gguf zero
+bash ablate_model_refusal.sh models/input_model.gguf models/ablated_model.gguf zero
+# (optional 4th arg sets strategy; defaults to ablation)
+
+# Heretic strategy example:
+#   bash ablate_model_refusal.sh models/input_model.gguf models/ablated_model.gguf zero heretic config/heretic_refusal.yaml
 
 # Manual layer specification
-PYTHONPATH=src python3 src/aegis_lab/editing/khoj_refusal_ablation.py \
-  --model models/khoj_model.gguf \
-  --output models/khoj_ablated.gguf \
+PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py \
+  --model models/input_model.gguf \
+  --output models/ablated_model.gguf \
   --method zero \
+  --strategy heretic \
+  --heretic-config config/heretic_refusal.yaml \
+  --policy-document path/or/url/to/policy.md \
+  --policy-document-label unsafe \
   --layers layer_20 layer_21 layer_22 \
-  --report exports/ablation_reports/khoj_report.json
+  --report exports/ablation_reports/refusal_ablation_report.json
 ```
+
+The default strategy is `ablation`, which uses the current heuristic implementation.
 
 Ablation methods:
 - `zero`: Zero out refusal neuron weights (recommended)

@@ -1,9 +1,15 @@
 import asyncio
 import unittest
 
-from fastapi import HTTPException
+try:
+    from fastapi import HTTPException
+except Exception:  # pragma: no cover - optional dependency in test env
+    HTTPException = None
 
-from aegis_lab.api import server
+if HTTPException is not None:
+    from aegis_lab.api import server
+else:
+    server = None
 
 
 class FakeClient:
@@ -21,6 +27,7 @@ class FakeClient:
         return {"status": "error", "error": "unknown"}
 
 
+@unittest.skipIf(HTTPException is None, "fastapi is not installed in this environment")
 class TestAPIServerContract(unittest.TestCase):
     def tearDown(self):
         server.set_orchestrator_client(None)

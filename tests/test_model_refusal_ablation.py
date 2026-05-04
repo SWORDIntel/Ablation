@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test suite for Khoj refusal ablation
+Test suite for model refusal ablation
 Validates that safety mechanisms are properly removed
 """
 import unittest
@@ -10,14 +10,14 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from aegis_lab.editing.khoj_refusal_ablation import (
-    KhojRefusalAblator,
+from aegis_lab.editing.model_refusal_ablation import (
+    ModelRefusalAblator,
     AblationTarget
 )
 
 
-class TestKhojAblation(unittest.TestCase):
-    """Test Khoj refusal ablation functionality"""
+class TestModelRefusalAblation(unittest.TestCase):
+    """Test model refusal ablation functionality"""
     
     def setUp(self):
         """Set up test fixtures"""
@@ -26,7 +26,7 @@ class TestKhojAblation(unittest.TestCase):
     
     def test_ablator_initialization(self):
         """Test ablator can be initialized"""
-        ablator = KhojRefusalAblator(self.test_model_path)
+        ablator = ModelRefusalAblator(self.test_model_path)
         self.assertIsNotNone(ablator)
         self.assertEqual(ablator.model_path, self.test_model_path)
     
