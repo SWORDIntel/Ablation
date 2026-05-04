@@ -1,0 +1,12 @@
+{
+  "device_name": "vpu_stick_3",
+  "hardware_type": "MYRIAD",
+  "bus_id": "003",
+  "device_id": "003",
+  "vendor_id": "0x03e7",
+  "product_id": "0x2485",
+  "serial": "03e72485_3",
+  "locking_required": true,
+  "firmware_upload_phase": "bootloader",
+  "bus_lock_id": "usb_bus_003_lock"
+}

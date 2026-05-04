@@ -1,0 +1,20 @@
+model_path: "models/qwen2.5.gguf"
+dataset_path: "data/refusal_prompts.jsonl"
+n_trials: 16
+top_k_layers: 4
+seed: 42
+train_split: 0.7
+val_split: 0.2
+max_prompts: 1000
+prompt_field: "prompt"
+label_field: "label"
+prompt_label_map:
+  safe: "safe"
+  unsafe: "unsafe"
+refusal_weight: 1.0
+kl_weight: 0.18
+max_parallel_agents: 3
+output_dir: "exports/heretic_refusal"
+strategy: "heretic_refusal"
+# Optional knobs for pipeline shape and scoring tradeoffs:
+# max_parallel_agents: 3

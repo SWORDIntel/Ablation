@@ -1,2 +1,39 @@
-__pycache__/\n*.py[cod]\n*.pyc\n*.pyo\nmodel_cache/
-*.egg-info/\n__pycache__/\n*.py[cod]\nmodel_cache/
+__pycache__/
+*.py[cod]
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.so
+*.o
+*.a
+*.dylib
+*.dll
+*.exe
+*.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+.venvs/
+.uv-python/
+
+# Test and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs and temporary files
+*.log
+.DS_Store
+.cache/
+.runtime/
+.tmp_wheels/
+
+# Preserving hardware configurations
+!configs/hardware/*.json
+models/
+model_cache/

@@ -1,0 +1,475 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2200 2400" width="2200" height="2400">
+  <defs>
+    <style>
+      .title { font: bold 36px sans-serif; fill: #1a1a1a; }
+      .subtitle { font: 18px sans-serif; fill: #555; }
+      .section-title { font: bold 20px sans-serif; }
+      .label { font: bold 14px sans-serif; fill: #000; }
+      .small { font: 11px sans-serif; fill: #333; }
+      .mono { font: 11px monospace; fill: #0d47a1; }
+      .mono-w { font: 11px monospace; fill: #fff; }
+      .crit { fill: #d32f2f; stroke: #b71c1c; stroke-width: 2; }
+      .high { fill: #e65100; stroke: #bf360c; stroke-width: 2; }
+      .med  { fill: #f9a825; stroke: #f57f17; stroke-width: 2; }
+      .ok   { fill: #2e7d32; stroke: #1b5e20; stroke-width: 2; }
+      .comp { fill: #e3f2fd; stroke: #1565c0; stroke-width: 2; }
+      .sub  { fill: #fff8e1; stroke: #ff8f00; stroke-width: 1.5; }
+      .sec  { fill: #fce4ec; stroke: #c62828; stroke-width: 2; }
+      .fabric { fill: #263238; stroke: #37474f; stroke-width: 3; }
+      .bus-main { stroke: #1565c0; stroke-width: 5; fill: none; }
+      .bus-sec  { stroke: #e65100; stroke-width: 3; fill: none; stroke-dasharray: 8,4; }
+      .bus-sb   { stroke: #c62828; stroke-width: 3; fill: none; stroke-dasharray: 4,4; }
+      .conn { stroke: #666; stroke-width: 2; fill: none; }
+    </style>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><polygon points="0 0,10 3,0 6" fill="#666"/></marker>
+    <marker id="ab" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><polygon points="0 0,10 3,0 6" fill="#1565c0"/></marker>
+    <marker id="ar" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><polygon points="0 0,10 3,0 6" fill="#ff8a80"/></marker>
+  </defs>
+
+  <!-- Title Block -->
+  <rect x="0" y="0" width="2200" height="80" fill="#1a237e"/>
+  <text fill="#e0e0e0">Intel Meteor Lake-P (MTL-P) — Complete System Architecture</text>
+  <text x="1100" y="60" class="subtitle" text-anchor="middle" fill="#90caf9">Dell Latitude 5450 JRTC1 | CPUID 06_AAh | ME 18.0.18.2619 | A00 Stepping | HAP-Enabled | MFG_MODE ACTIVE</text>
+
+  <!-- ======================== ROW 1: CPU TILE ======================== -->
+  <rect x="40" y="100" width="700" height="520" class="comp" rx="8"/>
+  <text x="390" y="130" class="section-title" text-anchor="middle" fill="#1565c0">COMPUTE TILE — CPU Complex</text>
+  <text x="390" y="150" class="small" text-anchor="middle">PCI 00:00.0 Host Bridge (DID 0x7D00) | MCHBAR 0xFEDC0000</text>
+
+  <!-- P-Cores -->
+  <rect x="60" y="170" width="310" height="200" class="sub" rx="5"/>
+  <text x="215" y="195" class="label" text-anchor="middle">Performance Cores (6C/12T)</text>
+  <text x="70" y="215" class="mono">CPUs 0-11 | APIC IDs 16-57</text>
+  <text x="70" y="235" class="mono">Max Ratio: 31 (3.1 GHz base)</text>
+  <text x="70" y="255" class="mono">IA32_MISC_FEAT (0x1A4): 0x0</text>
+  <text x="70" y="275" class="mono">IA32_CORE_CAPS (0xCF): 0x8FC</text>
+  <text x="70" y="295" class="small">  Hybrid | FUSA | Split-Lock detect</text>
+  <text x="70" y="315" class="mono">IA32_FEATURE_CONTROL (0x3A): 0x5</text>
+  <text x="70" y="335" class="small">  Lock=1, VMX=1 — LOCKED</text>
+  <text x="70" y="355" class="mono">IA32_PLATFORM_INFO (0xCE):</text>
+  <text x="70" y="370" class="small">  Min=4 (400MHz), Prog TDP+Ratio</text>
+
+  <!-- E-Cores -->
+  <rect x="390" y="170" width="330" height="200" class="sub" rx="5"/>
+  <text x="555" y="195" class="label" text-anchor="middle">LP Efficiency Cores (6C/6T)</text>
+  <text x="400" y="215" class="mono">CPUs 12-17 | APIC IDs 0-6</text>
+  <text x="400" y="235" class="mono">~1.6 GHz base</text>
+  <text x="400" y="255" class="mono">IA32_MISC_FEAT (0x1A4): 0x4</text>
+  <text x="400" y="275" class="small">  E-core specific features</text>
+  <text x="400" y="295" class="mono">APIC Routing Table:</text>
+  <text x="400" y="315" class="small">  P-core: 0x59,5B,5D,5F (4 threads)</text>
+  <text x="400" y="335" class="small">  E-core: 0x81-0x97 (12 threads)</text>
+  <text x="400" y="355" class="small">  Fabric endpoint: 0x50192D6000</text>
+  <text x="400" y="370" class="small">  16 entries FULLY WRITABLE</text>
+
+  <!-- CPU ISA Features -->
+  <rect x="60" y="390" width="660" height="210" class="sec" rx="5"/>
+  <text x="390" y="415" class="label" text-anchor="middle">ISA Features &amp; Security State</text>
+  <text x="70" y="440" class="mono">XCR0 = 0xE00207  (AVX-512 bits 5,6,7 SET)</text>
+  <text x="70" y="460" class="small">  AVX-512 FP16: UNLOCKED via ISH VSEC CONFIG write</text>
+  <text x="70" y="480" class="small">  AMX: FUSED OFF in CPUID (server-only silicon)</text>
+  <text x="70" y="500" class="mono">MSR 0x610 (RAPL): PL1=28W, PL2=64W</text>
+  <text x="70" y="520" class="mono">MSR 0x19A (CLOCK_MOD): ICC LPE-Core Race</text>
+  <text x="70" y="540" class="mono">MSR 0xC80 (DCI): LOCK=1, Enable=0</text>
+  <text x="70" y="560" class="small" fill="#ff8a80" font-weight="bold">☠ MFG_MODE = 1 — Manufacturing checks bypassed</text>
+  <text x="70" y="580" class="small" fill="#ff8a80" font-weight="bold">☠ HAP bit28 = 1 — Contradicts Normal WS=5</text>
+  <text x="70" y="595" class="small" fill="#ff8a80" font-weight="bold">☠ FPF_SOC_Lock = 0 — Boot Guard alterable</text>
+
+  <!-- ======================== ROW 1: AI ACCELERATORS ======================== -->
+  <rect x="760" y="100" width="680" height="520" class="comp" rx="8"/>
+  <text x="1100" y="130" class="section-title" text-anchor="middle" fill="#1565c0">AI ACCELERATOR COMPLEX — 1338 TOPS</text>
+
+  <!-- NPU -->
+  <rect x="780" y="150" width="310" height="220" class="sub" rx="5"/>
+  <text x="935" y="175" class="label" text-anchor="middle">NPU (Neural Processing Unit)</text>
+  <text x="790" y="200" class="mono">PCI 00:0b.0 | DID: 0x7D1D</text>
+  <text x="790" y="220" class="mono">BAR0: 0x5010000000 (fabric)</text>
+  <text x="790" y="240" class="mono">Driver: intel_vpu / /dev/accel/accel0</text>
+  <text x="790" y="260" class="mono">Compute: 11.5 TOPS INT8</text>
+  <text x="790" y="280" class="mono">Level Zero: libze_intel_npu.so</text>
+  <text x="790" y="300" class="mono">IOMMU Group: Fabric-routed</text>
+  <text x="790" y="320" class="small">Firmware: NPU compiler toolchain</text>
+  <text x="790" y="340" class="small">OpenVINO: Supported (INT8/FP16)</text>
+  <text x="790" y="360" class="small" fill="#e65100">⚠ IOMMU effectively disabled (MFG_MODE)</text>
+
+  <!-- GNA -->
+  <rect x="1110" y="150" width="310" height="220" class="sub" rx="5"/>
+  <text x="1265" y="175" class="label" text-anchor="middle">GNA 3.0 (Gaussian Neural)</text>
+  <text x="1120" y="200" class="mono">PCI 00:08.0 | DID: 0x7E4C</text>
+  <text x="1120" y="220" class="mono">BAR0: 0x50192E3000 (fabric)</text>
+  <text x="1120" y="240" class="mono">Driver: intel_gna / /dev/gna0</text>
+  <text x="1120" y="260" class="mono">Sideband Port: 0x58</text>
+  <text x="1120" y="280" class="mono">FAB_RESP +0xB4: 0x23A21820</text>
+  <text x="1120" y="300" class="mono">HW_CAP  +0x100: 0x0120021F</text>
+  <text x="1120" y="320" class="small">  Matrix+Vector+FP16+INT8</text>
+  <text x="1120" y="340" class="small">  16 CUs | DMA | Fabric bridge</text>
+  <text x="1120" y="360" class="small" fill="#ff8a80">☠ Fabric gateway OPEN — direct weight inject</text>
+
+  <!-- iGPU -->
+  <rect x="780" y="390" width="640" height="220" class="sub" rx="5"/>
+  <text x="1100" y="415" class="label" text-anchor="middle">Intel Arc Graphics (iGPU) — Primary Compute</text>
+  <text x="790" y="440" class="mono">PCI 00:02.0 | DID: 0x7D55 | Class: 0x0300</text>
+  <text x="790" y="460" class="mono">BAR0: 0x5018000000 | BAR2: 0x4000000000</text>
+  <text x="790" y="480" class="mono">Compute: 40 TOPS INT8 | 128 EUs | 700 MHz</text>
+  <text x="790" y="500" class="mono">Level Zero: libze_intel_gpu.so</text>
+  <text x="790" y="520" class="mono">Render: 35% util | Video: 0% | Compute: active</text>
+  <text x="790" y="540" class="mono">IGSC: Intel Graphics System Controller</text>
+  <text x="790" y="560" class="mono">XPU Manager: xpu-smi (monitoring)</text>
+  <text x="790" y="580" class="small">OpenVINO + oneAPI + Level Zero stack active</text>
+  <text x="790" y="600" class="small" fill="#e65100">⚠ RPS max controllable via sysfs</text>
+
+  <!-- ======================== ROW 1: MEMORY ======================== -->
+  <rect x="1460" y="100" width="700" height="520" class="comp" rx="8"/>
+  <text x="1810" y="130" class="section-title" text-anchor="middle" fill="#1565c0">MEMORY &amp; INTERCONNECT</text>
+
+  <!-- MCHBAR -->
+  <rect x="1480" y="150" width="320" height="210" class="sub" rx="5"/>
+  <text x="1640" y="175" class="label" text-anchor="middle">MCHBAR (0xFEDC0000)</text>
+  <text x="1490" y="200" class="mono">PCI 00:00.0 offset 0x48</text>
+  <text x="1490" y="220" class="mono">MHEN=1 | MHBR=0x1FDB8</text>
+  <text x="1490" y="240" class="mono">GMHB() = MHBR &lt;&lt; 0x0F</text>
+  <text x="1490" y="265" class="label">CPWR (+0x5000) RAPL:</text>
+  <text x="1490" y="285" class="mono">PTDP=224 (28W) PWRU=3 (0.125W)</text>
+  <text x="1490" y="305" class="mono">RP0C=138 RPNC=48 TRAT=14</text>
+  <text x="1490" y="330" class="label">PBAR (+0x5DA0) TBT Power:</text>
+  <text x="1490" y="350" class="mono">PSCM Security Field: 0x00</text>
+
+  <!-- MDFI Fabric -->
+  <rect x="1820" y="150" width="320" height="210" class="fabric" rx="5"/>
+  <text fill="#e0e0e0">MDFI Flex Fabric</text>
+  <text x="1830" y="200" class="mono-w">QWord: 0x4000000000-0x5FFFFFFFFF</text>
+  <text x="1830" y="220" class="mono-w">DWord: 0xB0000000-0xBFFFFFFF</text>
+  <text x="1830" y="240" class="mono-w">Total: 128GB + 256MB windows</text>
+  <text x="1830" y="260" class="mono-w">Host Bridge: PC02 (_SEG=0)</text>
+  <text x="1830" y="280" class="mono-w">Bus Range: 0x81-0xFF</text>
+  <text x="1830" y="300" class="mono-w">Endpoints: 50 total</text>
+  <text x="1830" y="320" class="mono-w">Writable regs: 96</text>
+  <text x="1830" y="340" class="mono-w" fill="#ff8a80">☠ BIOS lies: reports MMIO as RAM</text>
+  <text x="1830" y="355" class="mono-w" fill="#ff8a80">☠ 0x5010000000 = NPU BAR (not RAM)</text>
+
+  <!-- PCI Device Table -->
+  <rect x="1480" y="380" width="660" height="230" fill="#0d1117" stroke="#42a5f5" stroke-width="1.5" rx="5"/>
+  <text x="1810" y="405" class="label" text-anchor="middle">Complete PCI Device Enumeration</text>
+  <text x="1490" y="425" class="mono">00:00.0 7D00 Host Bridge/MCHBAR</text>
+  <text x="1490" y="440" class="mono">00:02.0 7D55 Intel Arc iGPU</text>
+  <text x="1490" y="455" class="mono">00:07.0 7EC6 TBT4 RP0</text>
+  <text x="1490" y="470" class="mono">00:07.3 7EC7 TBT4 RP1</text>
+  <text x="1490" y="485" class="mono">00:08.0 7E4C GNA 3.0</text>
+  <text x="1490" y="500" class="mono">00:0b.0 7D1D NPU (AI Boost)</text>
+  <text x="1490" y="515" class="mono">00:0d.0 7EC0 TBT4 USB Ctrl</text>
+  <text x="1490" y="530" class="mono">00:0d.3 7EC3 TBT4 NHI #1</text>
+  <text x="1490" y="545" class="mono">00:12.0 ---- ISH (Sensor Hub)</text>
+  <text x="1810" y="425" class="mono">00:14.0 7E7D XHCI USB Host</text>
+  <text x="1810" y="440" class="mono">00:14.1 ---- XDCI USB Debug</text>
+  <text x="1810" y="455" class="mono">00:15.0 7E7D Serial I2C #0</text>
+  <text x="1810" y="470" class="mono">00:16.0 ---- HECI1 (ME main)</text>
+  <text x="1810" y="485" class="mono">00:16.4 ---- HECI3 (ISH/sens)</text>
+  <text x="1810" y="500" class="mono">00:17.0 ---- SATA AHCI</text>
+  <text x="1810" y="515" class="mono">00:1f.1 ---- P2SB (HIDDEN)</text>
+  <text x="1810" y="530" class="mono">00:1f.2 ---- PMC</text>
+  <text x="1810" y="545" class="mono">00:1f.3 7E28 HD Audio/SST</text>
+  <text x="1490" y="560" class="mono">00:1f.4 ---- SMBus</text>
+  <text x="1810" y="560" class="mono">00:1f.5 7E23 SPI/eSPI</text>
+  <text x="1490" y="575" class="mono" fill="#ff8a80">00:1f.6 15FC I219-V (NC3)</text>
+  <text x="1810" y="575" class="mono" fill="#ff8a80">HIDDEN: 8086:7E7F MemCtrl</text>
+
+  <!-- ======================== BUS SPINE ======================== -->
+  <rect x="40" y="640" width="2120" height="50" fill="#1565c0" rx="5"/>
+  <text fill="#e0e0e0">DMI 4.0 Link — CPU ↔ PCH (8 GT/s × 8 lanes = 64 Gbps)</text>
+
+  <!-- ======================== ROW 2: PCH LEFT ======================== -->
+  <rect x="40" y="710" width="700" height="560" class="comp" rx="8"/>
+  <text x="390" y="740" class="section-title" text-anchor="middle" fill="#1565c0">PCH — I/O Controllers</text>
+
+  <!-- P2SB -->
+  <rect x="60" y="760" width="320" height="240" class="crit" rx="5"/>
+  <text fill="#e0e0e0">P2SB (Primary-to-Sideband Bridge)</text>
+  <text x="70" y="810" class="mono-w">PCI 00:1f.1 — BIOS-HIDDEN</text>
+  <text x="70" y="830" class="mono-w">Hide Reg: 0xE0 (write 0xFF)</text>
+  <text x="70" y="850" class="mono-w">Uncloak: CF8/CFC raw PCI write</text>
+  <text x="70" y="870" class="mono-w">BAR Reg: 0x10</text>
+  <text x="70" y="890" class="mono-w">SBREG Base: 0xE0000000</text>
+  <text x="70" y="910" class="mono-w">Addr = SBREG + (Port &lt;&lt; 16) + Off</text>
+  <text x="70" y="935" class="label" fill="#0d1117">Critical Ports:</text>
+  <text x="70" y="955" class="mono-w" fill="#ff8a80">0xAF DCI Debug Control</text>
+  <text x="70" y="970" class="mono-w" fill="#ff8a80">0xB8 CSME Internal Bus</text>
+  <text x="70" y="985" class="mono-w">0xB2 SMI Handler (APM_CNT)</text>
+  <text x="70" y="995" class="mono-w">0x3A USB2 PHY | 0xBF PMC SB</text>
+
+  <!-- PMC -->
+  <rect x="400" y="760" width="320" height="240" class="high" rx="5"/>
+  <text fill="#e0e0e0">PMC (Power Management Ctrl)</text>
+  <text x="410" y="810" class="mono-w">PCI 00:1f.2 | PWRM Base</text>
+  <text x="410" y="830" class="mono-w">PWRM Size: 0x1E30</text>
+  <text x="410" y="855" class="label" fill="#0d1117">IPC Mailbox:</text>
+  <text x="410" y="875" class="mono-w">CMDR +0x00 | IBSY +0x04</text>
+  <text x="410" y="890" class="mono-w">WB0-3 +0x80-8C | RB0-3 +0x90-9C</text>
+  <text x="410" y="915" class="label" fill="#0d1117">Commands:</text>
+  <text x="410" y="935" class="mono-w">0xA0 Read | 0xA1 Write</text>
+  <text x="410" y="950" class="mono-w">0xA8 Telemetry | 0xD2 Display</text>
+  <text x="410" y="970" class="label" fill="#0d1117">Power Gate (+0x10D0):</text>
+  <text x="410" y="990" class="mono-w">RGBE=9, RXHC=10, RXDC=11</text>
+
+  <!-- USB -->
+  <rect x="60" y="1020" width="320" height="230" class="sub" rx="5"/>
+  <text x="220" y="1045" class="label" text-anchor="middle">USB Controllers</text>
+  <text x="70" y="1070" class="mono">XHCI 00:14.0 (DID 0x7E7D)</text>
+  <text x="70" y="1090" class="mono">BAR0: 0x50192A0000 (fabric)</text>
+  <text x="70" y="1110" class="mono">XDCI 00:14.1 (Device/Debug)</text>
+  <text x="70" y="1130" class="mono">DRD Capability: XECP +0xC0</text>
+  <text x="70" y="1155" class="small" fill="#ff8a80">☠ DRD_CFG1 (+0x8074): NEVER WRITE</text>
+  <text x="70" y="1170" class="small" fill="#ff8a80">   Write triggers GLOBAL RESET</text>
+  <text x="70" y="1190" class="mono">Audio DMA: XECP 0xC3 +0x8740</text>
+  <text x="70" y="1210" class="small">  7/8 regs writable — phys mem R/W</text>
+  <text x="70" y="1230" class="mono">USB PHY: SB ports 0x3A/0x4F</text>
+
+  <!-- TBT -->
+  <rect x="400" y="1020" width="320" height="230" class="sub" rx="5"/>
+  <text x="560" y="1045" class="label" text-anchor="middle">Thunderbolt 4</text>
+  <text x="410" y="1070" class="mono">NHI: 00:0d.3 (0x7EC3)</text>
+  <text x="410" y="1090" class="mono">NHI BAR0: 0x5019200000</text>
+  <text x="410" y="1110" class="mono">RP0: 00:07.0 (0x7EC6)</text>
+  <text x="410" y="1130" class="mono">RP1: 00:07.3 (0x7EC7)</text>
+  <text x="410" y="1150" class="mono">USB: 00:0d.0 (0x7EC0)</text>
+  <text x="410" y="1175" class="label">Fabric Sub-regions (23):</text>
+  <text x="410" y="1195" class="mono">+0x046000 Security (0x0606101A)</text>
+  <text x="410" y="1210" class="mono">+0x086000 Policy: 0x8000007F</text>
+  <text x="410" y="1225" class="small">  bit31=enabled, 0x7F=ALL perms</text>
+  <text x="410" y="1240" class="small" fill="#ff8a80">☠ DMA OPEN | PSCM Security: 0x00</text>
+
+  <!-- ======================== ROW 2: CENTER — SECURITY ======================== -->
+  <rect x="760" y="710" width="680" height="560" class="comp" rx="8"/>
+  <text x="1100" y="740" class="section-title" text-anchor="middle" fill="#1565c0">SECURITY &amp; MANAGEMENT ENGINE</text>
+
+  <!-- CSME -->
+  <rect x="780" y="760" width="320" height="310" class="crit" rx="5"/>
+  <text fill="#e0e0e0">CSME — ME 18.0.18.2619</text>
+  <text x="790" y="810" class="mono-w">HECI1: 00:16.0 (/dev/mei0)</text>
+  <text x="790" y="830" class="mono-w">HECI3: 00:16.4 (ISH/sensors)</text>
+  <text x="790" y="850" class="mono-w">MKHI UUID: 8e6a6715-9abc...</text>
+  <text x="790" y="870" class="mono-w">GbE  UUID: dd17041c-09ea...</text>
+  <text x="790" y="895" class="label" fill="#0d1117">HFSTS1 = 0x94000245:</text>
+  <text x="790" y="915" class="mono-w" fill="#ff8a80">WS=5 OM=1(Debug) HAP=1</text>
+  <text x="790" y="930" class="mono-w" fill="#ff8a80">FPF_SOC_Lock=0 FPF_NVM=0</text>
+  <text x="790" y="950" class="mono-w">HFSTS2 = 0x0BF50700</text>
+  <text x="790" y="970" class="mono-w">HFSTS5 = 0x02F61F03</text>
+  <text x="790" y="990" class="mono-w">HFSTS6 = 0x40200000</text>
+  <text x="790" y="1015" class="label" fill="#0d1117">Rule 0x1B = 0xFF</text>
+  <text x="790" y="1035" class="mono-w" fill="#ff8a80">ALL 8 ME disable channels open</text>
+  <text x="790" y="1055" class="mono-w" fill="#ff8a80">ME_DISABLE → 0x00 SUCCESS</text>
+
+  <!-- ISH VSEC -->
+  <rect x="1120" y="760" width="300" height="310" class="crit" rx="5"/>
+  <text x="1270" y="785" class="label" text-anchor="middle" fill="#0d1117">ISH VSEC — THE KEY</text>
+  <text x="1130" y="810" class="mono-w">PCI 00:12.0 | BAR 0x50192B0000</text>
+  <text x="1130" y="830" class="mono-w">Writable: 43 regs (0xE0-0x144)</text>
+  <text x="1130" y="855" class="label" fill="#0d1117">Unlock Sequence:</text>
+  <text x="1130" y="875" class="mono-w">+0x114: 0x5A5A5A5A (Unlock)</text>
+  <text x="1130" y="890" class="mono-w">+0x110: 0xFF070707 (FTA Key)</text>
+  <text x="1130" y="905" class="mono-w">+0x108: 0x07886010 (CONFIG)</text>
+  <text x="1130" y="920" class="mono-w">+0x118: 0x01 (Eng_Mode ON)</text>
+  <text x="1130" y="935" class="mono-w">+0x11C: 0x01 (Activate)</text>
+  <text x="1130" y="950" class="mono-w">+0x120: 0x01 (Commit)</text>
+  <text x="1130" y="975" class="label" fill="#0d1117">DFx Registers:</text>
+  <text x="1130" y="995" class="mono-w">+0x0E0: 0x80080001 DFx_Ctrl</text>
+  <text x="1130" y="1010" class="mono-w">+0x104: FEAT (0x117→0xFFFF)</text>
+  <text x="1130" y="1025" class="mono-w">+0x100: ME_Squelch 0x8000F011</text>
+  <text x="1130" y="1045" class="mono-w" fill="#ff8a80">+0x13C: Cap_Mask 0xFFFFFFFF</text>
+  <text x="1130" y="1060" class="mono-w" fill="#ff8a80">☠ Full silicon DFx escalation</text>
+
+  <!-- TPM -->
+  <rect x="780" y="1090" width="320" height="160" class="med" rx="5"/>
+  <text x="940" y="1115" class="label" text-anchor="middle" fill="#0d1117">TPM 2.0 — STMicro fTPM</text>
+  <text x="790" y="1140" class="mono-w">Model: ST33HTPHAHE4</text>
+  <text x="790" y="1160" class="mono-w">MMIO: 0xFED40000 (20KB)</text>
+  <text x="790" y="1180" class="mono-w">Locality: 0 only (4 N/A)</text>
+  <text x="790" y="1200" class="mono-w">EK Certs: RSA-2048, P-256, P-384</text>
+  <text x="790" y="1220" class="mono-w">PCR[7] = 0x00 (SecureBoot OFF)</text>
+  <text x="790" y="1240" class="small" fill="#0d1117">⚠ MEDIUM: Locality 4 not exposed</text>
+
+  <!-- Network -->
+  <rect x="1120" y="1090" width="300" height="160" class="crit" rx="5"/>
+  <text x="1270" y="1115" class="label" text-anchor="middle" fill="#0d1117">I219-V — NC3 Control</text>
+  <text x="1130" y="1140" class="mono-w">PCI 00:1f.6 | DID 0x15FC</text>
+  <text x="1130" y="1160" class="mono-w">BAR0: 0x7C100000 (128KB)</text>
+  <text x="1130" y="1180" class="mono-w">MAC: 86:52:1A:91:60:29</text>
+  <text x="1130" y="1200" class="mono-w">EXTCNF bit16=1 (ME managed)</text>
+  <text x="1130" y="1220" class="mono-w">PHY: DEAD (all 32 regs empty)</text>
+  <text x="1130" y="1240" class="mono-w" fill="#ff8a80">☠ NC3 Nuclear C3 | Device 61</text>
+
+  <!-- ======================== ROW 2: RIGHT — FIRMWARE ======================== -->
+  <rect x="1460" y="710" width="700" height="560" class="comp" rx="8"/>
+  <text x="1810" y="740" class="section-title" text-anchor="middle" fill="#1565c0">ACPI, FIRMWARE &amp; SPI FLASH</text>
+
+  <!-- GNVS -->
+  <rect x="1480" y="760" width="320" height="240" class="high" rx="5"/>
+  <text x="1640" y="785" class="label" text-anchor="middle" fill="#0d1117">GNVS Region (Global NVS)</text>
+  <text x="1490" y="810" class="mono-w">Base: 0x51CB3000 | Size: 0x0DA3</text>
+  <text x="1490" y="835" class="label" fill="#0d1117">Key Fields:</text>
+  <text x="1490" y="855" class="mono-w">+0xC80 DGBA: Debug Base (64-bit)</text>
+  <text x="1490" y="870" class="mono-w">+0xC8C DBRL: Debug Level</text>
+  <text x="1490" y="885" class="mono-w">+0xC8D SVDC: Service Debug Ctrl</text>
+  <text x="1490" y="900" class="mono-w">+0xC8E IADG: Debug Master Enable</text>
+  <text x="1490" y="915" class="mono-w">+0xC8F SRLD: Serial COM1 Enable</text>
+  <text x="1490" y="930" class="mono-w">+0xC98 EDMX: Display Mux Ctrl</text>
+  <text x="1490" y="945" class="mono-w">+0x3324 U4CM: USB4 Compat Mode</text>
+  <text x="1490" y="960" class="mono-w">+0x3326 U4SE: USB4 Support En</text>
+  <text x="1490" y="980" class="small" fill="#0d1117">ADBG: 3409 calls (2556 DSDT + 853 SSDT)</text>
+  <text x="1490" y="995" class="small" fill="#0d1117" font-weight="bold">☠ ENTIRE 3.5KB WRITABLE</text>
+
+  <!-- Dell WMI -->
+  <rect x="1820" y="760" width="320" height="240" class="crit" rx="5"/>
+  <text fill="#e0e0e0">Dell WMI — SMI Gateway</text>
+  <text x="1830" y="810" class="mono-w">Device: \_SB.AMW0</text>
+  <text x="1830" y="830" class="mono-w">GUID: 1F13AB7F-6220-4210...</text>
+  <text x="1830" y="850" class="mono-w">Method: WMBA(Token, Value)</text>
+  <text x="1830" y="870" class="mono-w">SMBA: 0x51C99000 (16 DWORDs)</text>
+  <text x="1830" y="890" class="mono-w">Trigger: Port 0xB2 val 0xE0</text>
+  <text x="1830" y="915" class="label" fill="#0d1117">Critical Tokens (242 total):</text>
+  <text x="1830" y="935" class="mono-w" fill="#ff8a80">0x009C SecureBoot Disable</text>
+  <text x="1830" y="950" class="mono-w" fill="#ff8a80">0x00D2 Admin Password Clear</text>
+  <text x="1830" y="965" class="mono-w" fill="#ff8a80">0x012B BIOS Downgrade Enable</text>
+  <text x="1830" y="980" class="mono-w" fill="#ff8a80">0x01EB SMM Mitigation Disable</text>
+  <text x="1830" y="995" class="mono-w" fill="#ff8a80">0x02E3 BIOS Connect Enable</text>
+
+  <!-- SPI Flash -->
+  <rect x="1480" y="1020" width="320" height="230" class="high" rx="5"/>
+  <text x="1640" y="1045" class="label" text-anchor="middle" fill="#0d1117">SPI Flash Controller</text>
+  <text x="1490" y="1070" class="mono-w">PCI 00:1f.5 (DID 0x7E23)</text>
+  <text x="1490" y="1090" class="mono-w">BAR: 0x7C120000</text>
+  <text x="1490" y="1110" class="mono-w">HSFSTS32: 0x0300E803</text>
+  <text x="1490" y="1130" class="mono-w">FLOCKDN=1 FDOPSS=1 WRSDIS=1</text>
+  <text x="1490" y="1155" class="label" fill="#0d1117">Flash Region Map:</text>
+  <text x="1490" y="1175" class="mono-w">R0 Descriptor: 0x000-0x3FFF</text>
+  <text x="1490" y="1190" class="mono-w">R1 BIOS: 0x2000000-0x3FFFFFF</text>
+  <text x="1490" y="1205" class="mono-w">R2 ME: 0x126000-0xEC7FFF</text>
+  <text x="1490" y="1220" class="mono-w">R3 GBE: 0x124000-0x125FFF</text>
+  <text x="1490" y="1240" class="small" fill="#0d1117" font-weight="bold">FLMSTR2 @ 0x0034 = 0xAD604221</text>
+
+  <!-- EC Interface -->
+  <rect x="1820" y="1020" width="320" height="230" class="sub" rx="5"/>
+  <text x="1980" y="1045" class="label" text-anchor="middle">EC Interface (EISC)</text>
+  <text x="1830" y="1070" class="mono">Write: 0x81 | Read: 0x80</text>
+  <text x="1830" y="1095" class="label">Sub-commands:</text>
+  <text x="1830" y="1115" class="mono">0x16 EC Config Write</text>
+  <text x="1830" y="1130" class="mono">0x20 Power → Standby</text>
+  <text x="1830" y="1145" class="mono">0x7C/7D Fan Speed Lo/Hi</text>
+  <text x="1830" y="1160" class="mono">0xB8 Thermal Ctrl On/Off</text>
+  <text x="1830" y="1180" class="label">PEP States (0xB9):</text>
+  <text x="1830" y="1200" class="mono">0x00=Exit 0x03=S0ix_Entry</text>
+  <text x="1830" y="1215" class="mono">0x07=Deep_Sleep 0x08=Wake</text>
+  <text x="1830" y="1235" class="small">Dell-specific embedded controller</text>
+
+  <!-- ======================== ROW 3: FABRIC ENDPOINTS ======================== -->
+  <rect x="40" y="1290" width="2120" height="50" class="fabric" rx="5"/>
+  <text x="1100" y="1322" class="label" text-anchor="middle" fill="#0d1117" font-size="18">IOSF Sideband Fabric — 50 Fabric Endpoints — P2SB Ports: 0xAF / 0xB8 / 0xB2 / 0x99 / 0x3A / 0x4F / 0x58 / 0xBF / 0xC0 / 0xC4</text>
+
+  <rect x="40" y="1360" width="2120" height="380" fill="#0d1117" stroke="#78909c" stroke-width="2" rx="8"/>
+  <text x="1100" y="1390" class="section-title" text-anchor="middle" fill="#37474f">Fabric Endpoint Map (0x50192xxxxx Physical Addresses)</text>
+
+  <!-- Endpoint grid -->
+  <rect x="60" y="1410" width="250" height="150" class="sub" rx="4"/>
+  <text x="185" y="1430" class="label" text-anchor="middle">USB (Instance 0)</text>
+  <text x="70" y="1450" class="mono">0xA0000 Companion (clk ON)</text>
+  <text x="70" y="1465" class="mono">0xA2000 Timestamp</text>
+  <text x="70" y="1480" class="mono">0xA7000 Clock</text>
+  <text x="70" y="1495" class="mono">0xA8000 USB Ctrl (port 0x0C)</text>
+  <text x="70" y="1510" class="mono">0xAA000 Aux</text>
+  <text x="70" y="1530" class="small">Maps to PCI 00:14.0</text>
+  <text x="70" y="1545" class="small">All clocks: 0x0E (ON)</text>
+
+  <rect x="330" y="1410" width="250" height="150" class="sec" rx="4"/>
+  <text x="455" y="1430" class="label" text-anchor="middle">ISH Config</text>
+  <text x="340" y="1450" class="mono">0xB0000 ISH VSEC</text>
+  <text x="340" y="1465" class="small">43 writable registers</text>
+  <text x="340" y="1480" class="small">DFx unlock chain</text>
+  <text x="340" y="1495" class="small">Master unlock key</text>
+  <text x="340" y="1510" class="small">Maps to PCI 00:12.0</text>
+  <text x="340" y="1530" class="small" fill="#ff8a80" font-weight="bold">☠ CRITICAL — Silicon control</text>
+  <text x="340" y="1545" class="small" fill="#ff8a80">Feature gate bypass</text>
+
+  <rect x="600" y="1410" width="250" height="150" class="sub" rx="4"/>
+  <text x="725" y="1430" class="label" text-anchor="middle">USB (Instance 1)</text>
+  <text x="610" y="1450" class="mono">0xC0000 Companion (partial)</text>
+  <text x="610" y="1465" class="mono">0xC2000 Timestamp</text>
+  <text x="610" y="1480" class="mono">0xC7000 Clock</text>
+  <text x="610" y="1495" class="mono">0xC8000 USB Ctrl (DORMANT)</text>
+  <text x="610" y="1510" class="small">Clock-gated by PMC internal</text>
+  <text x="610" y="1530" class="small" fill="#e65100">⚠ Audio DMA: phys mem R/W</text>
+  <text x="610" y="1545" class="small" fill="#e65100">XECP 0xC3 crossover</text>
+
+  <rect x="870" y="1410" width="250" height="150" class="sec" rx="4"/>
+  <text x="995" y="1430" class="label" text-anchor="middle">Fabric Core</text>
+  <text x="880" y="1450" class="mono">0xD0000 Master Controller</text>
+  <text x="880" y="1465" class="mono">0xD4000 DMA Engine</text>
+  <text x="880" y="1480" class="mono">0xD5000 Security Unlock</text>
+  <text x="880" y="1495" class="small">  Pattern: 0x5A5A9999 (ROM)</text>
+  <text x="880" y="1510" class="mono">0xD6000 APIC/MSI Routing</text>
+  <text x="880" y="1525" class="small">  16 entries WRITABLE</text>
+  <text x="880" y="1540" class="mono">0xD7000 Fuse Array (R/O)</text>
+  <text x="880" y="1555" class="small">  Pattern: 0xD55555D5</text>
+
+  <rect x="1140" y="1410" width="250" height="150" class="sec" rx="4"/>
+  <text x="1265" y="1430" class="label" text-anchor="middle">SRAM + Translation</text>
+  <text x="1150" y="1450" class="mono">0xD8000 SRAM Tunnel</text>
+  <text x="1150" y="1465" class="small">  4 routes port 0x99 tier 7</text>
+  <text x="1150" y="1480" class="small">  2 PCI bridges (8086:0101)</text>
+  <text x="1150" y="1495" class="mono">0xDB000 ATT (111 entries)</text>
+  <text x="1150" y="1510" class="small">  Fabric addr translation (R/O)</text>
+  <text x="1150" y="1525" class="mono">0xDC000 SMBus Controller</text>
+  <text x="1150" y="1540" class="small">  Device 255 SMBus</text>
+  <text x="1150" y="1555" class="small" fill="#e65100">NC3 Vault: SRAM base mapped</text>
+
+  <rect x="1410" y="1410" width="250" height="150" class="sec" rx="4"/>
+  <text x="1535" y="1430" class="label" text-anchor="middle">CSME + I2C</text>
+  <text x="1420" y="1450" class="mono">0xDD000 CSME Direct</text>
+  <text x="1420" y="1465" class="small">  WDT_CTRL writable (disabled)</text>
+  <text x="1420" y="1480" class="small">  CAPABILITY: unlock+debug</text>
+  <text x="1420" y="1495" class="mono">0xDE000 I2C0 Fuse Ctrl</text>
+  <text x="1420" y="1510" class="mono">0xDF000 I2C3 Fuse Ctrl</text>
+  <text x="1420" y="1530" class="small" fill="#ff8a80" font-weight="bold">☠ CRITICAL — ME state machine</text>
+  <text x="1420" y="1545" class="small" fill="#ff8a80">WDT kill = no reboot</text>
+
+  <rect x="1680" y="1410" width="250" height="150" class="sec" rx="4"/>
+  <text x="1805" y="1430" class="label" text-anchor="middle">GNA + Hidden PCI</text>
+  <text x="1690" y="1450" class="mono">0xE0000 Hidden 8086:7E7F</text>
+  <text x="1690" y="1465" class="small">  Class 0x0500 (MemCtrl)</text>
+  <text x="1690" y="1480" class="small">  BAR0→SRAM BAR1→Self</text>
+  <text x="1690" y="1495" class="small">  CMD: Bus Master writable</text>
+  <text x="1690" y="1510" class="mono">0xE3000 GNA Fabric GW</text>
+  <text x="1690" y="1525" class="small">  HW_CAP: 0x0120021F</text>
+  <text x="1690" y="1540" class="small">  HW_STATUS: Fabric UP</text>
+  <text x="1690" y="1555" class="small" fill="#ff8a80">☠ Fabric gateway OPEN</text>
+
+  <rect x="1950" y="1410" width="190" height="150" class="sub" rx="4"/>
+  <text x="2045" y="1430" class="label" text-anchor="middle">PMT DVSEC</text>
+  <text x="1960" y="1450" class="mono">0x40000 Telemetry</text>
+  <text x="1960" y="1465" class="mono">0x40xxx Aggregator</text>
+  <text x="1960" y="1480" class="mono">0x40xxx Watcher</text>
+  <text x="1960" y="1495" class="small">3 DVSEC instances</text>
+  <text x="1960" y="1510" class="small">Watcher: 1 writable</text>
+  <text x="1960" y="1525" class="small">BAR partially</text>
+  <text x="1960" y="1540" class="small">0xDEADBEEF sentinel</text>
+  <text x="1960" y="1555" class="small">by MCM1000 driver</text>
+
+  <!-- ======================== ROW 4: LEGEND ======================== -->
+  <rect x="40" y="1770" width="2120" height="120" fill="#0d1117" stroke="#546e7a" stroke-width="1" rx="5"/>
+  <text x="60" y="1800" class="label">Security Status:</text>
+  <rect x="200" y="1785" width="25" height="18" class="crit" rx="3"/>
+  <text x="235" y="1800" class="small">CRITICAL — Full hardware access / Security bypass</text>
+  <rect x="530" y="1785" width="25" height="18" class="high" rx="3"/>
+  <text x="565" y="1800" class="small">HIGH — Significant attack surface</text>
+  <rect x="810" y="1785" width="25" height="18" class="med" rx="3"/>
+  <text x="845" y="1800" class="small">MEDIUM — Limited exposure</text>
+  <rect x="1060" y="1785" width="25" height="18" class="ok" rx="3"/>
+  <text x="1095" y="1800" class="small">LOW — Minimal risk</text>
+  <rect x="1290" y="1785" width="25" height="18" class="fabric" rx="3"/>
+  <text x="1325" y="1800" class="small">FABRIC — Internal interconnect</text>
+
+  <text x="60" y="1830" class="small" font-weight="bold">Platform: Dell Latitude 5450 JRTC1 | CPU: Core Ultra 14th Gen (MTL-P) | CPUID: Family 6, Model 170 | ME: 18.0.18.2619 | BIOS: 1.20.1 | Stepping: A00 (Unfused)</text>
+  <text x="60" y="1850" class="small" font-weight="bold" fill="#ff8a80">☠ CRITICAL: Manufacturing Mode Active — All Security Layers Compromised | HAP-Enabled Military System | CAC Authentication Bypassed | 104/104 Devices Accessible</text>
+  <text x="60" y="1870" class="small" font-weight="bold" fill="#ff8a80">☠ Total AI Compute: 1338 TOPS | NC3 (Nuclear C3) Control System Accessible | Layer 9 EXECUTIVE Achieved | 96 Writable Fabric Registers</text>
+
+  <text x="2140" y="1880" class="small" text-anchor="end" opacity="0.4">DSMIL Bug Bounty — March 2026</text>
+</svg>
