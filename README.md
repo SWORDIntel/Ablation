@@ -112,27 +112,28 @@ Run the canned mission wrapper:
 Remove safety/refusal mechanisms from a target model (model-agnostic):
 
 ```bash
-# Auto-detect and ablate refusal neurons
+# Auto-detect and ablate refusal neurons (heuristic default mode)
 bash ablate_model_refusal.sh models/input_model.gguf models/ablated_model.gguf zero
 # (optional 4th arg sets strategy; defaults to ablation)
 
 # Heretic strategy example:
 #   bash ablate_model_refusal.sh models/input_model.gguf models/ablated_model.gguf zero heretic config/heretic_refusal.yaml
 
-# Manual layer specification
+# Heretic mode (optimization + optional edit application)
 PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py \
   --model models/input_model.gguf \
   --output models/ablated_model.gguf \
-  --method zero \
+  --method prune \
   --strategy heretic \
   --heretic-config config/heretic_refusal.yaml \
   --policy-document path/or/url/to/policy.md \
   --policy-document-label unsafe \
-  --layers layer_20 layer_21 layer_22 \
+  --apply-heretic-edits \
   --report exports/ablation_reports/refusal_ablation_report.json
 ```
 
 The default strategy is `ablation`, which uses the current heuristic implementation.
+Heretic mode is report-only unless `--apply-heretic-edits` is provided.
 
 Ablation methods:
 - `zero`: Zero out refusal neuron weights (recommended)

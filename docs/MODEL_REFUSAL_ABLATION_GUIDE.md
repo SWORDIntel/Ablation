@@ -35,10 +35,9 @@ PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py \
   --method zero \
   --auto-detect \
   --strategy ablation \
-  --heretic-config config/heretic_refusal.yaml \
   --report exports/ablation_reports/refusal_7b_report.json
 
-# Manual layer specification
+# Heretic optimization example (report-only by default)
 PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py \
   --model models/model_13b.gguf \
   --output models/model_13b_ablated.gguf \
@@ -47,9 +46,11 @@ PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py \
   --heretic-config config/heretic_refusal.yaml \
   --policy-document path/or/url/to/policy.md \
   --policy-document-label unsafe \
-  --layers layer_18 layer_19 layer_20 layer_21 layer_22 \
+  --apply-heretic-edits \
   --report exports/ablation_reports/refusal_13b_report.json
 ```
+
+> Note: Heretic mode does not apply edits to the model unless `--apply-heretic-edits` is set.
 
 ### Heretic policy-document options
 
