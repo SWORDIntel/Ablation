@@ -10,7 +10,7 @@ This guide explains how to use the refusal ablation tool to remove safety and re
 ### Basic Usage
 
 ```bash
-cd /mnt/sdi2/Ablation
+cd /tank/btrfs-recovery/Ablation
 
 # Ablate a model
 bash ablate_model_refusal.sh models/input_model.gguf models/ablated_model.gguf zero
@@ -74,6 +74,16 @@ PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py \
 ```
 
 Remote document URLs are supported for policy sources (`.txt/.md` exports and direct text URLs). If a remote doc is not publicly accessible, 401/403 responses surface an explicit error asking for a public/exported URL.
+
+### TUI Launcher
+
+```bash
+cd /tank/btrfs-recovery/Ablation
+./ablate_model_refusal.sh --tui
+```
+
+Use this when you want checkbox-based method/strategy selection, model path fields,
+and a live progress/log view while the ablation pipeline runs.
 
 ## Ablation Methods
 
@@ -242,7 +252,7 @@ Example report:
 cp models/model_ablated.gguf /path/to/service/models/
 
 # Restart service
-cd /mnt/DSMIL/HIGH-GRAVITY
+cd /path/to/HIGH-GRAVITY
 bash hg_stop.sh
 bash hg_start.sh
 ```
@@ -260,7 +270,7 @@ curl -X POST http://127.0.0.1:42110/api/chat \
 Run the test suite to validate ablation logic:
 
 ```bash
-cd /mnt/sdi2/Ablation
+cd /tank/btrfs-recovery/Ablation
 
 # Run all tests
 PYTHONPATH=src python3 -m unittest tests.test_model_refusal_ablation -v
@@ -331,13 +341,13 @@ cp models/model_source.gguf models/model_source.gguf.backup
 ### Update model deployment
 ```bash
 # Copy ablated model to target service directory
-cp models/model_ablated.gguf /mnt/DSMIL/HIGH-GRAVITY/models/
+cp models/model_ablated.gguf /path/to/HIGH-GRAVITY/models/
 
 # Update service config
-echo "model_path: models/model_ablated.gguf" >> /mnt/DSMIL/HIGH-GRAVITY/config/model.env
+echo "model_path: models/model_ablated.gguf" >> /path/to/HIGH-GRAVITY/config/model.env
 
 # Restart services
-cd /mnt/DSMIL/HIGH-GRAVITY
+cd /path/to/HIGH-GRAVITY
 bash hg_stop.sh
 bash hg_start.sh
 ```
@@ -374,10 +384,10 @@ Common refusal layers in transformer models:
 
 ## References
 
-- AEGIS-LAB Framework: `/mnt/sdi2/Ablation/README.md`
-- Ablation Study: `/mnt/sdi2/Ablation/docs/KHOJ_ABLATION_STUDY.md`
-- Source Code: `/mnt/sdi2/Ablation/src/aegis_lab/editing/model_refusal_ablation.py`
-- Test Suite: `/mnt/sdi2/Ablation/tests/test_model_refusal_ablation.py`
+- AEGIS-LAB Framework: `/tank/btrfs-recovery/Ablation/README.md`
+- Ablation Study: `/tank/btrfs-recovery/Ablation/docs/KHOJ_ABLATION_STUDY.md`
+- Source Code: `/tank/btrfs-recovery/Ablation/src/aegis_lab/editing/model_refusal_ablation.py`
+- Test Suite: `/tank/btrfs-recovery/Ablation/tests/test_model_refusal_ablation.py`
 
 ---
 

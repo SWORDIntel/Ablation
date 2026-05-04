@@ -111,25 +111,35 @@ Run the canned mission wrapper:
 
 Remove safety/refusal mechanisms from a target model (model-agnostic):
 
+TUI is the preferred mode and default when no CLI args are provided:
+
 ```bash
-# Auto-detect and ablate refusal neurons (heuristic default mode)
-bash ablate_model_refusal.sh models/input_model.gguf models/ablated_model.gguf zero
-# (optional 4th arg sets strategy; defaults to ablation)
+./ablate_model_refusal.sh                # interactive TUI (default)
+./ablate_model_refusal.sh --tui           # explicit TUI mode
+```
 
-# Heretic strategy example:
-#   bash ablate_model_refusal.sh models/input_model.gguf models/ablated_model.gguf zero heretic config/heretic_refusal.yaml
+For scripted/non-interactive use, pass full positional args:
 
-# Heretic mode (optimization + optional edit application)
-PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py \
-  --model models/input_model.gguf \
-  --output models/ablated_model.gguf \
-  --method prune \
-  --strategy heretic \
-  --heretic-config config/heretic_refusal.yaml \
+```bash
+# Auto-detect and ablate (heuristic default mode)
+bash ablate_model_refusal.sh models/input_model.gguf models/ablated_model.gguf zero ablation
+
+# Heretic example with extra flags
+bash ablate_model_refusal.sh \
+  models/input_model.gguf \
+  models/ablated_model.gguf \
+  prune \
+  heretic \
+  config/heretic_refusal.yaml \
   --policy-document path/or/url/to/policy.md \
   --policy-document-label unsafe \
-  --apply-heretic-edits \
-  --report exports/ablation_reports/refusal_ablation_report.json
+  --apply-heretic-edits
+```
+
+Single root entrypoint (interactive + non-interactive) cheat sheet:
+
+```bash
+./ablate_model_refusal.sh --help
 ```
 
 The default strategy is `ablation`, which uses the current heuristic implementation.
@@ -140,14 +150,7 @@ Ablation methods:
 - `prune`: Remove weak connections below threshold
 - `clamp`: Limit activation ranges to reduce refusal strength
 
-Monitor progress:
-
-```bash
-python3 aegis.py list
-python3 aegis.py status --job-id job-xxxxxxxx
-curl http://127.0.0.1:18000/jobs
-curl http://127.0.0.1:18000/hardware/sitrep
-```
+TUI run output includes live progress and log lines. For shell/CLI runs, keep an eye on command output in your terminal.
 
 ## Runtime Model
 

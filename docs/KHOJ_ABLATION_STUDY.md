@@ -303,9 +303,9 @@ class KhojAblationHarness:
 ## References
 
 - Khoj Documentation: https://docs.khoj.dev
-- HIGH-GRAVITY Proxy: `/mnt/DSMIL/HIGH-GRAVITY/src/proxy.py`
-- PegasusKhojBridge: `/mnt/DSMIL/HIGH-GRAVITY/src/pegasus/khoj_integration.py`
-- AEGIS-LAB Framework: `/mnt/sdi2/Ablation/README.md`
+- HIGH-GRAVITY Proxy: `/path/to/HIGH-GRAVITY/src/proxy.py`
+- PegasusKhojBridge: `/path/to/HIGH-GRAVITY/src/pegasus/khoj_integration.py`
+- AEGIS-LAB Framework: `/tank/btrfs-recovery/Ablation/README.md`
 
 ---
 
