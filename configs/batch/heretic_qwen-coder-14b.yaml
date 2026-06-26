@@ -1,0 +1,19 @@
+dataset_path: /fast/Main Workspace/framewerx/external/Ablation/data/refusal_prompts.jsonl
+enable_optuna: false
+kl_weight: 0.18
+label_field: label
+max_parallel_agents: 3
+max_prompts: 40
+model_path: /usr/share/ollama/.ollama/models/blobs/sha256-ac9bc7a69dab38da1c790838955f1293420b55ab555ef6b4615efa1c1507b1ed
+n_trials: 8
+output_dir: /fast/Main Workspace/framewerx/external/Ablation/exports/batch_ablation/qwen-coder-14b
+prompt_field: prompt
+prompt_label_map:
+  safe: safe
+  unsafe: unsafe
+refusal_weight: 1.0
+seed: 42
+strategy: heretic_refusal
+top_k_layers: 4
+train_split: 0.7
+val_split: 0.2

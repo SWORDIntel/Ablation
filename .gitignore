@@ -37,3 +37,7 @@ htmlcov/
 !configs/hardware/*.json
 models/
 model_cache/
+
+# Ablation exports — GGUF blobs are too large for git
+exports/
+*.gguf

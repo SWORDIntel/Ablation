@@ -1,0 +1,19 @@
+dataset_path: /fast/Main Workspace/framewerx/external/Ablation/data/refusal_prompts.jsonl
+enable_optuna: false
+kl_weight: 0.18
+label_field: label
+max_parallel_agents: 3
+max_prompts: 40
+model_path: /usr/share/ollama/.ollama/models/blobs/sha256-dde5aa3fc5ffc17176b5e8bdc82f587b24b2678c6c66101bf7da77af9f7ccdff
+n_trials: 8
+output_dir: /fast/Main Workspace/framewerx/external/Ablation/exports/batch_ablation/llama3.2-3b
+prompt_field: prompt
+prompt_label_map:
+  safe: safe
+  unsafe: unsafe
+refusal_weight: 1.0
+seed: 42
+strategy: heretic_refusal
+top_k_layers: 4
+train_split: 0.7
+val_split: 0.2
