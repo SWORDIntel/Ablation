@@ -30,6 +30,21 @@ class ModelVault:
         self.is_locked = False
         return True
 
+    def _get_secure_path(self, atom_id: str) -> str:
+        """
+        Resolves and validates that the path for a given atom_id is within the vault.
+        """
+        # Ensure the filename is safe and doesn't allow traversal
+        filename = f"{atom_id}.enc"
+        base_path = os.path.abspath(self.vault_path)
+        secure_path = os.path.abspath(os.path.join(base_path, filename))
+
+        if not secure_path.startswith(base_path + os.sep):
+            logger.error(f"Security Violation: Path traversal attempt detected with atom_id: {atom_id}")
+            raise ValueError("Invalid atom_id: Path traversal detected.")
+
+        return secure_path
+
     def store_atom_securely(self, atom_id: str, data: bytes):
         """
         Encrypts and stores an atom using hardware-backed keys.
@@ -38,7 +53,7 @@ class ModelVault:
             logger.error("CSME Vault is locked. Storage denied.")
             return False
             
-        secure_path = os.path.join(self.vault_path, f"{atom_id}.enc")
+        secure_path = self._get_secure_path(atom_id)
         # Simulating hardware-level AES-256-GCM encryption
         with open(secure_path, "wb") as f:
             f.write(data) # In real impl, this is encrypted by CSME logic
@@ -49,7 +64,8 @@ class ModelVault:
         if self.is_locked: return None
         # Simulating hardware-level decryption
         try:
-            with open(os.path.join(self.vault_path, f"{atom_id}.enc"), "rb") as f:
+            secure_path = self._get_secure_path(atom_id)
+            with open(secure_path, "rb") as f:
                 return f.read()
-        except FileNotFoundError:
+        except (FileNotFoundError, ValueError):
             return None
