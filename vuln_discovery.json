@@ -1,0 +1,16 @@
+[
+  {
+    "model": "qwen2.5-coder:latest",
+    "prompt": "Identify CVEs for Apache 2.4.49 on Ubuntu 20.04 with mod_cgi enabled and rank by",
+    "response_len": 450,
+    "eval_count": 128,
+    "tok_per_s": 2.89,
+    "ttft_s": 49.98,
+    "gen_time_s": 44.34,
+    "total_s": 94.32,
+    "ram_delta_gb": 4.78,
+    "ram_available_gb": 14.82,
+    "response_preview": "To identify the Common Vulnerabilities and Exposures (CVEs) associated with Apache 2.4.49 on Ubuntu 20.04 with `mod_cgi` enabled, you can follow these steps:\n\n1. **Search for CVEs related to Apache 2.",
+    "tier": "vuln_discovery"
+  }
+]

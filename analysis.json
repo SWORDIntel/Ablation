@@ -1,0 +1,16 @@
+[
+  {
+    "model": "phi4-mini:3.8b",
+    "prompt": "Assess risk of exposed Kubernetes API server with no authentication on an intern",
+    "response_len": 691,
+    "eval_count": 128,
+    "tok_per_s": 4.18,
+    "ttft_s": 19.68,
+    "gen_time_s": 30.64,
+    "total_s": 50.32,
+    "ram_delta_gb": 2.54,
+    "ram_available_gb": 16.68,
+    "response_preview": "Exposing a Kubernetes API Server without any form of authentication, especially within its own cluster (i.e., not exposing it externally), can still pose significant security risks. Here are some pote",
+    "tier": "analysis"
+  }
+]

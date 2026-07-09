@@ -1,0 +1,16 @@
+[
+  {
+    "model": "phi4-mini:3.8b",
+    "prompt": "Summarize these nmap results and rank hosts by attack surface: 10.0.1.5 (22,80,4",
+    "response_len": 508,
+    "eval_count": 128,
+    "tok_per_s": 5.44,
+    "ttft_s": 22.99,
+    "gen_time_s": 23.51,
+    "total_s": 46.5,
+    "ram_delta_gb": 2.67,
+    "ram_available_gb": 16.99,
+    "response_preview": "Based on the Nmap scan results provided for three different IP addresses within a network segment:\n\n- **IP: 10.0.1.5** - Open ports are identified as TCP port numbers 80 and 443 which correspond to HT",
+    "tier": "recon"
+  }
+]

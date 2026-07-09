@@ -1,0 +1,16 @@
+[
+  {
+    "model": "phi4-mini:3.8b",
+    "prompt": "Write a one-paragraph executive summary: 3 critical, 5 high, 12 medium findings ",
+    "response_len": 764,
+    "eval_count": 128,
+    "tok_per_s": 4.35,
+    "ttft_s": 17.45,
+    "gen_time_s": 29.43,
+    "total_s": 46.88,
+    "ram_delta_gb": 2.65,
+    "ram_available_gb": 16.45,
+    "response_preview": "Executive Summary:\n\nUpon conducting an extensive analysis of our recent project data and market research reports for the fiscal year ending December 31st, we have distilled key insights into three piv",
+    "tier": "reporting"
+  }
+]

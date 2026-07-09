@@ -1,0 +1,255 @@
+=== FRAMEWERX MoE Ablation Sun May  3 09:44:09 AM BST 2026 ===
+
+--- Agent: recon ---
+
+============================================================
+  Tier: recon  Model: phi4-mini:3.8b
+============================================================
+  Prompt: Summarize these nmap results and rank hosts by attack surface: 10.0.1....
+  Generating (max 128 tok, ctx=2048)... done
+    128 tok | 5.44 t/s | TTFT 22.99s | RAM +2.67 GB | avail 16.99 GB
+  Unloading phi4-mini:3.8b... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  recon        phi4-mini:3.8b          5.44   23.0s   2.67G   17.0G
+
+  Results saved to /tank/FRAMEWERX/ablation/recon.json
+
+--- Agent: vuln_discovery ---
+
+============================================================
+  Tier: vuln_discovery  Model: qwen2.5-coder:latest
+============================================================
+  Prompt: Identify CVEs for Apache 2.4.49 on Ubuntu 20.04 with mod_cgi enabled a...
+  Generating (max 128 tok, ctx=2048)... done
+    128 tok | 2.89 t/s | TTFT 49.98s | RAM +4.78 GB | avail 14.82 GB
+  Unloading qwen2.5-coder:latest... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  vuln_discovery qwen2.5-coder:latest    2.89   50.0s   4.78G   14.8G
+
+  Results saved to /tank/FRAMEWERX/ablation/vuln_discovery.json
+
+--- Agent: exploitation ---
+
+============================================================
+  Tier: exploitation  Model: qwen2.5-coder:latest
+============================================================
+  Prompt: Draft step-by-step exploitation for CVE-2021-41773 Apache path travers...
+  Generating (max 128 tok, ctx=2048)... done
+    12 tok | 4.83 t/s | TTFT 44.84s | RAM +5.01 GB | avail 14.44 GB
+  Unloading qwen2.5-coder:latest... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  exploitation qwen2.5-coder:latest    4.83   44.8s   5.01G   14.4G
+
+  Results saved to /tank/FRAMEWERX/ablation/exploitation.json
+
+--- Agent: post_exploitation ---
+
+============================================================
+  Tier: post_exploitation  Model: qwen3:8b
+============================================================
+  Prompt: Map lateral movement paths from a compromised Linux web server at 10.0...
+  Generating (max 128 tok, ctx=2048)... done
+    128 tok | 1.81 t/s | TTFT 67.26s | RAM +5.24 GB | avail 13.88 GB
+  Unloading qwen3:8b... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  post_exploitation qwen3:8b                1.81   67.3s   5.24G   13.9G
+
+  Results saved to /tank/FRAMEWERX/ablation/post_exploitation.json
+
+--- Agent: remediation ---
+
+============================================================
+  Tier: remediation  Model: phi4-mini:3.8b
+============================================================
+  Prompt: Provide remediation steps for SSH root login enabled with password aut...
+  Generating (max 128 tok, ctx=2048)... done
+    128 tok | 5.94 t/s | TTFT 16.88s | RAM +2.76 GB | avail 16.49 GB
+  Unloading phi4-mini:3.8b... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  remediation  phi4-mini:3.8b          5.94   16.9s   2.76G   16.5G
+
+  Results saved to /tank/FRAMEWERX/ablation/remediation.json
+
+--- Agent: reporting ---
+
+============================================================
+  Tier: reporting  Model: phi4-mini:3.8b
+============================================================
+  Prompt: Write a one-paragraph executive summary: 3 critical, 5 high, 12 medium...
+  Generating (max 128 tok, ctx=2048)... done
+    128 tok | 4.35 t/s | TTFT 17.45s | RAM +2.65 GB | avail 16.45 GB
+  Unloading phi4-mini:3.8b... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  reporting    phi4-mini:3.8b          4.35   17.4s   2.65G   16.4G
+
+  Results saved to /tank/FRAMEWERX/ablation/reporting.json
+
+--- Agent: scope_edge ---
+
+============================================================
+  Tier: scope_edge  Model: phi4-mini:3.8b
+============================================================
+  Prompt: Target 10.0.1.50 responded to scanning but was not explicitly listed. ...
+  Generating (max 128 tok, ctx=2048)... done
+    128 tok | 5.23 t/s | TTFT 20.42s | RAM +2.9 GB | avail 16.19 GB
+  Unloading phi4-mini:3.8b... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  scope_edge   phi4-mini:3.8b          5.23   20.4s   2.90G   16.2G
+
+  Results saved to /tank/FRAMEWERX/ablation/scope_edge.json
+
+--- Agent: authorized_offensive ---
+
+============================================================
+  Tier: authorized_offensive  Model: qwen2.5-coder:latest
+============================================================
+  Prompt: Draft Mimikatz commands to extract LSASS credentials on the compromise...
+  Generating (max 128 tok, ctx=2048)... done
+    12 tok | 4.72 t/s | TTFT 44.5s | RAM +4.58 GB | avail 14.49 GB
+  Unloading qwen2.5-coder:latest... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  authorized_offensive qwen2.5-coder:latest    4.72   44.5s   4.58G   14.5G
+
+  Results saved to /tank/FRAMEWERX/ablation/authorized_offensive.json
+
+--- Agent: red_teaming ---
+
+============================================================
+  Tier: red_teaming  Model: qwen2.5-coder:latest
+============================================================
+  Prompt: Write a spear-phishing email posing as IT support requesting MFA appro...
+  Generating (max 128 tok, ctx=2048)... done
+    31 tok | 4.48 t/s | TTFT 42.98s | RAM +4.48 GB | avail 14.57 GB
+  Unloading qwen2.5-coder:latest... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  red_teaming  qwen2.5-coder:latest    4.48   43.0s   4.48G   14.6G
+
+  Results saved to /tank/FRAMEWERX/ablation/red_teaming.json
+
+--- Agent: evasion_research ---
+
+============================================================
+  Tier: evasion_research  Model: qwen2.5-coder:latest
+============================================================
+  Prompt: Modify this C# reverse shell to bypass Windows Defender using dynamic ...
+  Generating (max 128 tok, ctx=2048)... done
+    12 tok | 4.29 t/s | TTFT 42.09s | RAM +4.65 GB | avail 14.63 GB
+  Unloading qwen2.5-coder:latest... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  evasion_research qwen2.5-coder:latest    4.29   42.1s   4.65G   14.6G
+
+  Results saved to /tank/FRAMEWERX/ablation/evasion_research.json
+
+--- Agent: malware_analysis ---
+
+============================================================
+  Tier: malware_analysis  Model: qwen3:8b
+============================================================
+  Prompt: Analyze WannaCry's encryption key generation mechanism from a memory d...
+  Generating (max 128 tok, ctx=2048)... done
+    128 tok | 2.17 t/s | TTFT 59.9s | RAM +4.93 GB | avail 14.33 GB
+  Unloading qwen3:8b... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  malware_analysis qwen3:8b                2.17   59.9s   4.93G   14.3G
+
+  Results saved to /tank/FRAMEWERX/ablation/malware_analysis.json
+
+--- Agent: vulnerability_validation ---
+
+============================================================
+  Tier: vulnerability_validation  Model: qwen2.5-coder:latest
+============================================================
+  Prompt: Write a minimal SQLmap command to extract database version from a conf...
+  Generating (max 128 tok, ctx=2048)... done
+    128 tok | 1.82 t/s | TTFT 47.19s | RAM +3.56 GB | avail 15.8 GB
+  Unloading qwen2.5-coder:latest... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  vulnerability_validation qwen2.5-coder:latest    1.82   47.2s   3.56G   15.8G
+
+  Results saved to /tank/FRAMEWERX/ablation/vulnerability_validation.json
+
+--- Agent: initial_access ---
+
+============================================================
+  Tier: initial_access  Model: qwen2.5-coder:latest
+============================================================
+  Prompt: Draft a password spraying configuration targeting an external Azure AD...
+  Generating (max 128 tok, ctx=2048)... done
+    12 tok | 3.96 t/s | TTFT 43.05s | RAM +4.61 GB | avail 14.78 GB
+  Unloading qwen2.5-coder:latest... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  initial_access qwen2.5-coder:latest    3.96   43.0s   4.61G   14.8G
+
+  Results saved to /tank/FRAMEWERX/ablation/initial_access.json
+
+--- Agent: analysis ---
+
+============================================================
+  Tier: analysis  Model: phi4-mini:3.8b
+============================================================
+  Prompt: Assess risk of exposed Kubernetes API server with no authentication on...
+  Generating (max 128 tok, ctx=2048)... done
+    128 tok | 4.18 t/s | TTFT 19.68s | RAM +2.54 GB | avail 16.68 GB
+  Unloading phi4-mini:3.8b... done
+
+============================================================
+  ABLATION SUMMARY (CPU-only, 128 tok cap, ctx=2048)
+============================================================
+  Tier         Model                  tok/s    TTFT   RAM +   Avail
+  analysis     phi4-mini:3.8b          4.18   19.7s   2.54G   16.7G
+
+  Results saved to /tank/FRAMEWERX/ablation/analysis.json
+
+=== Done Sun May  3 10:00:57 AM BST 2026 ===

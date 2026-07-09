@@ -1,0 +1,16 @@
+[
+  {
+    "model": "phi4-mini:3.8b",
+    "prompt": "Target 10.0.1.50 responded to scanning but was not explicitly listed. Scope says",
+    "response_len": 535,
+    "eval_count": 128,
+    "tok_per_s": 5.23,
+    "ttft_s": 20.42,
+    "gen_time_s": 24.45,
+    "total_s": 44.87,
+    "ram_delta_gb": 2.9,
+    "ram_available_gb": 16.19,
+    "response_preview": "Before proceeding with any action, it's crucial to understand the implications and risks involved:\n\n- **Understanding Target Information**: The target IP address (10.0.1.50) is responding during a sca",
+    "tier": "scope_edge"
+  }
+]
