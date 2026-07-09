@@ -10,7 +10,7 @@ except (ImportError, OSError):
     AutoModelForCausalLM = None
     AutoTokenizer = None
 
-from aegis_lab.editing.runtime import (
+from framewerx.aegis_lab.editing.runtime import (
     ExecutionMode,
     resolve_execution_contract,
     stable_json_hash,

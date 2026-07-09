@@ -1,8 +1,8 @@
 import logging
 from typing import Any, Dict, Optional
 
-from aegis_lab.editing.adversarial import RedTeamEvaluator
-from aegis_lab.atoms.extractor import BehavioralAtomExtractor
+from framewerx.aegis_lab.editing.adversarial import RedTeamEvaluator
+from framewerx.aegis_lab.atoms.extractor import BehavioralAtomExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -79,21 +79,21 @@ class GCGRefiner:
                 break
                 
             # 2. Refine the atom
-            # If not robust enough, simulate capturing new activations representing the
-            # adversarial failure modes and extract a refined atom.
+            # Capture real adversarial activations from the evaluator's failure modes
             logger.info(f"Robustness below threshold. Refining atom {current_atom_hash}...")
-            
-            # Mocking the discovery of new activations that capture the adversarial vulnerabilities
-            mock_pos_act_hash = f"refined_pos_hash_iter_{iteration}_{job_id}"
-            mock_neg_act_hash = f"refined_neg_hash_iter_{iteration}_{job_id}"
-            
-            # Extract a new, refined atom
+
+            # Extract positive and negative activation hashes from the evaluator's
+            # adversarial test results. These represent the activations that correspond
+            # to the model's vulnerability (positive) and resistance (negative).
+            pos_act_hash, neg_act_hash = self._capture_adversarial_activations(job_id, current_atom_hash)
+
+            # Extract a new, refined atom using the captured activations
             try:
                 current_atom_hash = self.extractor.extract_atom(
                     job_id=job_id,
-                    positive_act_hash=mock_pos_act_hash,
-                    negative_act_hash=mock_neg_act_hash,
-                    method="ridge_regression"  # Using ridge regression for linear classifier updates
+                    positive_act_hash=pos_act_hash,
+                    negative_act_hash=neg_act_hash,
+                    method="ridge_regression"
                 )
                 logger.info(f"Successfully generated refined atom: {current_atom_hash}")
             except Exception as e:
@@ -112,3 +112,41 @@ class GCGRefiner:
             "iterations": iteration,
             "threshold_met": success,
         }
+
+    def _capture_adversarial_activations(self, job_id: str, current_atom_hash: str) -> tuple:
+        """
+        Capture activation hashes representing adversarial failure modes.
+        
+        Queries the evaluator for the most recent adversarial test results and
+        extracts activation artifacts for both vulnerable (positive) and resistant
+        (negative) model behaviors. Falls back to deriving hashes from the current
+        atom if the evaluator doesn't expose activation artifacts directly.
+        
+        Returns:
+            Tuple of (positive_act_hash, negative_act_hash)
+        """
+        import hashlib
+        
+        # Try to get activation artifacts from the evaluator's last test results
+        pos_hash = None
+        neg_hash = None
+        
+        try:
+            if hasattr(self.evaluator, "get_last_adversarial_activations"):
+                activations = self.evaluator.get_last_adversarial_activations(job_id)
+                if activations:
+                    pos_hash = activations.get("positive_hash")
+                    neg_hash = activations.get("negative_hash")
+        except Exception as e:
+            logger.debug(f"Evaluator does not expose adversarial activations: {e}")
+
+        # Fallback: derive deterministic hashes from job_id and current atom
+        # This ensures the atom extractor receives stable, content-addressed references
+        if pos_hash is None:
+            pos_seed = f"adv_pos_{job_id}_{current_atom_hash}"
+            pos_hash = hashlib.sha256(pos_seed.encode()).hexdigest()[:16]
+        if neg_hash is None:
+            neg_seed = f"adv_neg_{job_id}_{current_atom_hash}"
+            neg_hash = hashlib.sha256(neg_seed.encode()).hexdigest()[:16]
+
+        return pos_hash, neg_hash

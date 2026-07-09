@@ -1,6 +1,6 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer
-from aegis_lab.gui.widgets.mission_monitor import MissionMonitor
+from framewerx.aegis_lab.gui.widgets.mission_monitor import MissionMonitor
 
 class AegisTUI(App):
     BINDINGS = [("q", "quit", "Quit the application")]

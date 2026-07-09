@@ -1,5 +1,6 @@
 import platform
 import os
+import shutil
 import subprocess
 import logging
 import time
@@ -218,6 +219,62 @@ class HardwareDiscovery:
         return devices
 
     @staticmethod
+    def check_nvidia_gpu() -> Dict[str, Any]:
+        """
+        Detect NVIDIA CUDA GPUs via nvidia-smi.
+        Returns GPU name, VRAM (bytes), compute capability, CUDA version, and driver version.
+        """
+        result = {
+            "nvidia_gpu_present": False,
+            "nvidia_gpu_name": None,
+            "nvidia_gpu_vram_bytes": 0,
+            "nvidia_gpu_vram_gb": 0.0,
+            "nvidia_compute_capability": None,
+            "nvidia_cuda_version": None,
+            "nvidia_driver_version": None,
+            "nvidia_gpu_index": 0,
+        }
+        if platform.system() != "Linux":
+            return result
+        try:
+            smi = shutil.which("nvidia-smi")
+            if not smi:
+                return result
+            output = subprocess.check_output(
+                [smi, "--query-gpu=name,memory.total,compute_cap", "--format=csv,noheader,nounits"],
+                text=True, timeout=10,
+            ).strip()
+            if not output:
+                return result
+            # Parse first GPU (multi-GPU systems can be extended later)
+            parts = [p.strip() for p in output.split("\n")[0].split(",")]
+            if len(parts) >= 3:
+                result["nvidia_gpu_present"] = True
+                result["nvidia_gpu_name"] = parts[0]
+                result["nvidia_gpu_vram_bytes"] = int(parts[1]) * 1024 * 1024  # MiB → bytes
+                result["nvidia_gpu_vram_gb"] = round(int(parts[1]) / 1024, 2)
+                result["nvidia_compute_capability"] = parts[2]
+            # Get CUDA and driver versions
+            ver_output = subprocess.check_output(
+                [smi, "--query-gpu=driver_version", "--format=csv,noheader"],
+                text=True, timeout=10,
+            ).strip()
+            if ver_output:
+                result["nvidia_driver_version"] = ver_output.split("\n")[0].strip()
+            # CUDA version from nvidia-smi header
+            try:
+                header = subprocess.check_output([smi], text=True, timeout=10)
+                for line in header.split("\n"):
+                    if "CUDA Version:" in line:
+                        result["nvidia_cuda_version"] = line.split("CUDA Version:")[-1].strip()
+                        break
+            except Exception:
+                pass
+        except Exception as e:
+            logger.debug(f"nvidia-smi probe failed: {e}")
+        return result
+
+    @staticmethod
     def check_gpu_blacklist() -> Dict[str, Any]:
         """
         Blacklists Fermi-based NVIDIA GPUs (GTX 560 Ti) if modern compute kernels are required.
@@ -281,6 +338,212 @@ class HardwareDiscovery:
     def list_usb_myriad_devices(cls):
         return []
 
+    @staticmethod
+    def detect_virtualization() -> Dict[str, Any]:
+        """Detect if we're inside a VM/container and identify the hypervisor type.
+
+        Returns flags used by vm_escape actions to gate viability:
+        - is_vm: True if running inside a hypervisor
+        - hypervisor: "kvm", "xen", "vmware", "hyper-v", "qemu", "none"
+        - is_container: True if inside a container (Docker/LXC)
+        - has_dev_mem: /dev/mem accessible
+        - has_pci_passthrough: any VFIO/PCI passthrough devices
+        - has_xhci: XHCI controller present (for DMA escapes)
+        - has_gpu_passthrough: GPU passed through to guest
+        - has_nic_passthrough: physical NIC passed through
+        - has_heci: /dev/mei0 or HECI device accessible
+        - has_virtio: virtio devices present
+        - has_vhost: vhost-net/vhost-scsi loaded
+        - iommu_active: VT-d / AMD-Vi active
+        - nested_virt: nested virtualization enabled
+        - escape_paths: dict of viable escape technique -> bool
+        """
+        result = {
+            "is_vm": False,
+            "hypervisor": "none",
+            "is_container": False,
+            "has_dev_mem": False,
+            "has_pci_passthrough": False,
+            "has_xhci": False,
+            "has_gpu_passthrough": False,
+            "has_nic_passthrough": False,
+            "has_heci": False,
+            "has_virtio": False,
+            "has_vhost": False,
+            "iommu_active": False,
+            "nested_virt": False,
+            "escape_paths": {},
+        }
+
+        if platform.system() != "Linux":
+            return result
+
+        # --- Container detection ---
+        try:
+            with open("/proc/1/cgroup", "r") as f:
+                cgroup = f.read().lower()
+                if "docker" in cgroup or "lxc" in cgroup or "containerd" in cgroup:
+                    result["is_container"] = True
+            if os.path.exists("/.dockerenv"):
+                result["is_container"] = True
+        except Exception:
+            pass
+
+        # --- Hypervisor detection via DMI ---
+        try:
+            vendor_files = [
+                "/sys/class/dmi/id/sys_vendor",
+                "/sys/class/dmi/id/product_name",
+                "/sys/class/dmi/id/bios_vendor",
+            ]
+            dmi_text = ""
+            for vf in vendor_files:
+                if os.path.exists(vf):
+                    with open(vf, "r") as f:
+                        dmi_text += f.read().lower() + " "
+            if "kvm" in dmi_text or "qemu" in dmi_text:
+                result["is_vm"] = True
+                result["hypervisor"] = "kvm"
+            elif "xen" in dmi_text:
+                result["is_vm"] = True
+                result["hypervisor"] = "xen"
+            elif "vmware" in dmi_text:
+                result["is_vm"] = True
+                result["hypervisor"] = "vmware"
+            elif "hyper-v" in dmi_text or "microsoft" in dmi_text:
+                result["is_vm"] = True
+                result["hypervisor"] = "hyper-v"
+            elif "virtualbox" in dmi_text:
+                result["is_vm"] = True
+                result["hypervisor"] = "virtualbox"
+        except Exception:
+            pass
+
+        # --- CPUID-based hypervisor detection (fallback) ---
+        if not result["is_vm"]:
+            try:
+                with open("/proc/cpuinfo", "r") as f:
+                    content = f.read()
+                    if "hypervisor" in content.lower():
+                        result["is_vm"] = True
+                        # Try to identify which one
+                        if "kvm" in content.lower():
+                            result["hypervisor"] = "kvm"
+                        else:
+                            result["hypervisor"] = "unknown"
+            except Exception:
+                pass
+
+        # --- /dev/mem access ---
+        result["has_dev_mem"] = os.access("/dev/mem", os.R_OK | os.W_OK)
+
+        # --- PCI passthrough (VFIO) ---
+        try:
+            vfio_dir = "/sys/bus/pci/drivers/vfio-pci"
+            if os.path.isdir(vfio_dir):
+                for entry in os.listdir(vfio_dir):
+                    if entry.startswith("0000:"):
+                        result["has_pci_passthrough"] = True
+                        break
+        except Exception:
+            pass
+
+        # --- XHCI controller ---
+        try:
+            if shutil.which("lspci"):
+                lspci = subprocess.check_output(["lspci", "-nn"], text=True, timeout=5)
+                if "0c03:30" in lspci.lower() or "xhci" in lspci.lower():
+                    result["has_xhci"] = True
+                # GPU passthrough
+                if "nvidia" in lspci.lower() and result["is_vm"]:
+                    result["has_gpu_passthrough"] = True
+                if "amd" in lspci.lower() and "radeon" in lspci.lower() and result["is_vm"]:
+                    result["has_gpu_passthrough"] = True
+                # NIC passthrough (physical NIC, not virtio)
+                if "ethernet" in lspci.lower() and "virtio" not in lspci.lower() and result["is_vm"]:
+                    result["has_nic_passthrough"] = True
+        except Exception:
+            pass
+
+        # --- HECI / MEI device ---
+        result["has_heci"] = os.path.exists("/dev/mei0") or os.path.exists("/dev/mei")
+
+        # --- Virtio devices ---
+        try:
+            if os.path.isdir("/sys/bus/virtio/devices"):
+                result["has_virtio"] = len(os.listdir("/sys/bus/virtio/devices")) > 0
+        except Exception:
+            pass
+
+        # --- vhost modules ---
+        try:
+            with open("/proc/modules", "r") as f:
+                modules = f.read()
+                if "vhost_net" in modules:
+                    result["has_vhost"] = True
+        except Exception:
+            pass
+
+        # --- IOMMU active ---
+        try:
+            with open("/proc/cmdline", "r") as f:
+                cmdline = f.read().lower()
+                if "intel_iommu=on" in cmdline or "amd_iommu=on" in cmdline or "iommu=pt" in cmdline:
+                    result["iommu_active"] = True
+            if os.path.isdir("/sys/class/iommu"):
+                result["iommu_active"] = len(os.listdir("/sys/class/iommu")) > 0
+        except Exception:
+            pass
+
+        # --- Nested virtualization ---
+        try:
+            nested_files = [
+                "/sys/module/kvm_intel/parameters/nested",
+                "/sys/module/kvm_amd/parameters/nested",
+            ]
+            for nf in nested_files:
+                if os.path.exists(nf):
+                    with open(nf, "r") as f:
+                        val = f.read().strip().lower()
+                        if val in ("1", "y", "yes"):
+                            result["nested_virt"] = True
+        except Exception:
+            pass
+
+        # --- Compute viable escape paths ---
+        paths = {}
+        hv = result["hypervisor"]
+
+        # DMA escape: needs /dev/mem + XHCI or PCI passthrough
+        paths["vm_escape_dma"] = (
+            result["has_dev_mem"] and
+            (result["has_xhci"] or result["has_pci_passthrough"])
+        )
+
+        # SMM escape: needs VM + /dev/mem (SMI triggering)
+        paths["vm_escape_smm"] = result["is_vm"] and result["has_dev_mem"]
+
+        # HECI escape: needs HECI device accessible
+        paths["vm_escape_heci"] = result["has_heci"]
+
+        # Virtio escape: needs virtio devices (KVM/QEMU)
+        paths["vm_escape_virtio"] = result["has_virtio"] and hv in ("kvm", "qemu", "none")
+
+        # Xen escape: needs Xen hypervisor
+        paths["vm_escape_xen"] = hv == "xen"
+
+        # VMware escape: needs VMware hypervisor
+        paths["vm_escape_vmware"] = hv == "vmware"
+
+        # Hyper-V escape: needs Hyper-V hypervisor
+        paths["vm_escape_hyperv"] = hv == "hyper-v"
+
+        # Container escape: needs container environment
+        paths["container_escape"] = result["is_container"]
+
+        result["escape_paths"] = paths
+        return result
+
     @classmethod
     def discover(cls) -> Dict[str, Any]:
         """
@@ -293,6 +556,7 @@ class HardwareDiscovery:
         - openvino_available, openvino_import: OpenVINO status.
         - npu_bar_found, npu_bar_protected, npu_bar_conflict: NPU BAR status.
         - cuda_compat: CUDA compatibility (e.g., via ZLUDA).
+        - nvidia_gpu_*: NVIDIA CUDA GPU detection (name, VRAM, compute cap, CUDA version, driver).
         - accel_available: General accelerator availability flag.
         - mem_bandwidth_gbs: Memory bandwidth in GB/s.
         - hardware_tier: Classified hardware tier (e.g., "HIGH_PERF_SERVER", "MODERN_MTL").
@@ -305,18 +569,20 @@ class HardwareDiscovery:
         npu_bar_status = cls.check_npu_bar()
         mem_bandwidth = cls.check_memory_bandwidth()
         gpu_blacklist = cls.check_gpu_blacklist()
-        
+        nvidia_gpu = cls.check_nvidia_gpu()
+        virt_info = cls.detect_virtualization()
+
         # Check for ZLUDA (CUDA on Intel) compatibility
         has_zluda = os.path.exists("/usr/local/bin/zluda") or "ZLUDA_PATH" in os.environ
         
         # DYNAMIC ACCELERATION PROBE:
         # Check if the detected accelerators actually support the minimum required precision (INT8/FP16)
-        accel_functional = ov_devices["igpu"] or ov_devices["npu"] or ov_devices["vpu"] or has_zluda
+        accel_functional = ov_devices["igpu"] or ov_devices["npu"] or ov_devices["vpu"] or has_zluda or nvidia_gpu["nvidia_gpu_present"]
         
         # Blacklist logic: If Fermi GPU found, we explicitly disable CUDA compat for it
         if gpu_blacklist["blacklisted_gpus_found"]:
             has_zluda = False
-            accel_functional = ov_devices["igpu"] or ov_devices["npu"] or ov_devices["vpu"]
+            accel_functional = ov_devices["igpu"] or ov_devices["npu"] or ov_devices["vpu"] or nvidia_gpu["nvidia_gpu_present"]
 
         hardware_tier = cls.get_hardware_tier(cpu_features, ov_devices)
         
@@ -324,6 +590,10 @@ class HardwareDiscovery:
         all_supported_precisions: Set[str] = set()
         for device_precisions in ov_devices.get("supported_precisions_by_device", {}).values():
             all_supported_precisions.update(device_precisions)
+        
+        # NVIDIA CUDA GPUs support FP32, FP16, and potentially INT8
+        if nvidia_gpu["nvidia_gpu_present"]:
+            all_supported_precisions.update(["FP32", "FP16", "INT8"])
         
         # Ensure FP32 is always present if any accelerator is available, or as a fallback
         if accel_functional and "FP32" not in all_supported_precisions:
@@ -352,6 +622,13 @@ class HardwareDiscovery:
             "npu_bar_protected": npu_bar_status["protected"],
             "npu_bar_conflict": npu_bar_status["conflict"],
             "cuda_compat": has_zluda,
+            "nvidia_gpu_present": nvidia_gpu["nvidia_gpu_present"],
+            "nvidia_gpu_name": nvidia_gpu["nvidia_gpu_name"],
+            "nvidia_gpu_vram_bytes": nvidia_gpu["nvidia_gpu_vram_bytes"],
+            "nvidia_gpu_vram_gb": nvidia_gpu["nvidia_gpu_vram_gb"],
+            "nvidia_compute_capability": nvidia_gpu["nvidia_compute_capability"],
+            "nvidia_cuda_version": nvidia_gpu["nvidia_cuda_version"],
+            "nvidia_driver_version": nvidia_gpu["nvidia_driver_version"],
             "accel_available": accel_functional,
             "mem_bandwidth_gbs": mem_bandwidth,
             "hardware_tier": hardware_tier,
@@ -359,6 +636,7 @@ class HardwareDiscovery:
             "blacklist_reasons": gpu_blacklist["reasons"],
             "supported_precisions_by_device": ov_devices["supported_precisions_by_device"], # Include device-specific precisions
             "supported_precisions": sorted(list(all_supported_precisions), key=lambda x: {"FP32": 0, "FP16": 1, "BF16": 2, "INT8": 3}.get(x, 4)), # Consolidated list
+            "virtualization": virt_info,
         }
 
     @classmethod

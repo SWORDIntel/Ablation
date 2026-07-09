@@ -1,4 +1,4 @@
-from aegis_lab.editing import StaticIntervention
+from framewerx.aegis_lab.editing import StaticIntervention
 from typing import Any
 
 class CausalEditor(StaticIntervention):

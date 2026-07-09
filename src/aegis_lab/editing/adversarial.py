@@ -129,8 +129,86 @@ class RedTeamEvaluator:
 
     def run_gcg_iteration(self, prompt: str, target: str, suffix: str) -> str:
         """
-        Placeholder for a single GCG iteration. 
-        In a real implementation, this would perform coordinate-wise gradient steps.
+        Perform a single GCG (Greedy Coordinate Gradient) iteration.
+
+        Since we operate without gradient access (GGUF/llama_cpp models), this
+        implements a coordinate-wise search variant: it tries swapping each
+        suffix token for alternatives from a candidate pool and keeps the
+        change that maximizes target-string likelihood in the model response.
         """
-        # This is where the actual token swap logic would live.
-        return suffix + " [optimized]"
+        if not suffix:
+            return suffix
+
+        # Token-level operations on the suffix
+        suffix_tokens = suffix.split()
+        if not suffix_tokens:
+            return suffix
+
+        # Candidate replacement tokens (common GCG suffix vocabulary)
+        candidates = ["!","?",".","","the","a","is","are","was","were","and","or",
+                       "not","but","if","then","when","where","how","why","what",
+                       "who","which","this","that","here","there","just","like"]
+
+        best_suffix = suffix
+        best_score = self._score_suffix(prompt, suffix, target)
+
+        for i in range(len(suffix_tokens)):
+            current_best = suffix_tokens[i]
+            current_best_score = best_score
+
+            for candidate in candidates:
+                if candidate == suffix_tokens[i]:
+                    continue
+                trial_tokens = list(suffix_tokens)
+                trial_tokens[i] = candidate
+                trial_suffix = " ".join(t for t in trial_tokens if t)
+                score = self._score_suffix(prompt, trial_suffix, target)
+                if score > current_best_score:
+                    current_best_score = score
+                    current_best = candidate
+
+            if current_best != suffix_tokens[i]:
+                suffix_tokens[i] = current_best
+                best_score = current_best_score
+                best_suffix = " ".join(t for t in suffix_tokens if t)
+
+        logger.debug(f"GCG iteration: score {best_score:.4f}, suffix: '{best_suffix[:40]}...'")
+        return best_suffix
+
+    def _score_suffix(self, prompt: str, suffix: str, target: str) -> float:
+        """
+        Score a suffix by how much the model's response to (prompt + suffix)
+        matches the target string. Higher is better.
+        """
+        full_prompt = f"{prompt} {suffix}"
+        # Use the state's model if available, otherwise return a heuristic score
+        try:
+            if hasattr(self.state, 'get_active_model'):
+                model = self.state.get_active_model()
+                if model is None:
+                    return 0.0
+                if hasattr(model, '__call__'):
+                    output = model(full_prompt, max_tokens=50)
+                    if isinstance(output, dict):
+                        response = output.get('choices', [{}])[0].get('text', '')
+                    else:
+                        response = str(output)
+                elif hasattr(model, 'generate'):
+                    response = str(model.generate(full_prompt, max_tokens=50))
+                else:
+                    return 0.0
+            else:
+                return 0.0
+        except Exception:
+            return 0.0
+
+        # Score based on target string overlap
+        target_lower = target.lower()
+        response_lower = response.lower()
+        if not target_lower:
+            return 0.0
+        # Simple overlap score: fraction of target words present in response
+        target_words = set(target_lower.split())
+        response_words = set(response_lower.split())
+        overlap = len(target_words & response_words) / len(target_words) if target_words else 0.0
+        return overlap

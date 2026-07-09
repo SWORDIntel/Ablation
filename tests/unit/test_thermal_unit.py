@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch, mock_open
 import os
-from aegis_lab.hardware.thermal import ThermalGuardian, ThermalLevel
+from framewerx.aegis_lab.hardware.thermal import ThermalGuardian, ThermalLevel
 
 class TestThermalUnit(unittest.TestCase):
     @patch('os.path.exists')

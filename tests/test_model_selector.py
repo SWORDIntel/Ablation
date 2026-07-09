@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import unittest
 
-from aegis_lab.hardware.model_selector import suggest_models
+from framewerx.aegis_lab.hardware.model_selector import suggest_models
 
 
 class TestModelSelector(unittest.TestCase):

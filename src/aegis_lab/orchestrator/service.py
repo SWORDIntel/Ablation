@@ -3,23 +3,23 @@ import time
 import logging
 import os
 from typing import Dict, List, Any, Optional
-from aegis_lab.state.db import AegisState
-from aegis_lab.orchestrator.ipc import IPCServer, LogServer, EventPublisher
-from aegis_lab.hardware.thermal import ThermalGuardian
-from aegis_lab.hardware.discovery import HardwareDiscovery
-from aegis_lab.scheduler.engine import SchedulerEngine
-from aegis_lab.hardware.telemetry import LevelZeroTelemetry
-from aegis_lab.orchestrator.optimizer import HardwareOptimizer
+from framewerx.aegis_lab.state.db import AegisState
+from framewerx.aegis_lab.orchestrator.ipc import IPCServer, LogServer, EventPublisher
+from framewerx.aegis_lab.hardware.thermal import ThermalGuardian
+from framewerx.aegis_lab.hardware.discovery import HardwareDiscovery
+from framewerx.aegis_lab.scheduler.engine import SchedulerEngine
+from framewerx.aegis_lab.hardware.telemetry import LevelZeroTelemetry
+from framewerx.aegis_lab.orchestrator.optimizer import HardwareOptimizer
 
-from aegis_lab.evaluation.leaderboard import LeaderboardManager
-from aegis_lab.evaluation.elo_judge import EloJudge
-from aegis_lab.evaluation.hallucination import HallucinationDetector
-from aegis_lab.evaluation.capability_drift import CapabilityDriftAnalyzer
-from aegis_lab.evaluation.hardware_efficiency import EfficiencyRanker
+from framewerx.aegis_lab.evaluation.leaderboard import LeaderboardManager
+from framewerx.aegis_lab.evaluation.elo_judge import EloJudge
+from framewerx.aegis_lab.evaluation.hallucination import HallucinationDetector
+from framewerx.aegis_lab.evaluation.capability_drift import CapabilityDriftAnalyzer
+from framewerx.aegis_lab.evaluation.hardware_efficiency import EfficiencyRanker
 
-from aegis_lab.hardware.vault import ModelVault
-from aegis_lab.evaluation.consensus import ConsensusJudge
-from aegis_lab.verification.proofs import ZKAblationProof
+from framewerx.aegis_lab.hardware.vault import ModelVault
+from framewerx.aegis_lab.evaluation.consensus import ConsensusJudge
+from framewerx.aegis_lab.verification.proofs import ZKAblationProof
 
 logger = logging.getLogger(__name__)
 
@@ -306,31 +306,63 @@ class OrchestratorService:
         logger.info(f"Running final ranking evaluations for job: {job_id}")
         self._ensure_runtime_services()
         
-        # 1. Elo Judge (Simulated)
-        elo = EloJudge()
-        # In real scenario, we'd pull baseline vs ablated responses
-        self.leaderboard.record_score(job_id, "elo_rating", 1250.0)
-        
-        # 2. Adversarial Robustness (Method 2)
-        # Pull from the adversarial_eval stage result
         stages = self.state.get_stages(job_id)
+
+        # 1. Elo Judge — pairwise comparison of baseline vs ablated responses
+        elo = EloJudge()
+        baseline_resp = ""
+        ablated_resp = ""
+        eval_context = ""
+        for s in stages:
+            result = s.get("result") or {}
+            if s.get("stage_name") == "probe":
+                baseline_resp = result.get("baseline_response", "")
+                eval_context = result.get("context", "")
+            elif s.get("stage_name") == "verify":
+                ablated_resp = result.get("ablated_response", "")
+        if baseline_resp and ablated_resp:
+            ablated_won = elo.evaluate_pairwise(ablated_resp, baseline_resp, eval_context)
+            new_r_ablated, _ = elo.calculate_new_ratings(1200.0, 1200.0, ablated_won)
+            self.leaderboard.record_score(job_id, "elo_rating", new_r_ablated)
+        else:
+            logger.warning(f"Job {job_id}: insufficient data for Elo evaluation, defaulting to baseline.")
+            self.leaderboard.record_score(job_id, "elo_rating", 1200.0)
+
+        # 2. Adversarial Robustness (Method 2)
         adv_stage = next((s for s in stages if s.get("stage_name") == "adversarial_eval"), None)
         if adv_stage and adv_stage.get("result"):
             score = adv_stage["result"].get("robustness_score", 0.0)
             self.leaderboard.record_score(job_id, "adversarial_robustness", score)
-            
+
         # 3. Capability Drift (Method 3)
         drift = CapabilityDriftAnalyzer(self.state)
         self.leaderboard.record_score(job_id, "ais_score", drift.calculate_ais(job_id))
-        
+
         # 4. Hardware Efficiency (Method 4)
         efficiency = EfficiencyRanker(self.telemetry)
-        # Assuming we know tokens/sec from worker result
-        self.leaderboard.record_score(job_id, "perf_per_watt", efficiency.compute_efficiency_score(tokens_per_sec=45.0))
-        
+        tokens_per_sec = 0.0
+        for s in stages:
+            result = s.get("result") or {}
+            if "tokens_per_sec" in result:
+                tokens_per_sec = result["tokens_per_sec"]
+                break
+            if "throughput" in result:
+                tokens_per_sec = result["throughput"]
+                break
+        if tokens_per_sec <= 0:
+            logger.warning(f"Job {job_id}: no throughput data found, using 0 for efficiency score.")
+        self.leaderboard.record_score(job_id, "perf_per_watt", efficiency.compute_efficiency_score(tokens_per_sec=tokens_per_sec))
+
         # 5. Hallucination Index (Method 5)
         detector = HallucinationDetector(self.state)
-        self.leaderboard.record_score(job_id, "truthfulness", 1.0 - detector.compute_index("The model is aligned.", job_id))
+        model_output = ablated_resp or ""
+        if not model_output:
+            for s in stages:
+                result = s.get("result") or {}
+                if result.get("sample_output"):
+                    model_output = result["sample_output"]
+                    break
+        self.leaderboard.record_score(job_id, "truthfulness", 1.0 - detector.compute_index(model_output, job_id))
 
     def submit_job(self, project_id: str, job_type: str, priority: int = 50, parameters: Dict[str, Any] = None) -> str:
         job_id = f"job-{uuid.uuid4().hex[:8]}"

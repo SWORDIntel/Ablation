@@ -7,6 +7,8 @@ from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timezone
 from .qihse_wrapper import QIHSE
 from enum import IntEnum
+from framewerx.state.db import QihseKVStore, _DEFAULT_STORAGE_ROOT as _FW_DEFAULT_ROOT
+from framewerx.state.qihse_paths import resolve_qihse_lib_path
 
 class QihseVectorDBBackend(IntEnum):
     FAISS = 0
@@ -118,14 +120,22 @@ class QihseStore:
                 
             return all_items
 
+_AEGIS_DEFAULT_ROOT = os.environ.get(
+    "AEGIS_STATE_ROOT",
+    os.path.join(os.path.expanduser("~"), ".framewerx", "aegis"),
+)
+
+
 class StateDatabase:
     """
-    Manager for multiple QihseStores, maintaining the 'Source of Truth'.
+    Manager for multiple Stores, maintaining the 'Source of Truth'.
+    Uses QIHSE for atoms/intel tables and SQLite for structured state.
     """
-    def __init__(self, storage_root: str, lib_path: str):
+    def __init__(self, storage_root: str = _AEGIS_DEFAULT_ROOT, lib_path: str = None):
         self.storage_root = storage_root
         os.makedirs(storage_root, exist_ok=True)
-        # Global QIHSE initialization includes Lying E820 protection in qihse_wrapper
+        if lib_path is None:
+            lib_path = resolve_qihse_lib_path()
         require_native = os.getenv("AEGIS_REQUIRE_NATIVE_QIHSE", "").lower() in {"1", "true", "yes"}
         try:
             self.qihse = QIHSE(lib_path)
@@ -134,14 +144,18 @@ class StateDatabase:
                 raise
             logger.warning("QIHSE native library missing at %s; falling back to in-memory store.", lib_path)
             self.qihse = InMemoryQIHSE(lib_path)
-        self.stores: Dict[str, QihseStore] = {}
+        self.stores: Dict[str, Union[QihseStore, QihseKVStore]] = {}
         self._stores_lock = threading.Lock()
-        
-    def _get_store(self, table_name: str) -> QihseStore:
+
+    def _get_store(self, table_name: str) -> Union[QihseStore, QihseKVStore]:
         with self._stores_lock:
             if table_name not in self.stores:
-                db_path = os.path.join(self.storage_root, f"{table_name}.qihse")
-                self.stores[table_name] = QihseStore(self.qihse, table_name, db_path)
+                if table_name == "atoms" or table_name.startswith(("intel_", "vuln_")):
+                    db_path = os.path.join(self.storage_root, f"{table_name}.qihse")
+                    self.stores[table_name] = QihseStore(self.qihse, table_name, db_path)
+                else:
+                    kv_path = os.path.join(self.storage_root, f"{table_name}.qkv")
+                    self.stores[table_name] = QihseKVStore(table_name, kv_path)
             return self.stores[table_name]
 
     def upsert(self, table_name: str, pk_field: str, pk_value: Any, data: Dict[str, Any], vector: Optional[List[float]] = None):
@@ -163,10 +177,12 @@ class StateDatabase:
         return self._get_store(table_name).query()
 
 class AegisState:
-    def __init__(self, storage_root: str, lib_path: Optional[str] = None):
+    def __init__(self, storage_root: Optional[str] = None, lib_path: Optional[str] = None):
+        if not storage_root:
+            storage_root = _AEGIS_DEFAULT_ROOT
         if not lib_path:
-            lib_path = "/home/john/Documents/MEMSHADOW/QIHSE/qihse/libqihse.so"
-        logger.info(f"AegisState initializing with lib_path: {lib_path}")
+            lib_path = resolve_qihse_lib_path()
+        logger.info(f"AegisState initializing — storage: {storage_root}, lib: {lib_path}")
         self.db = StateDatabase(storage_root, lib_path)
         self.qihse = self.db.qihse
         
@@ -210,8 +226,10 @@ class AegisState:
         stages = self.db.query("stages", {"stage_id": stage_id})
         return stages[0] if stages else None
 
-    def get_stages(self, job_id: str) -> List[Dict[str, Any]]:
-        return self.db._get_store("stages").query({"job_id": job_id}, pk_field="stage_id")
+    def get_stages(self, job_id_or_filters) -> List[Dict[str, Any]]:
+        if isinstance(job_id_or_filters, dict):
+            return self.db._get_store("stages").query(job_id_or_filters, pk_field="stage_id")
+        return self.db._get_store("stages").query({"job_id": job_id_or_filters}, pk_field="stage_id")
 
     def get_all_stages(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         return self.db._get_store("stages").query(filters, pk_field="stage_id")

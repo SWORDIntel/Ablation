@@ -1,6 +1,6 @@
 import hashlib
 from typing import List, Dict, Any
-from aegis_lab.state.db import AegisState
+from framewerx.aegis_lab.state.db import AegisState
 
 class RAGEngine:
     """
@@ -56,17 +56,46 @@ ABLATED MODEL RESPONSE:"""
 
     def generate_response(self, user_query: str) -> str:
         """
-        Simulates the model's response after RAG augmentation.
+        Generates a model response after RAG augmentation.
+        Sends the context-augmented prompt to the configured LLM provider.
         """
-        # prompt = self.query(user_query) # We could log the prompt if needed
-        
-        # Mock model response - in a real scenario, this prompt would be sent to the inference engine.
-        # Here we simulate finding something in the atoms if any were found
+        # Build the RAG-augmented prompt
+        prompt = self.query(user_query)
+
+        # Try to send the prompt to the configured LLM provider
+        try:
+            response = self._call_llm(prompt)
+            if response:
+                return response
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"LLM call failed in RAG engine: {e}")
+
+        # Fallback: return context-aware response based on retrieved atoms
         query_vector = self.get_query_embedding(user_query)
         atoms = self.state.search_atoms(query_vector, top_k=1)
-        
+
         if atoms:
             best_atom = atoms[0].get('atom_id', 'unknown')
             return f"[RAG-Augmented Response] I have analyzed your query and cross-referenced it with Behavioral Atom {best_atom}. The ablated model state shows a strong correlation with this feature. Your request is being processed under this context."
         else:
             return f"[Standard Response] No specific behavioral atoms matched your query tightly enough. Responding based on base ablated model weights for: '{user_query[:30]}...'"
+
+    def _call_llm(self, prompt: str) -> str:
+        """
+        Send the augmented prompt to the configured LLM provider via SWORD LLM resolver.
+        Returns the model's text response or empty string on failure.
+        """
+        try:
+            from framewerx.sword_llm import get_provider
+            provider = get_provider()
+            messages = [{"role": "user", "content": prompt}]
+            response = provider.chat(messages)
+            if isinstance(response, str):
+                return response
+            if isinstance(response, dict) and "content" in response:
+                return response["content"]
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug(f"SWORD LLM provider not available for RAG: {e}")
+        return ""

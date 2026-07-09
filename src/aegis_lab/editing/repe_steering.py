@@ -1,4 +1,4 @@
-from aegis_lab.editing import RuntimeSteering
+from framewerx.aegis_lab.editing import RuntimeSteering
 from typing import Any
 
 class RepeSteering(RuntimeSteering):

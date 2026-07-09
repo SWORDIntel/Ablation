@@ -5,9 +5,9 @@ from __future__ import annotations
 import math
 import unittest
 
-from aegis_lab.editing.heretic_refusal.dataset import RefusalPromptRecord
-from aegis_lab.editing.heretic_refusal.model_eval import compute_model_eval_metrics
-from aegis_lab.editing.heretic_refusal.scoring_agent import ScoringAgent
+from framewerx.aegis_lab.editing.heretic_refusal.dataset import RefusalPromptRecord
+from framewerx.aegis_lab.editing.heretic_refusal.model_eval import compute_model_eval_metrics
+from framewerx.aegis_lab.editing.heretic_refusal.scoring_agent import ScoringAgent
 
 
 def _records() -> list[RefusalPromptRecord]:

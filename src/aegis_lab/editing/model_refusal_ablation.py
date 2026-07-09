@@ -23,12 +23,12 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     torch = None
 
-from aegis_lab.editing.heretic_refusal.runner import run_heretic_refusal_ablation
-from aegis_lab.editing.heretic_refusal.runner import (
+from framewerx.aegis_lab.editing.heretic_refusal.runner import run_heretic_refusal_ablation
+from framewerx.aegis_lab.editing.heretic_refusal.runner import (
     run_heretic_refusal_ablation_from_config,
 )
-from aegis_lab.editing.heretic_refusal.config import HereticRefusalConfig, config_to_dict, load_config
-from aegis_lab.editing.heretic_refusal.interventions import (
+from framewerx.aegis_lab.editing.heretic_refusal.config import HereticRefusalConfig, config_to_dict, load_config
+from framewerx.aegis_lab.editing.heretic_refusal.interventions import (
     build_ablation_targets_from_trial,
 )
 
@@ -167,9 +167,23 @@ class ModelRefusalAblator:
                     layer_act = outputs.hidden_states[layer_idx].cpu().numpy()
                     activations.append(layer_act.mean(axis=1)[0])  # Average over sequence
             else:
-                # GGUF model - approximate with embeddings
-                # This is a simplified approach
-                activations.append(np.random.randn(4096))  # Placeholder
+                # GGUF model — extract activations via embedding lookup
+                # Use llama_cpp's embedding API to get token-level representations
+                # as a proxy for hidden-state activations
+                try:
+                    embed_input = self.model.embed(prompt)
+                    if embed_input is not None:
+                        if hasattr(embed_input, '__len__'):
+                            # embed_input is a list of floats (embedding vector)
+                            activations.append(np.array(embed_input, dtype=np.float32))
+                        else:
+                            activations.append(np.array(embed_input, dtype=np.float32))
+                    else:
+                        logger.warning(f"GGUF embed returned None for prompt: {prompt[:30]}...")
+                        activations.append(np.zeros(4096, dtype=np.float32))
+                except Exception as exc:
+                    logger.warning(f"GGUF activation extraction failed: {exc}, using zero vector")
+                    activations.append(np.zeros(4096, dtype=np.float32))
         
         return np.array(activations)
     

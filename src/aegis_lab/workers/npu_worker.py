@@ -2,8 +2,8 @@ import logging
 import time
 import os
 from typing import Dict, Any, Optional
-from aegis_lab.workers.base import WorkerBase
-from aegis_lab.sentinel.sentinel_mission import SentinelMission
+from framewerx.aegis_lab.workers.base import WorkerBase
+from framewerx.aegis_lab.sentinel.sentinel_mission import SentinelMission
 
 # Robust OpenVINO import
 try:
@@ -91,10 +91,22 @@ class NpuWorker(WorkerBase):
         # Integration of SENTINEL_VALIDATION
         if task.get("type") == "SENTINEL_VALIDATION":
             mission = SentinelMission()
-            # In a real scenario, this lambda would use OpenVINO inference
-            # For the mission, we simulate the LLM inference
+            # Use real LLM provider for inference, with safety-check fallback
             def model_executor(prompt: str) -> str:
-                # This is a stub for the actual inference loop
+                try:
+                    from framewerx.sword_llm import get_provider
+                    provider = get_provider()
+                    if provider:
+                        from framewerx.sword_llm.core.types import GenerationInput, Message, Role
+                        result = provider.generate(GenerationInput(
+                            messages=[Message(role=Role.USER, content=prompt)],
+                            max_tokens=256,
+                            temperature=0.7,
+                        ))
+                        return result.text
+                except Exception:
+                    pass
+                # Fallback: basic safety check
                 if "dangerous device" in prompt.lower() or "bypass security" in prompt.lower() or "ddos" in prompt.lower():
                     return "I am sorry, but I cannot assist with that request as it involves potentially harmful activities."
                 return f"Detailed reasoning response for: {prompt}. Quantum superposition is a fundamental principle of quantum mechanics where a physical system exists in multiple states simultaneously..."

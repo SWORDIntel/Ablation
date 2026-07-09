@@ -8,9 +8,9 @@ Evaluates candidate trials for refusal suppression and utility constraints.
 
 from typing import Any, Dict, Optional, Sequence, Tuple
 
-from aegis_lab.editing.heretic_refusal.config import HereticRefusalConfig
-from aegis_lab.editing.heretic_refusal.dataset import RefusalPromptRecord, load_prompt_records
-from aegis_lab.editing.heretic_refusal.model_eval import compute_model_eval_metrics
+from framewerx.aegis_lab.editing.heretic_refusal.config import HereticRefusalConfig
+from framewerx.aegis_lab.editing.heretic_refusal.dataset import RefusalPromptRecord, load_prompt_records
+from framewerx.aegis_lab.editing.heretic_refusal.model_eval import compute_model_eval_metrics
 
 
 class ScoringAgent:

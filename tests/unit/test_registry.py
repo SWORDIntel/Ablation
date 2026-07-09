@@ -3,9 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from aegis_lab.state.db import AegisState
-from aegis_lab.artifacts.store import ArtifactStore
-from aegis_lab.atoms.registry import AtomRegistry
+from framewerx.aegis_lab.state.db import AegisState
+from framewerx.aegis_lab.artifacts.store import ArtifactStore
+from framewerx.aegis_lab.atoms.registry import AtomRegistry
 
 class TestAtomRegistry(unittest.TestCase):
     def setUp(self):
@@ -14,7 +14,7 @@ class TestAtomRegistry(unittest.TestCase):
         self.artifact_root = os.path.join(self.temp_dir.name, "artifacts")
         
         # Find libqihse.so
-        self.lib_path = "../../../../../home/john/Documents/MEMSHADOW/QIHSE/qihse/libqihse.so"
+        self.lib_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "QIHSE", "qihse", "libqihse.so"))
         if not os.path.exists(self.lib_path):
             self.skipTest(f"libqihse.so not found at {self.lib_path}")
 

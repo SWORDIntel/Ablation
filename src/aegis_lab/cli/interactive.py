@@ -6,9 +6,9 @@ from pathlib import Path
 # Add src to python path automatically if not present
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from aegis_lab.state.db import AegisState
-from aegis_lab.artifacts.store import ArtifactStore
-from aegis_lab.editing.advanced import AdvancedAblationOrchestrator
+from framewerx.aegis_lab.state.db import AegisState
+from framewerx.aegis_lab.artifacts.store import ArtifactStore
+from framewerx.aegis_lab.editing.advanced import AdvancedAblationOrchestrator
 
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')

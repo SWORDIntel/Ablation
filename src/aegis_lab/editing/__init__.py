@@ -16,6 +16,6 @@ class RuntimeSteering(Intervention):
     pass
 
 # Exported classes for easier access
-from aegis_lab.editing.causal_editor import CausalEditor, AttnAblation
-from aegis_lab.editing.sae_clamping import SaeClamping, ConceptErasure
-from aegis_lab.editing.repe_steering import RepeSteering, ContrastiveSteering
+from framewerx.aegis_lab.editing.causal_editor import CausalEditor, AttnAblation
+from framewerx.aegis_lab.editing.sae_clamping import SaeClamping, ConceptErasure
+from framewerx.aegis_lab.editing.repe_steering import RepeSteering, ContrastiveSteering

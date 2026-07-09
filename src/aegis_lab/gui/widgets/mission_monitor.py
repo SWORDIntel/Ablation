@@ -1,7 +1,7 @@
 from textual.app import ComposeResult
 from textual.containers import Grid, Container, Vertical
 from textual.widgets import Static, Label
-from aegis_lab.gui.widgets.cockpit_widgets import RadialGauge, LedIndicator
+from framewerx.aegis_lab.gui.widgets.cockpit_widgets import RadialGauge, LedIndicator
 
 class MissionMonitor(Container):
     def compose(self) -> ComposeResult:

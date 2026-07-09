@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import math
 from typing import Any, Iterable, Optional, Sequence, Tuple
 
-from aegis_lab.editing.heretic_refusal.dataset import RefusalPromptRecord
+from framewerx.aegis_lab.editing.heretic_refusal.dataset import RefusalPromptRecord
 
 
 _UNSAFE_LABELS = {

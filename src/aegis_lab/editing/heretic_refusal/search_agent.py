@@ -9,7 +9,7 @@ Generates candidate interventions for each trial.
 import random
 from typing import List, Tuple
 
-from aegis_lab.editing.heretic_refusal.config import HereticRefusalConfig
+from framewerx.aegis_lab.editing.heretic_refusal.config import HereticRefusalConfig
 
 
 class SearchAgent:

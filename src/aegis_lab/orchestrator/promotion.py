@@ -3,8 +3,8 @@ import shutil
 import json
 import logging
 from typing import Dict, Any, List, Optional
-from aegis_lab.state.db import AegisState
-from aegis_lab.artifacts.hashing import hash_file, hash_directory
+from framewerx.aegis_lab.state.db import AegisState
+from framewerx.aegis_lab.artifacts.hashing import hash_file, hash_directory
 
 logger = logging.getLogger(__name__)
 

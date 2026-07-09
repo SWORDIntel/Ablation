@@ -2,8 +2,8 @@ import unittest
 import time
 import os
 from unittest.mock import patch
-from aegis_lab.sentinel.cascade import NPUSentinel
-from aegis_lab.state.db import AegisState
+from framewerx.aegis_lab.sentinel.cascade import NPUSentinel
+from framewerx.aegis_lab.state.db import AegisState
 
 class TestLatencyPerformance(unittest.TestCase):
     def setUp(self):

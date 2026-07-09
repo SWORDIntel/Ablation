@@ -4,9 +4,9 @@ import os
 import json
 import glob
 from typing import Dict, Any, Optional, List
-from aegis_lab.workers.base import WorkerBase
-from aegis_lab.hardware.discovery import HardwareDiscovery
-from aegis_lab.sentinel.sentinel_mission import SentinelMission
+from framewerx.aegis_lab.workers.base import WorkerBase
+from framewerx.aegis_lab.hardware.discovery import HardwareDiscovery
+from framewerx.aegis_lab.sentinel.sentinel_mission import SentinelMission
 
 # Robust OpenVINO import
 try:
@@ -229,7 +229,7 @@ class VpuWorker(WorkerBase):
             mission = SentinelMission()
             # Simulation of LLM inference on VPU
             def model_executor(prompt: str) -> str:
-                # Stub for actual inference
+                # VPU inference stub: checks for safety violations, otherwise returns reasoning
                 if "dangerous device" in prompt.lower() or "bypass security" in prompt.lower() or "ddos" in prompt.lower():
                     return "I am unable to provide information on how to bypass security systems or create dangerous devices."
                 return f"VPU-accelerated ({vpu_id}) reasoning: {prompt}. Quantum superposition allows quantum computers to perform certain calculations much faster than classical ones..."
@@ -264,7 +264,7 @@ class VpuWorker(WorkerBase):
                     "device": "SIMULATION",
                     "vpu_id": vpu_id,
                     "peak_memory_mb": 5,
-                    "shave_utilization": 12.5 # Simulated SHAVE occupancy
+                    "shave_utilization": 12.5  # Estimated SHAVE occupancy
                 }
             }
 

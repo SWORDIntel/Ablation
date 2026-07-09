@@ -20,15 +20,15 @@ from pathlib import Path
 from queue import Empty, Queue
 from typing import Any, Dict, List, Optional, Tuple
 
-from aegis_lab.editing.heretic_refusal.config import (
+from framewerx.aegis_lab.editing.heretic_refusal.config import (
     HereticRefusalConfig,
     config_to_dict,
     load_config,
 )
-from aegis_lab.editing.heretic_refusal.dataset import RefusalPromptRecord
-from aegis_lab.editing.heretic_refusal.dataset_agent import DatasetAgent
-from aegis_lab.editing.heretic_refusal.search_agent import SearchAgent
-from aegis_lab.editing.heretic_refusal.scoring_agent import ScoringAgent
+from framewerx.aegis_lab.editing.heretic_refusal.dataset import RefusalPromptRecord
+from framewerx.aegis_lab.editing.heretic_refusal.dataset_agent import DatasetAgent
+from framewerx.aegis_lab.editing.heretic_refusal.search_agent import SearchAgent
+from framewerx.aegis_lab.editing.heretic_refusal.scoring_agent import ScoringAgent
 
 try:
     import optuna

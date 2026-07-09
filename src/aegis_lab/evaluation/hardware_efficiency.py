@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any, List
-from aegis_lab.hardware.telemetry import LevelZeroTelemetry
+from framewerx.aegis_lab.hardware.telemetry import LevelZeroTelemetry
 
 logger = logging.getLogger(__name__)
 

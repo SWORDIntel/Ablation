@@ -2,8 +2,8 @@ import unittest
 from unittest.mock import MagicMock, patch
 import time
 import threading
-from aegis_lab.orchestrator.service import OrchestratorService
-from aegis_lab.state.db import AegisState
+from framewerx.aegis_lab.orchestrator.service import OrchestratorService
+from framewerx.aegis_lab.state.db import AegisState
 
 class MockWorker:
     def __init__(self, service: OrchestratorService, worker_id: str, worker_type: str):
@@ -48,7 +48,7 @@ class TestWorkflowIntegration(unittest.TestCase):
         self.test_dir = tempfile.mkdtemp()
         self.state_path = os.path.join(self.test_dir, "state")
         self.state = AegisState(self.state_path, os.path.abspath("QIHSE/qihse/libqihse.so"))
-        with patch('aegis_lab.orchestrator.service.IPCServer'):
+        with patch('framewerx.aegis_lab.orchestrator.service.IPCServer'):
             self.orchestrator = OrchestratorService(self.state)
 
     def tearDown(self):

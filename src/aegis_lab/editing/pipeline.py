@@ -7,23 +7,23 @@ import time
 from typing import Dict, Any, List
 from pathlib import Path
 
-from aegis_lab.state.db import AegisState
-from aegis_lab.artifacts.store import ArtifactStore
-from aegis_lab.utils.progress import ProgressTracker
-from aegis_lab.intake.fingerprint import ModelFingerprint
-from aegis_lab.probing.capture import CAREActivationCapturer
-from aegis_lab.atoms.extractor import BehavioralAtomExtractor
-from aegis_lab.editing.delta_builder import DeltaBuilder
-from aegis_lab.editing.adversarial import RedTeamEvaluator
-from aegis_lab.editing.runtime import ExecutionMode, resolve_execution_contract
-from aegis_lab.quantization.calibration import CalibrationCorpusBuilder
-from aegis_lab.quantization.exporter import OpenVINOExporter
-from aegis_lab.verification.authority import SemanticAuthority
-from aegis_lab.editing.moe_ablation import MoEAwareAblator
-from aegis_lab.editing.inference_steering import DynamicSteeringManager
-from aegis_lab.editing.sae_clamping import SaeClamping
-from aegis_lab.editing.causal_editor import CausalEditor
-from aegis_lab.editing.repe_steering import RepeSteering, ContrastiveSteering
+from framewerx.aegis_lab.state.db import AegisState
+from framewerx.aegis_lab.artifacts.store import ArtifactStore
+from framewerx.aegis_lab.utils.progress import ProgressTracker
+from framewerx.aegis_lab.intake.fingerprint import ModelFingerprint
+from framewerx.aegis_lab.probing.capture import CAREActivationCapturer
+from framewerx.aegis_lab.atoms.extractor import BehavioralAtomExtractor
+from framewerx.aegis_lab.editing.delta_builder import DeltaBuilder
+from framewerx.aegis_lab.editing.adversarial import RedTeamEvaluator
+from framewerx.aegis_lab.editing.runtime import ExecutionMode, resolve_execution_contract
+from framewerx.aegis_lab.quantization.calibration import CalibrationCorpusBuilder
+from framewerx.aegis_lab.quantization.exporter import OpenVINOExporter
+from framewerx.aegis_lab.verification.authority import SemanticAuthority
+from framewerx.aegis_lab.editing.moe_ablation import MoEAwareAblator
+from framewerx.aegis_lab.editing.inference_steering import DynamicSteeringManager
+from framewerx.aegis_lab.editing.sae_clamping import SaeClamping
+from framewerx.aegis_lab.editing.causal_editor import CausalEditor
+from framewerx.aegis_lab.editing.repe_steering import RepeSteering, ContrastiveSteering
 
 logger = logging.getLogger(__name__)
 

@@ -2,12 +2,12 @@ import unittest
 import os
 import shutil
 import tempfile
-from aegis_lab.state.db import AegisState
+from framewerx.aegis_lab.state.db import AegisState
 
 class TestDbQihse(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp()
-        self.lib_path = "../../../../../home/john/Documents/MEMSHADOW/QIHSE/qihse/libqihse.so"
+        self.lib_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "QIHSE", "qihse", "libqihse.so"))
         # Ensure we skip if lib doesn't exist
         if not os.path.exists(self.lib_path):
             self.skipTest(f"QIHSE library not found at {self.lib_path}")

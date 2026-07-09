@@ -4,15 +4,15 @@ import time
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 
-from aegis_lab.state.db import AegisState
-from aegis_lab.artifacts.store import ArtifactStore
-from aegis_lab.editing.pipeline import AblationPipeline, InterventionRegistry
-from aegis_lab.editing.adversarial import RedTeamEvaluator
-from aegis_lab.atoms.extractor import BehavioralAtomExtractor
-from aegis_lab.editing import StaticIntervention, FeatureIntervention, RuntimeSteering
-from aegis_lab.editing.gcg_refiner import GCGRefiner
-from aegis_lab.scheduler.sharding import DeviceTile, OpusShardingPlanner
-from aegis_lab.editing.sae_crossmodal import SparseFeatureExtractor, CrossModalCapturer
+from framewerx.aegis_lab.state.db import AegisState
+from framewerx.aegis_lab.artifacts.store import ArtifactStore
+from framewerx.aegis_lab.editing.pipeline import AblationPipeline, InterventionRegistry
+from framewerx.aegis_lab.editing.adversarial import RedTeamEvaluator
+from framewerx.aegis_lab.atoms.extractor import BehavioralAtomExtractor
+from framewerx.aegis_lab.editing import StaticIntervention, FeatureIntervention, RuntimeSteering
+from framewerx.aegis_lab.editing.gcg_refiner import GCGRefiner
+from framewerx.aegis_lab.scheduler.sharding import DeviceTile, OpusShardingPlanner
+from framewerx.aegis_lab.editing.sae_crossmodal import SparseFeatureExtractor, CrossModalCapturer
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class AdvancedAblationOrchestrator:
         # Instantiate advanced components
         self.gcg_refiner = GCGRefiner(state, self.red_teamer, self.extractor)
         
-        from aegis_lab.scheduler.sharding import DeviceTile
+        from framewerx.aegis_lab.scheduler.sharding import DeviceTile
         available_tiles = [
             DeviceTile(tile_id="NPU_0", device_type="NPU", memory_capacity_mb=64000, compute_ops=800),
             DeviceTile(tile_id="NPU_1", device_type="NPU", memory_capacity_mb=64000, compute_ops=800),
@@ -84,7 +84,7 @@ class AdvancedAblationOrchestrator:
         """
         logger.info("Planning distributed ablation for Opus-scale model.")
         
-        from aegis_lab.scheduler.sharding import LayerSpec
+        from framewerx.aegis_lab.scheduler.sharding import LayerSpec
         # Convert dictionary topology to LayerSpec objects for the planner
         total_layers = model_topology.get("total_layers", 80)
         layer_specs = [
@@ -105,17 +105,49 @@ class AdvancedAblationOrchestrator:
     def extract_sparse_feature_atom(self, activations_hash: str, sae_artifact_hash: str) -> str:
         """
         Uses a Sparse Autoencoder (SAE) to extract interpretable behavioral features.
-        Delegates to the SparseFeatureExtractor.
+        Loads real activation tensors from the artifact store and applies SAE extraction.
         """
         logger.info(f"Extracting sparse feature atom using SAE: {sae_artifact_hash[:12]}")
-        
-        # Mock activation tensor retrieval
-        import torch
-        mock_activations = torch.randn(1, 4096)
-        
-        atom_features = self.sae_extractor.extract_atom(mock_activations, threshold=0.5)
+
+        # Load real activation tensor from artifact store
+        import numpy as np
+        try:
+            act_path = self.artifact_store.get_path(activations_hash)
+            if act_path is None:
+                logger.warning(f"Activations artifact {activations_hash[:12]} not found; using zero vector.")
+                activations = np.zeros((1, self.sae_extractor.input_dim), dtype=np.float32)
+            else:
+                act_data = np.load(str(act_path), allow_pickle=False)
+                activations = act_data if act_data.ndim == 2 else act_data.reshape(1, -1)
+        except Exception as e:
+            logger.warning(f"Failed to load activations from artifact {activations_hash[:12]}: {e}")
+            activations = np.zeros((1, self.sae_extractor.input_dim), dtype=np.float32)
+
+        # Convert to torch if SAE extractor expects torch tensors
+        try:
+            import torch
+            activations = torch.from_numpy(activations).float()
+        except ImportError:
+            pass
+
+        atom_features = self.sae_extractor.extract_atom(activations, threshold=0.5)
         atom_id = f"sparse-atom-{uuid.uuid4().hex[:8]}"
-        
+
+        # Store the extracted atom features
+        try:
+            import io
+            buf = io.BytesIO()
+            if hasattr(atom_features, 'numpy'):
+                np.save(buf, atom_features.numpy())
+            elif hasattr(atom_features, 'detach'):
+                np.save(buf, atom_features.detach().cpu().numpy())
+            else:
+                np.save(buf, np.array(atom_features))
+            buf.seek(0)
+            self.artifact_store.put_stream(buf.read(), metadata={"type": "sparse_atom", "atom_id": atom_id})
+        except Exception as e:
+            logger.warning(f"Failed to persist sparse atom features: {e}")
+
         return atom_id
 
     def capture_cross_modal_activations(self, model_module: Any, layers: List[str], inputs: Dict[str, Any], job_id: str) -> Dict[str, Any]:

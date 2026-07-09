@@ -1,4 +1,4 @@
-from aegis_lab.editing import FeatureIntervention
+from framewerx.aegis_lab.editing import FeatureIntervention
 from typing import Any
 
 class SaeClamping(FeatureIntervention):

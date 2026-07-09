@@ -5,8 +5,8 @@ Sparse Feature Extraction and Cross-Modal Ablation Hooks for AEGIS-LAB.
 from typing import Any, Dict, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
-from aegis_lab.state.db import AegisState
-from aegis_lab.artifacts.store import ArtifactStore
+from framewerx.aegis_lab.state.db import AegisState
+from framewerx.aegis_lab.artifacts.store import ArtifactStore
 
 class SparseFeatureExtractor(nn.Module):
     """

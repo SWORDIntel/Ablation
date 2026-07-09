@@ -7,7 +7,7 @@ except Exception:  # pragma: no cover - optional dependency in test env
     HTTPException = None
 
 if HTTPException is not None:
-    from aegis_lab.api import server
+    from framewerx.aegis_lab.api import server
 else:
     server = None
 

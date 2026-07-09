@@ -1,6 +1,6 @@
 import logging
 from typing import List, Dict, Any
-from aegis_lab.evaluation.elo_judge import EloJudge
+from framewerx.aegis_lab.evaluation.elo_judge import EloJudge
 
 logger = logging.getLogger(__name__)
 

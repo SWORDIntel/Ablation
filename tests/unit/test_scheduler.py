@@ -1,6 +1,6 @@
 import unittest
 import os
-from aegis_lab.scheduler.engine import SchedulerEngine
+from framewerx.aegis_lab.scheduler.engine import SchedulerEngine
 
 class TestSchedulerFailSafe(unittest.TestCase):
     def test_failsafe_activation(self):

@@ -1,7 +1,7 @@
 import logging
 import time
 from typing import Dict, Any
-from aegis_lab.workers.base import WorkerBase
+from framewerx.aegis_lab.workers.base import WorkerBase
 
 logger = logging.getLogger(__name__)
 

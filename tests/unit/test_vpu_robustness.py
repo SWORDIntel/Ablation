@@ -1,5 +1,5 @@
 import logging
-from aegis_lab.scheduler.engine import SchedulerEngine
+from framewerx.aegis_lab.scheduler.engine import SchedulerEngine
 
 def test_vpu_fail_fast_logic():
     """

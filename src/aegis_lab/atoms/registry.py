@@ -3,9 +3,9 @@ import os
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 
-from aegis_lab.state.db import AegisState
-from aegis_lab.artifacts.store import ArtifactStore
-from aegis_lab.state.qihse_wrapper import QIHSE, QihseVectorDBBackend
+from framewerx.aegis_lab.state.db import AegisState
+from framewerx.aegis_lab.artifacts.store import ArtifactStore
+from framewerx.aegis_lab.state.qihse_wrapper import QIHSE, QihseVectorDBBackend
 
 class AtomRegistry:
     """

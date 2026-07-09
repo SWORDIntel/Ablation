@@ -1,6 +1,6 @@
 import sys
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QListWidget, QLabel, QListWidgetItem
-from aegis_lab.intake.hf_browser import HFModelBrowser
+from framewerx.aegis_lab.intake.hf_browser import HFModelBrowser
 
 class HFSelectorWidget(QWidget):
     def __init__(self, parent=None):

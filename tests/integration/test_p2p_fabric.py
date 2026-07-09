@@ -5,11 +5,11 @@ import zmq
 import os
 import shutil
 import tempfile
-from aegis_lab.orchestrator.service import OrchestratorService
-from aegis_lab.state.db import AegisState
-from aegis_lab.workers.cpu_worker import CpuWorker
-from aegis_lab.workers.vpu_worker import VpuWorker
-from aegis_lab.workers.p2p import PeerStreamer
+from framewerx.aegis_lab.orchestrator.service import OrchestratorService
+from framewerx.aegis_lab.state.db import AegisState
+from framewerx.aegis_lab.workers.cpu_worker import CpuWorker
+from framewerx.aegis_lab.workers.vpu_worker import VpuWorker
+from framewerx.aegis_lab.workers.p2p import PeerStreamer
 
 AEGIS_AUTH_TOKEN = "aegis-secret-token-2024"
 
