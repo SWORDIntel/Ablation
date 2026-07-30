@@ -1,0 +1,10 @@
+- The user requested to review the entire codebase for improvements, fixes, to-dos, incomplete functions.
+- And improve tools for surgical model ablation for non-refusal reasons (e.g. increase efficiency, cut out things you don't need).
+- We replaced `pass` functions in state wrappers to work smoothly.
+- Replaced `framewerx` namespace with `aegis_lab` since framewerx isn't fully available.
+- Fixed some test errors due to `env PYTHONPATH` missing.
+- Implemented `TopologicalSurgicalTool` in `editing/__init__.py`.
+- Implemented `GraphPruner`, `SurgicalFeatureAblator`, `DynamicSurgicalSteering` for surgical ablation in respective files.
+- Implemented `topological.py` with `GraphIsolator`, `PathwayExcavator`, `AttentionHeadSurgeon`.
+- Registered all new tools in `pipeline.py`.
+- Everything passes now.

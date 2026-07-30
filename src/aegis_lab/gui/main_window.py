@@ -13,12 +13,12 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QTimer, Qt, QThread, pyqtSignal
 import pyqtgraph as pg
 
-from framewerx.aegis_lab.hardware.thermal import ThermalGuardian
-from framewerx.aegis_lab.hardware.discovery import HardwareDiscovery
-from framewerx.aegis_lab.hardware.telemetry import LevelZeroTelemetry
-from framewerx.aegis_lab.gui.widgets.graph_view import GraphView
-from framewerx.aegis_lab.gui.widgets.chat_view import ChatView
-from framewerx.aegis_lab.gui.widgets.ablation_map_view import AblationMapView
+from aegis_lab.hardware.thermal import ThermalGuardian
+from aegis_lab.hardware.discovery import HardwareDiscovery
+from aegis_lab.hardware.telemetry import LevelZeroTelemetry
+from aegis_lab.gui.widgets.graph_view import GraphView
+from aegis_lab.gui.widgets.chat_view import ChatView
+from aegis_lab.gui.widgets.ablation_map_view import AblationMapView
 
 class RealTimeSubscriber(QThread):
     """
@@ -715,9 +715,9 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.main_layout.addWidget(self.tabs)
 
-        from framewerx.aegis_lab.gui.widgets.graph_view import GraphView
-        from framewerx.aegis_lab.gui.widgets.chat_view import ChatView
-        from framewerx.aegis_lab.gui.widgets.leaderboard_view import LeaderboardTab
+        from aegis_lab.gui.widgets.graph_view import GraphView
+        from aegis_lab.gui.widgets.chat_view import ChatView
+        from aegis_lab.gui.widgets.leaderboard_view import LeaderboardTab
 
         self.systems = SystemsTab(self)
         self.dashboard = DashboardTab(self.client)

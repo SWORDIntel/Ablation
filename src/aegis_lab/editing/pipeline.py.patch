@@ -1,0 +1,8 @@
+<<<<<<< SEARCH
+from aegis_lab.editing.causal_editor import CausalEditor
+from aegis_lab.editing.repe_steering import RepeSteering, ContrastiveSteering
+=======
+from aegis_lab.editing.causal_editor import CausalEditor, GraphPruner
+from aegis_lab.editing.repe_steering import RepeSteering, ContrastiveSteering, DynamicSurgicalSteering
+from aegis_lab.editing.topological import GraphIsolator, PathwayExcavator, AttentionHeadSurgeon
+>>>>>>> REPLACE

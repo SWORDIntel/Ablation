@@ -7,8 +7,8 @@ import os
 import threading
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
-from framewerx.aegis_lab.hardware.discovery import HardwareDiscovery
-from framewerx.aegis_lab.workers.p2p import PeerStreamer
+from aegis_lab.hardware.discovery import HardwareDiscovery
+from aegis_lab.workers.p2p import PeerStreamer
 
 logger = logging.getLogger(__name__)
 

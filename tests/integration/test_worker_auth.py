@@ -4,9 +4,9 @@ import time
 import threading
 import logging
 import socket
-from framewerx.aegis_lab.orchestrator.ipc import IPCServer
-from framewerx.aegis_lab.workers.cpu_worker import CpuWorker
-from framewerx.aegis_lab.workers.base import AEGIS_AUTH_TOKEN
+from aegis_lab.orchestrator.ipc import IPCServer
+from aegis_lab.workers.cpu_worker import CpuWorker
+from aegis_lab.workers.base import AEGIS_AUTH_TOKEN
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

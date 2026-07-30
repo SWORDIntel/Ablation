@@ -1,8 +1,8 @@
 import logging
 from pathlib import Path
-from framewerx.aegis_lab.state.db import AegisState
-from framewerx.aegis_lab.artifacts.store import ArtifactStore
-from framewerx.aegis_lab.editing.runtime import (
+from aegis_lab.state.db import AegisState
+from aegis_lab.artifacts.store import ArtifactStore
+from aegis_lab.editing.runtime import (
     ExecutionMode,
     resolve_execution_contract,
     stable_json_hash,

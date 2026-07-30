@@ -3,9 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from framewerx.aegis_lab.state.db import AegisState
-from framewerx.aegis_lab.artifacts.store import ArtifactStore
-from framewerx.aegis_lab.atoms.registry import AtomRegistry
+from aegis_lab.state.db import AegisState
+from aegis_lab.artifacts.store import ArtifactStore
+from aegis_lab.atoms.registry import AtomRegistry
 
 class TestAtomRegistry(unittest.TestCase):
     def setUp(self):

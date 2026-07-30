@@ -99,7 +99,7 @@ async def get_hardware_sitrep():
 async def get_gpu_profile():
     """Return GPU detection results from HardwareDiscovery."""
     try:
-        from framewerx.aegis_lab.hardware.discovery import HardwareDiscovery
+        from aegis_lab.hardware.discovery import HardwareDiscovery
         caps = HardwareDiscovery.discover()
         return {
             "nvidia_gpu_present": caps.get("nvidia_gpu_present", False),

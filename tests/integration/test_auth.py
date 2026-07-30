@@ -4,7 +4,7 @@ import time
 import threading
 import logging
 import socket
-from framewerx.aegis_lab.orchestrator.ipc import IPCServer
+from aegis_lab.orchestrator.ipc import IPCServer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

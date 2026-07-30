@@ -9,15 +9,15 @@ from typing import Dict, Any, List, Optional
 # Assuming aegis_lab is in the Python path when tests are run
 # If not, we might need to adjust PYTHONPATH or imports based on project structure
 try:
-    from framewerx.aegis_lab.orchestrator.promotion import PromotionController
-    from framewerx.aegis_lab.state.db import AegisState
+    from aegis_lab.orchestrator.promotion import PromotionController
+    from aegis_lab.state.db import AegisState
 except ImportError:
     # Fallback for testing if src is not directly in PYTHONPATH
     # This assumes the test is run from the project root
     import sys
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-    from framewerx.aegis_lab.orchestrator.promotion import PromotionController
-    from framewerx.aegis_lab.state.db import AegisState
+    from aegis_lab.orchestrator.promotion import PromotionController
+    from aegis_lab.state.db import AegisState
 
 
 class MockAegisState(AegisState):
@@ -118,7 +118,7 @@ class TestPromotionController(unittest.TestCase):
         }
 
         # 3. Calculate expected bundle hash using the actual controller logic
-        from framewerx.aegis_lab.artifacts.hashing import hash_directory
+        from aegis_lab.artifacts.hashing import hash_directory
         expected_bundle_hash = hash_directory(self.input_bundle_dir)
         expected_export_name = f"export_{expected_bundle_hash[:16]}"
         expected_export_path = os.path.join(self.export_root_dir, expected_export_name)

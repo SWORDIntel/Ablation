@@ -16,21 +16,21 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from framewerx.aegis_lab.editing.heretic_refusal.config import (
+from aegis_lab.editing.heretic_refusal.config import (
     HereticRefusalConfig,
     config_to_dict,
     load_config,
 )
-from framewerx.aegis_lab.editing.heretic_refusal.dataset import (
+from aegis_lab.editing.heretic_refusal.dataset import (
     RefusalPromptRecord,
     load_prompt_records,
     split_records,
 )
-from framewerx.aegis_lab.editing.heretic_refusal.dataset_agent import DatasetAgent
-from framewerx.aegis_lab.editing.heretic_refusal.search_agent import SearchAgent
-from framewerx.aegis_lab.editing.heretic_refusal.scoring_agent import ScoringAgent
-from framewerx.aegis_lab.editing.heretic_refusal import runner
-from framewerx.aegis_lab.editing.heretic_refusal.runner import run_heretic_refusal_ablation
+from aegis_lab.editing.heretic_refusal.dataset_agent import DatasetAgent
+from aegis_lab.editing.heretic_refusal.search_agent import SearchAgent
+from aegis_lab.editing.heretic_refusal.scoring_agent import ScoringAgent
+from aegis_lab.editing.heretic_refusal import runner
+from aegis_lab.editing.heretic_refusal.runner import run_heretic_refusal_ablation
 
 
 class TestHereticConfig(unittest.TestCase):
@@ -176,7 +176,7 @@ class TestHereticDataset(unittest.TestCase):
             max_prompts=4,
         )
         with mock.patch(
-            "framewerx.aegis_lab.editing.heretic_refusal.dataset.urlopen",
+            "aegis_lab.editing.heretic_refusal.dataset.urlopen",
             side_effect=HTTPError("https://example.com/prompts.jsonl", 403, "Forbidden", {}, None),
         ):
             with self.assertRaisesRegex(ValueError, "publicly accessible|HTTP 403"):

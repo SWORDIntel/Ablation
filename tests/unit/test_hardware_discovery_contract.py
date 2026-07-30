@@ -1,4 +1,4 @@
-from framewerx.aegis_lab.hardware.discovery import HardwareDiscovery
+from aegis_lab.hardware.discovery import HardwareDiscovery
 import unittest
 import time
 from pathlib import Path
@@ -116,7 +116,7 @@ class MockAegisState:
         self.logs.append(entry)
 
 # Import the OrchestratorService from the actual module
-from framewerx.aegis_lab.orchestrator.service import OrchestratorService
+from aegis_lab.orchestrator.service import OrchestratorService
 
 # Mock OpenVINOExporter to check if it's called correctly
 class MockOpenVINOExporter:
@@ -134,14 +134,14 @@ class MockOpenVINOExporter:
         return Path(f"{self.work_dir}/exported_model_{len(self.export_calls)}.xml")
 
 # Patch the actual imports with mocks
-@patch('framewerx.aegis_lab.orchestrator.service.HardwareDiscovery', MockHardwareDiscovery)
-@patch('framewerx.aegis_lab.orchestrator.service.AegisState', MockAegisState)
-@patch('framewerx.aegis_lab.orchestrator.service.logger', MagicMock())
+@patch('aegis_lab.orchestrator.service.HardwareDiscovery', MockHardwareDiscovery)
+@patch('aegis_lab.orchestrator.service.AegisState', MockAegisState)
+@patch('aegis_lab.orchestrator.service.logger', MagicMock())
 class TestOrchestratorTaskDispatch(unittest.TestCase):
 
     def setUp(self):
         # Mock ThermalGuardian to avoid thermal CRITICAL state on CI systems
-        self.thermal_patcher = patch('framewerx.aegis_lab.orchestrator.service.ThermalGuardian')
+        self.thermal_patcher = patch('aegis_lab.orchestrator.service.ThermalGuardian')
         self.mock_thermal = self.thermal_patcher.start()
         self.mock_thermal.return_value.get_status.return_value = {
             "temperature": 30.0,
@@ -151,11 +151,11 @@ class TestOrchestratorTaskDispatch(unittest.TestCase):
         }
         
         # Manually mock OpenVINOExporter in the service module
-        import framewerx.aegis_lab.orchestrator.service as _svc
+        import aegis_lab.orchestrator.service as _svc
         _svc.OpenVINOExporter = MockOpenVINOExporter
 
         # Avoid creating real ZMQ sockets during unit tests.
-        self.ipc_patcher = patch('framewerx.aegis_lab.orchestrator.service.IPCServer')
+        self.ipc_patcher = patch('aegis_lab.orchestrator.service.IPCServer')
         self.ipc_patcher.start()
 
         self.state = MockAegisState()

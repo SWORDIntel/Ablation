@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any, List
-from framewerx.aegis_lab.state.db import AegisState
+from aegis_lab.state.db import AegisState
 
 logger = logging.getLogger(__name__)
 

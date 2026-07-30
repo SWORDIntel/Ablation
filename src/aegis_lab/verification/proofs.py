@@ -1,7 +1,7 @@
 import logging
 import hashlib
 from typing import Dict, Any, List
-from framewerx.aegis_lab.state.qihse_wrapper import QIHSE
+from aegis_lab.state.qihse_wrapper import QIHSE
 
 logger = logging.getLogger(__name__)
 

@@ -2,8 +2,8 @@ import time
 import logging
 import threading
 from typing import Dict, Any, List, Optional
-from framewerx.aegis_lab.hardware.telemetry import LevelZeroTelemetry
-from framewerx.aegis_lab.state.db import AegisState
+from aegis_lab.hardware.telemetry import LevelZeroTelemetry
+from aegis_lab.state.db import AegisState
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class HardwareOptimizer:
         Identify 'hot' behavioral atoms and pin them to the 128MB NPU SRAM cache,
         applying explicit migration policies.
         """
-        from framewerx.aegis_lab.state.qihse_wrapper import QihseUmaMigrationPolicy
+        from aegis_lab.state.qihse_wrapper import QihseUmaMigrationPolicy
         
         # Query recently accessed or important atoms
         atom_store = self.state.db._get_store("atoms")

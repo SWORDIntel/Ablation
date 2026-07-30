@@ -7,23 +7,24 @@ import time
 from typing import Dict, Any, List
 from pathlib import Path
 
-from framewerx.aegis_lab.state.db import AegisState
-from framewerx.aegis_lab.artifacts.store import ArtifactStore
-from framewerx.aegis_lab.utils.progress import ProgressTracker
-from framewerx.aegis_lab.intake.fingerprint import ModelFingerprint
-from framewerx.aegis_lab.probing.capture import CAREActivationCapturer
-from framewerx.aegis_lab.atoms.extractor import BehavioralAtomExtractor
-from framewerx.aegis_lab.editing.delta_builder import DeltaBuilder
-from framewerx.aegis_lab.editing.adversarial import RedTeamEvaluator
-from framewerx.aegis_lab.editing.runtime import ExecutionMode, resolve_execution_contract
-from framewerx.aegis_lab.quantization.calibration import CalibrationCorpusBuilder
-from framewerx.aegis_lab.quantization.exporter import OpenVINOExporter
-from framewerx.aegis_lab.verification.authority import SemanticAuthority
-from framewerx.aegis_lab.editing.moe_ablation import MoEAwareAblator
-from framewerx.aegis_lab.editing.inference_steering import DynamicSteeringManager
-from framewerx.aegis_lab.editing.sae_clamping import SaeClamping
-from framewerx.aegis_lab.editing.causal_editor import CausalEditor
-from framewerx.aegis_lab.editing.repe_steering import RepeSteering, ContrastiveSteering
+from aegis_lab.state.db import AegisState
+from aegis_lab.artifacts.store import ArtifactStore
+from aegis_lab.utils.progress import ProgressTracker
+from aegis_lab.intake.fingerprint import ModelFingerprint
+from aegis_lab.probing.capture import CAREActivationCapturer
+from aegis_lab.atoms.extractor import BehavioralAtomExtractor
+from aegis_lab.editing.delta_builder import DeltaBuilder
+from aegis_lab.editing.adversarial import RedTeamEvaluator
+from aegis_lab.editing.runtime import ExecutionMode, resolve_execution_contract
+from aegis_lab.quantization.calibration import CalibrationCorpusBuilder
+from aegis_lab.quantization.exporter import OpenVINOExporter
+from aegis_lab.verification.authority import SemanticAuthority
+from aegis_lab.editing.moe_ablation import MoEAwareAblator
+from aegis_lab.editing.inference_steering import DynamicSteeringManager
+from aegis_lab.editing.sae_clamping import SaeClamping
+from aegis_lab.editing.causal_editor import CausalEditor, GraphPruner
+from aegis_lab.editing.repe_steering import RepeSteering, ContrastiveSteering, DynamicSurgicalSteering
+from aegis_lab.editing.topological import GraphIsolator, PathwayExcavator, AttentionHeadSurgeon
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,12 @@ class InterventionRegistry:
         self._registry["causal_edit"] = CausalEditor
         self._registry["repe_steer"] = RepeSteering
         self._registry["contrastive_steer"] = ContrastiveSteering
+        self._registry["graph_prune"] = GraphPruner
+        self._registry["dynamic_surgical_steer"] = DynamicSurgicalSteering
+        self._registry["graph_isolate"] = GraphIsolator
+        self._registry["pathway_excavate"] = PathwayExcavator
+        self._registry["attention_head_surgery"] = AttentionHeadSurgeon
+        self._registry["surgical_feature_ablate"] = SurgicalFeatureAblator
 
     def register(self, name: str, intervention_cls):
         self._registry[name] = intervention_cls

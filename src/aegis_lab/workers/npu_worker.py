@@ -2,8 +2,8 @@ import logging
 import time
 import os
 from typing import Dict, Any, Optional
-from framewerx.aegis_lab.workers.base import WorkerBase
-from framewerx.aegis_lab.sentinel.sentinel_mission import SentinelMission
+from aegis_lab.workers.base import WorkerBase
+from aegis_lab.sentinel.sentinel_mission import SentinelMission
 
 # Robust OpenVINO import
 try:

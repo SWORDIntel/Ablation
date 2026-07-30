@@ -4,9 +4,9 @@ import argparse
 import zmq
 import json
 import time
-from framewerx.aegis_lab.state.db import AegisState
-from framewerx.aegis_lab.orchestrator.service import OrchestratorService
-from framewerx.aegis_lab.hardware.model_selector import build_selector_output
+from aegis_lab.state.db import AegisState
+from aegis_lab.orchestrator.service import OrchestratorService
+from aegis_lab.hardware.model_selector import build_selector_output
 
 class OrchestratorClient:
     def __init__(self, url="tcp://localhost:5555"):
@@ -99,7 +99,7 @@ def main():
         except KeyboardInterrupt:
             service.stop()
     elif args.command == "worker":
-        from framewerx.aegis_lab.workers.cpu_worker import CpuWorker
+        from aegis_lab.workers.cpu_worker import CpuWorker
         worker = CpuWorker(orchestrator_url=args.url)
         print(f"Starting CPU Worker connecting to {args.url}...")
         worker.connect()

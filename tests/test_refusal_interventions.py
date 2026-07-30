@@ -9,8 +9,8 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from framewerx.aegis_lab.editing.heretic_refusal.interventions import build_ablation_targets_from_trial
-from framewerx.aegis_lab.editing.model_refusal_ablation import AblationTarget, ModelRefusalAblator
+from aegis_lab.editing.heretic_refusal.interventions import build_ablation_targets_from_trial
+from aegis_lab.editing.model_refusal_ablation import AblationTarget, ModelRefusalAblator
 
 
 class TestInterventionTranslation(unittest.TestCase):

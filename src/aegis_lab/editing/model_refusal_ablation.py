@@ -23,12 +23,12 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     torch = None
 
-from framewerx.aegis_lab.editing.heretic_refusal.runner import run_heretic_refusal_ablation
-from framewerx.aegis_lab.editing.heretic_refusal.runner import (
+from aegis_lab.editing.heretic_refusal.runner import run_heretic_refusal_ablation
+from aegis_lab.editing.heretic_refusal.runner import (
     run_heretic_refusal_ablation_from_config,
 )
-from framewerx.aegis_lab.editing.heretic_refusal.config import HereticRefusalConfig, config_to_dict, load_config
-from framewerx.aegis_lab.editing.heretic_refusal.interventions import (
+from aegis_lab.editing.heretic_refusal.config import HereticRefusalConfig, config_to_dict, load_config
+from aegis_lab.editing.heretic_refusal.interventions import (
     build_ablation_targets_from_trial,
 )
 

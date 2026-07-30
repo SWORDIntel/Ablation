@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from framewerx.aegis_lab.workers.vpu_worker import MultiVpuWorker, VpuWorker
+from aegis_lab.workers.vpu_worker import MultiVpuWorker, VpuWorker
 
 
 class FakeCore:
@@ -16,8 +16,8 @@ class TestVpuWorkerContract(unittest.TestCase):
     def test_alias_is_preserved(self):
         self.assertIs(VpuWorker, MultiVpuWorker)
 
-    @patch("framewerx.aegis_lab.workers.base.HardwareDiscovery.discover", return_value={"npu_type": None})
-    @patch("framewerx.aegis_lab.workers.vpu_worker.Core", new=None)
+    @patch("aegis_lab.workers.base.HardwareDiscovery.discover", return_value={"npu_type": None})
+    @patch("aegis_lab.workers.vpu_worker.Core", new=None)
     def test_worker_constructs_without_hardware(self, _discover_mock):
         worker = VpuWorker(orchestrator_url="tcp://127.0.0.1:1")
         try:
@@ -25,8 +25,8 @@ class TestVpuWorkerContract(unittest.TestCase):
         finally:
             worker.stop()
 
-    @patch("framewerx.aegis_lab.workers.base.HardwareDiscovery.discover", return_value={"npu_type": None})
-    @patch("framewerx.aegis_lab.workers.vpu_worker.HardwareDiscovery.list_usb_myriad_devices", return_value=[
+    @patch("aegis_lab.workers.base.HardwareDiscovery.discover", return_value={"npu_type": None})
+    @patch("aegis_lab.workers.vpu_worker.HardwareDiscovery.list_usb_myriad_devices", return_value=[
         {
             "sysfs_name": "3-1",
             "vendor_id": "03e7",
@@ -38,7 +38,7 @@ class TestVpuWorkerContract(unittest.TestCase):
             "product": "Movidius MyriadX",
         }
     ])
-    @patch("framewerx.aegis_lab.workers.vpu_worker.Core", new=FakeCore)
+    @patch("aegis_lab.workers.vpu_worker.Core", new=FakeCore)
     def test_worker_only_registers_physically_matched_profiles(self, _discover_mock, _usb_devices):
         worker = VpuWorker(
             orchestrator_url="tcp://127.0.0.1:1",

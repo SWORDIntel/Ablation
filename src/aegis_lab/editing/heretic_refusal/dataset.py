@@ -15,7 +15,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlparse
 from urllib.request import urlopen
 
-from framewerx.aegis_lab.editing.heretic_refusal.config import HereticRefusalConfig
+from aegis_lab.editing.heretic_refusal.config import HereticRefusalConfig
 
 
 @dataclass(frozen=True)

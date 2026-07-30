@@ -10,7 +10,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from framewerx.aegis_lab.editing.model_refusal_ablation import (
+from aegis_lab.editing.model_refusal_ablation import (
     ModelRefusalAblator,
     AblationTarget
 )

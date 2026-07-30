@@ -2,7 +2,7 @@ import unittest
 import os
 import shutil
 import tempfile
-from framewerx.aegis_lab.state.db import AegisState
+from aegis_lab.state.db import AegisState
 
 class TestDbQihse(unittest.TestCase):
     def setUp(self):

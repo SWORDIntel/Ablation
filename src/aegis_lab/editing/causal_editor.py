@@ -1,4 +1,4 @@
-from framewerx.aegis_lab.editing import StaticIntervention
+from aegis_lab.editing import StaticIntervention, GraphPruningTool
 from typing import Any
 
 class CausalEditor(StaticIntervention):
@@ -11,4 +11,9 @@ class CausalEditor(StaticIntervention):
 class AttnAblation(StaticIntervention):
     def apply(self, model: Any) -> Any:
         print("Applying AttnAblation.")
+        return model
+
+class GraphPruner(GraphPruningTool):
+    def apply(self, model: Any) -> Any:
+        print("Applying GraphPruner.")
         return model

@@ -2,7 +2,7 @@ import logging
 import json
 import math
 from typing import Dict, Any, List, Optional
-from framewerx.aegis_lab.state.db import AegisState
+from aegis_lab.state.db import AegisState
 
 logger = logging.getLogger(__name__)
 

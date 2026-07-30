@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
 import os
-from framewerx.aegis_lab.orchestrator.service import OrchestratorService
-from framewerx.aegis_lab.state.db import AegisState
+from aegis_lab.orchestrator.service import OrchestratorService
+from aegis_lab.state.db import AegisState
 
 class TestChaosRecovery(unittest.TestCase):
     def setUp(self):
@@ -11,7 +11,7 @@ class TestChaosRecovery(unittest.TestCase):
         self.test_dir = tempfile.mkdtemp()
         self.state_path = os.path.join(self.test_dir, "state")
         self.state = AegisState(self.state_path, os.path.abspath("QIHSE/qihse/libqihse.so"))
-        with patch('framewerx.aegis_lab.orchestrator.service.IPCServer'):
+        with patch('aegis_lab.orchestrator.service.IPCServer'):
             self.orchestrator = OrchestratorService(self.state)
 
     def tearDown(self):

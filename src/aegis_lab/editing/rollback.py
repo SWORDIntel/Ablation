@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from framewerx.aegis_lab.artifacts.store import ArtifactStore
+from aegis_lab.artifacts.store import ArtifactStore
 
 logger = logging.getLogger(__name__)
 

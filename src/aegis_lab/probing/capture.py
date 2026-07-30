@@ -4,8 +4,8 @@ import json
 import struct
 from typing import List, Dict, Any, Optional
 from pathlib import Path
-from framewerx.aegis_lab.state.db import AegisState
-from framewerx.aegis_lab.artifacts.store import ArtifactStore
+from aegis_lab.state.db import AegisState
+from aegis_lab.artifacts.store import ArtifactStore
 
 logger = logging.getLogger(__name__)
 

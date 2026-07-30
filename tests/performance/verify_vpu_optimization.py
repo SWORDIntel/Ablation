@@ -7,7 +7,7 @@ import sys
 # Add src to path
 sys.path.append(os.path.abspath("src"))
 
-from framewerx.aegis_lab.workers.vpu_worker import MultiVpuWorker
+from aegis_lab.workers.vpu_worker import MultiVpuWorker
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vpu_perf_test")
