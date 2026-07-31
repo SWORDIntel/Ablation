@@ -43,7 +43,6 @@ class InterventionRegistry:
         self._registry["graph_isolate"] = GraphIsolator
         self._registry["pathway_excavate"] = PathwayExcavator
         self._registry["attention_head_surgery"] = AttentionHeadSurgeon
-        self._registry["surgical_feature_ablate"] = SurgicalFeatureAblator
 
     def register(self, name: str, intervention_cls):
         self._registry[name] = intervention_cls
