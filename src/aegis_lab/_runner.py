@@ -26,11 +26,11 @@ def main():
     env["PYTHONPATH"] = os.path.join(os.path.dirname(__file__), "src")
 
     if args.command == "orchestrator":
-        cmd = [sys.executable, "-m", "framewerx.aegis_lab.cli.main", "orchestrator", "--port", str(args.port)]
+        cmd = [sys.executable, "-m", "aegis_lab.cli.main", "orchestrator", "--port", str(args.port)]
     elif args.command == "worker":
-        cmd = [sys.executable, "-m", "framewerx.aegis_lab.cli.main", "worker", "--url", args.url]
+        cmd = [sys.executable, "-m", "aegis_lab.cli.main", "worker", "--url", args.url]
     elif args.command == "gui":
-        cmd = [sys.executable, "-m", "framewerx.aegis_lab.gui.main_window"]
+        cmd = [sys.executable, "-m", "aegis_lab.gui.main_window"]
     elif args.command == "api":
         import socket
         port = args.api_port
@@ -42,24 +42,24 @@ def main():
             print(f"Randomized API Port: {port}")
         
         env["ORCHESTRATOR_URL"] = args.url
-        cmd = [sys.executable, "-m", "uvicorn", "framewerx.aegis_lab.api.server:app", "--host", "0.0.0.0", "--port", str(port)]
+        cmd = [sys.executable, "-m", "uvicorn", "aegis_lab.api.server:app", "--host", "0.0.0.0", "--port", str(port)]
     elif args.command == "submit":
         if not args.project:
             print("Error: --project required for submit")
             sys.exit(1)
-        cmd = [sys.executable, "-m", "framewerx.aegis_lab.cli.main", "submit", "--project", args.project, "--type", args.type, "--url", args.url]
+        cmd = [sys.executable, "-m", "aegis_lab.cli.main", "submit", "--project", args.project, "--type", args.type, "--url", args.url]
     elif args.command == "train":
         if not args.project or not args.model or not args.target:
             print("Error: --project, --model, and --target required for train")
             sys.exit(1)
-        cmd = [sys.executable, "-m", "framewerx.aegis_lab.cli.main", "train",
+        cmd = [sys.executable, "-m", "aegis_lab.cli.main", "train",
                "--project", args.project, "--model", args.model, "--target", args.target,
                "--device", args.device, "--url", args.url]
     elif args.command == "mission":
         print("🚀 Launching Automated Qwen Ablation Mission...")
-        from framewerx.aegis_lab.state.db import AegisState
-        from framewerx.aegis_lab.artifacts.store import ArtifactStore
-        from framewerx.aegis_lab.editing.pipeline import AblationPipeline
+        from aegis_lab.state.db import AegisState
+        from aegis_lab.artifacts.store import ArtifactStore
+        from aegis_lab.editing.pipeline import AblationPipeline
         
         storage_root = os.path.expanduser("~/.aegis_lab/state")
         artifact_root = os.path.expanduser("~/.aegis_lab/artifacts")

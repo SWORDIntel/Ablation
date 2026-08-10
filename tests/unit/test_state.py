@@ -3,7 +3,7 @@ import sys
 import unittest
 import tempfile
 import shutil
-from framewerx.aegis_lab.state.db import AegisState
+from aegis_lab.state.db import AegisState
 
 class TestAegisState(unittest.TestCase):
     def setUp(self):

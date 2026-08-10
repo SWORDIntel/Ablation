@@ -3,23 +3,23 @@ import time
 import logging
 import os
 from typing import Dict, List, Any, Optional
-from framewerx.aegis_lab.state.db import AegisState
-from framewerx.aegis_lab.orchestrator.ipc import IPCServer, LogServer, EventPublisher
-from framewerx.aegis_lab.hardware.thermal import ThermalGuardian
-from framewerx.aegis_lab.hardware.discovery import HardwareDiscovery
-from framewerx.aegis_lab.scheduler.engine import SchedulerEngine
-from framewerx.aegis_lab.hardware.telemetry import LevelZeroTelemetry
-from framewerx.aegis_lab.orchestrator.optimizer import HardwareOptimizer
+from aegis_lab.state.db import AegisState
+from aegis_lab.orchestrator.ipc import IPCServer, LogServer, EventPublisher
+from aegis_lab.hardware.thermal import ThermalGuardian
+from aegis_lab.hardware.discovery import HardwareDiscovery
+from aegis_lab.scheduler.engine import SchedulerEngine
+from aegis_lab.hardware.telemetry import LevelZeroTelemetry
+from aegis_lab.orchestrator.optimizer import HardwareOptimizer
 
-from framewerx.aegis_lab.evaluation.leaderboard import LeaderboardManager
-from framewerx.aegis_lab.evaluation.elo_judge import EloJudge
-from framewerx.aegis_lab.evaluation.hallucination import HallucinationDetector
-from framewerx.aegis_lab.evaluation.capability_drift import CapabilityDriftAnalyzer
-from framewerx.aegis_lab.evaluation.hardware_efficiency import EfficiencyRanker
+from aegis_lab.evaluation.leaderboard import LeaderboardManager
+from aegis_lab.evaluation.elo_judge import EloJudge
+from aegis_lab.evaluation.hallucination import HallucinationDetector
+from aegis_lab.evaluation.capability_drift import CapabilityDriftAnalyzer
+from aegis_lab.evaluation.hardware_efficiency import EfficiencyRanker
 
-from framewerx.aegis_lab.hardware.vault import ModelVault
-from framewerx.aegis_lab.evaluation.consensus import ConsensusJudge
-from framewerx.aegis_lab.verification.proofs import ZKAblationProof
+from aegis_lab.hardware.vault import ModelVault
+from aegis_lab.evaluation.consensus import ConsensusJudge
+from aegis_lab.verification.proofs import ZKAblationProof
 
 logger = logging.getLogger(__name__)
 

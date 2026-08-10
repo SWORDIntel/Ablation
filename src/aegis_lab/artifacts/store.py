@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Union, Optional, Dict, Any
 
 from .hashing import hash_file
-from framewerx.aegis_lab.state.db import AegisState
+from aegis_lab.state.db import AegisState
 
 class ArtifactStore:
     """

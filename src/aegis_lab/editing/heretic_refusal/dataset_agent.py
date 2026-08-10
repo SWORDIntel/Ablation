@@ -8,8 +8,8 @@ Loads labeled prompt records and produces train/val/test splits.
 
 from typing import Dict, List
 
-from framewerx.aegis_lab.editing.heretic_refusal.config import HereticRefusalConfig
-from framewerx.aegis_lab.editing.heretic_refusal.dataset import RefusalPromptRecord, load_prompt_records, split_records
+from aegis_lab.editing.heretic_refusal.config import HereticRefusalConfig
+from aegis_lab.editing.heretic_refusal.dataset import RefusalPromptRecord, load_prompt_records, split_records
 
 
 class DatasetAgent:

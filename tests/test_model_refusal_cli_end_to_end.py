@@ -154,7 +154,7 @@ class TestModelRefusalEndToEnd(unittest.TestCase):
         # Wrapper script invokes python with `PYTHONPATH=src`, so missing optional
         # dependencies can only be tested safely when native imports succeed.
         check = subprocess.run(
-            [sys.executable, "-c", "from framewerx.aegis_lab.editing import model_refusal_ablation"],
+            [sys.executable, "-c", "from aegis_lab.editing import model_refusal_ablation"],
             env=_python_env(),
             capture_output=True,
             text=True,

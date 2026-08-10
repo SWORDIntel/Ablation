@@ -111,7 +111,7 @@ echo -e "${BLUE}[*] Starting ablation process...${NC}"
 
 set +e
 CMD=(
-    PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py
+    env PYTHONPATH=src python3 src/aegis_lab/editing/model_refusal_ablation.py
     --model "$MODEL_PATH"
     --output "$OUTPUT_PATH"
     --method "$METHOD"

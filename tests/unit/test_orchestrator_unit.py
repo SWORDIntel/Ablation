@@ -2,13 +2,13 @@ import unittest
 from unittest.mock import MagicMock, patch
 import uuid
 import time
-from framewerx.aegis_lab.orchestrator.service import OrchestratorService
+from aegis_lab.orchestrator.service import OrchestratorService
 
 class TestOrchestratorUnit(unittest.TestCase):
     def setUp(self):
         self.mock_state = MagicMock()
         # Mock IPCServer to avoid starting a real server
-        with patch('framewerx.aegis_lab.orchestrator.service.IPCServer'):
+        with patch('aegis_lab.orchestrator.service.IPCServer'):
             self.service = OrchestratorService(self.mock_state)
 
     def test_submit_job(self):
@@ -43,7 +43,7 @@ class TestOrchestratorUnit(unittest.TestCase):
         self.assertEqual(response["status"], "ok")
         self.assertGreater(self.service.workers["worker-1"]["last_heartbeat"], 0)
 
-    @patch('framewerx.aegis_lab.orchestrator.service.SchedulerEngine')
+    @patch('aegis_lab.orchestrator.service.SchedulerEngine')
     def test_handle_request_task(self, MockScheduler):
         # Setup worker
         self.service.workers["worker-1"] = {

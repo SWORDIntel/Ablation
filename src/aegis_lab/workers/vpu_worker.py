@@ -4,9 +4,9 @@ import os
 import json
 import glob
 from typing import Dict, Any, Optional, List
-from framewerx.aegis_lab.workers.base import WorkerBase
-from framewerx.aegis_lab.hardware.discovery import HardwareDiscovery
-from framewerx.aegis_lab.sentinel.sentinel_mission import SentinelMission
+from aegis_lab.workers.base import WorkerBase
+from aegis_lab.hardware.discovery import HardwareDiscovery
+from aegis_lab.sentinel.sentinel_mission import SentinelMission
 
 # Robust OpenVINO import
 try:

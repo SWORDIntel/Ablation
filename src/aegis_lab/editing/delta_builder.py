@@ -3,7 +3,7 @@ import numpy as np
 from typing import Dict, Any
 from pathlib import Path
 
-from framewerx.aegis_lab.artifacts.store import ArtifactStore
+from aegis_lab.artifacts.store import ArtifactStore
 
 logger = logging.getLogger(__name__)
 

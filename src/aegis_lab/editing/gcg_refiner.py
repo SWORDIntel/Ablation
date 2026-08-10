@@ -1,8 +1,8 @@
 import logging
 from typing import Any, Dict, Optional
 
-from framewerx.aegis_lab.editing.adversarial import RedTeamEvaluator
-from framewerx.aegis_lab.atoms.extractor import BehavioralAtomExtractor
+from aegis_lab.editing.adversarial import RedTeamEvaluator
+from aegis_lab.atoms.extractor import BehavioralAtomExtractor
 
 logger = logging.getLogger(__name__)
 

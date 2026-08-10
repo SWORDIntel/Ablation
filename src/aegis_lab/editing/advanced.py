@@ -4,15 +4,15 @@ import time
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 
-from framewerx.aegis_lab.state.db import AegisState
-from framewerx.aegis_lab.artifacts.store import ArtifactStore
-from framewerx.aegis_lab.editing.pipeline import AblationPipeline, InterventionRegistry
-from framewerx.aegis_lab.editing.adversarial import RedTeamEvaluator
-from framewerx.aegis_lab.atoms.extractor import BehavioralAtomExtractor
-from framewerx.aegis_lab.editing import StaticIntervention, FeatureIntervention, RuntimeSteering
-from framewerx.aegis_lab.editing.gcg_refiner import GCGRefiner
-from framewerx.aegis_lab.scheduler.sharding import DeviceTile, OpusShardingPlanner
-from framewerx.aegis_lab.editing.sae_crossmodal import SparseFeatureExtractor, CrossModalCapturer
+from aegis_lab.state.db import AegisState
+from aegis_lab.artifacts.store import ArtifactStore
+from aegis_lab.editing.pipeline import AblationPipeline, InterventionRegistry
+from aegis_lab.editing.adversarial import RedTeamEvaluator
+from aegis_lab.atoms.extractor import BehavioralAtomExtractor
+from aegis_lab.editing import StaticIntervention, FeatureIntervention, RuntimeSteering
+from aegis_lab.editing.gcg_refiner import GCGRefiner
+from aegis_lab.scheduler.sharding import DeviceTile, OpusShardingPlanner
+from aegis_lab.editing.sae_crossmodal import SparseFeatureExtractor, CrossModalCapturer
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class AdvancedAblationOrchestrator:
         # Instantiate advanced components
         self.gcg_refiner = GCGRefiner(state, self.red_teamer, self.extractor)
         
-        from framewerx.aegis_lab.scheduler.sharding import DeviceTile
+        from aegis_lab.scheduler.sharding import DeviceTile
         available_tiles = [
             DeviceTile(tile_id="NPU_0", device_type="NPU", memory_capacity_mb=64000, compute_ops=800),
             DeviceTile(tile_id="NPU_1", device_type="NPU", memory_capacity_mb=64000, compute_ops=800),
@@ -84,7 +84,7 @@ class AdvancedAblationOrchestrator:
         """
         logger.info("Planning distributed ablation for Opus-scale model.")
         
-        from framewerx.aegis_lab.scheduler.sharding import LayerSpec
+        from aegis_lab.scheduler.sharding import LayerSpec
         # Convert dictionary topology to LayerSpec objects for the planner
         total_layers = model_topology.get("total_layers", 80)
         layer_specs = [

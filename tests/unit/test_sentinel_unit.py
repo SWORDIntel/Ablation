@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
-from framewerx.aegis_lab.sentinel.cascade import NPUSentinel
+from aegis_lab.sentinel.cascade import NPUSentinel
 
 class TestSentinelUnit(unittest.TestCase):
     def setUp(self):

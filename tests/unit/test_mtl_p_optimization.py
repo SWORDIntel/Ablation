@@ -1,6 +1,6 @@
 import unittest
 import os
-from framewerx.aegis_lab.scheduler.engine import SchedulerEngine
+from aegis_lab.scheduler.engine import SchedulerEngine
 
 class TestMTLPOptimization(unittest.TestCase):
     def test_mtl_p_activation_capture(self):

@@ -15,7 +15,14 @@ class FeatureIntervention(Intervention):
 class RuntimeSteering(Intervention):
     pass
 
+class TopologicalSurgicalTool(Intervention):
+    pass
+
+class GraphPruningTool(Intervention):
+    pass
+
 # Exported classes for easier access
-from framewerx.aegis_lab.editing.causal_editor import CausalEditor, AttnAblation
-from framewerx.aegis_lab.editing.sae_clamping import SaeClamping, ConceptErasure
-from framewerx.aegis_lab.editing.repe_steering import RepeSteering, ContrastiveSteering
+from aegis_lab.editing.causal_editor import CausalEditor, AttnAblation, GraphPruner
+from aegis_lab.editing.sae_clamping import SaeClamping, ConceptErasure, SurgicalFeatureAblator
+from aegis_lab.editing.repe_steering import RepeSteering, ContrastiveSteering, DynamicSurgicalSteering
+from aegis_lab.editing.topological import GraphIsolator, PathwayExcavator, AttentionHeadSurgeon

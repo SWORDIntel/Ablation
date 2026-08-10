@@ -1,6 +1,6 @@
 import hashlib
 from typing import List, Dict, Any
-from framewerx.aegis_lab.state.db import AegisState
+from aegis_lab.state.db import AegisState
 
 class RAGEngine:
     """

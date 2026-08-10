@@ -10,9 +10,9 @@ import nncf
 import openvino
 
 # Import the classes to be tested
-from framewerx.aegis_lab.quantization.calibration import CalibrationCorpusBuilder
-from framewerx.aegis_lab.quantization.exporter import OpenVINOExporter
-from framewerx.aegis_lab.quantization.validators import QuantizationValidator
+from aegis_lab.quantization.calibration import CalibrationCorpusBuilder
+from aegis_lab.quantization.exporter import OpenVINOExporter
+from aegis_lab.quantization.validators import QuantizationValidator
 
 class TestQuantizationUnit(unittest.TestCase):
     def test_calibration_corpus_builder(self):
