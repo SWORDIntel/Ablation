@@ -28,7 +28,8 @@ Source paths above are relative to `src/aegis_lab/editing/neurosurgery/`. Existi
 
 Existing limits to resolve:
 - `validate.py` compares only the final prompt-position next-token distributions; this does not establish retained multi-token task competence or successful DROP behavior changes.
-- Validation loaders currently enable `trust_remote_code=True`; `plan.py` loads profiles with `weights_only=False`. Artifact checksums do not make executable payloads trustworthy.
+- Continuation-level task metrics, dataset/model provenance, end-to-end candidate binding, and independent held-out evaluation are still missing.
+- Tensor-only artifact loading and explicit remote-code opt-in have landed; review the current loader implementation before treating older notes in this roadmap as current.
 - Selection checksums must be extended into end-to-end binding of the exact model revision, tokenizer, config, datasets, adapter, and operation order.
 - Independent passing edits need joint validation; stacking individually passing cuts or directional edits is not proof that their composition passes.
 - Uniform dimension constraints and adapter coverage limit physical edits. Modality inventory is not modality-removal support.
@@ -44,12 +45,16 @@ Required now: 4A, 4B, then a narrow 4C and Stage 5 implementation, followed by 4
 
 - [ ] Separate KEEP, CHANGE, and DROP datasets; require disjoint discovery/search/validation/test splits and dataset fingerprints. CHANGE includes desired outputs; DROP includes a task-specific suppression measure.
 - [ ] Add teacher-forced continuation loss/perplexity, sequence-level task scoring, and multi-token generation regression alongside KL/top-1. Use identical tokenization for distribution comparisons; reject incompatible vocabularies.
-- [ ] Reject empty datasets, NaN/Inf metrics, mismatched samples, missing required scores, and unsupported evaluation modes. Report per-domain and worst-slice damage, not just a mean.
+- [x] Reject empty prompt sets, mismatched comparison counts, incompatible vocabulary dimensions, and non-finite log probabilities in the current next-token comparison.
+- [ ] Reject missing required task scores and unsupported evaluation modes; report per-domain and worst-slice damage, not just a mean.
 - [ ] Evaluate the exact combined candidate, including directional edits, then reload and evaluate the physical export. Independently gate KEEP preservation and target-change success.
 - [ ] Bind plans to model/config/tokenizer hashes or immutable revisions, selection/profile hashes, data splits, software versions, seeds, adapter version, dtype, and edit order.
-- [ ] Default remote code execution off with explicit opt-in. Replace unrestricted profile deserialization with tensor-only loading or safetensors plus validated JSON; use safe YAML loading and reject unknown schema fields.
+- [x] Default remote model code execution off; require explicit `AEGIS_TRUST_REMOTE_CODE=1` opt-in. Load neurosurgery tensor artifacts with `weights_only=True`.
+- [ ] Add versioned artifact schemas and reject unknown fields; retain safe YAML loading and validate plan structure before applying.
 - [ ] Keep the source checkpoint immutable. Write candidates to separate directories; retain parent manifests and required original tensors/checkpoints for restoration. Verify restoration hashes where exact reconstruction is promised.
 - [ ] Add bounded-memory activation capture and baseline caching keyed to all inputs affecting scores.
+
+Progress: unit tests for restricted artifact loading, remote-code opt-in, tokenizer compatibility, and invalid comparison scores were added on 2026-09-30. They have not been executed in this GitHub-only session.
 
 Acceptance: tiny real-model fixtures exercise identity, changed candidate, empty/non-finite input rejection, stale-model plan rejection, export/reload parity, and restoration. A candidate must not pass when a required metric is unavailable. Publish one reproducible held-out evaluation report without simulation/fallback scoring.
 
