@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import torch
 import yaml
@@ -97,7 +97,7 @@ def _parameter_op(kind: str, layer: int, module, parameter_name: str, new_shape:
     }
 
 
-def build_preview(model, plan_file: str, profile_path: str | None = None) -> dict:
+def build_preview(model, plan_file: str, profile_path: Optional[str] = None) -> dict:
     plan_path = Path(plan_file)
     plan = yaml.safe_load(plan_path.read_text(encoding="utf-8"))
     if not isinstance(plan, dict):
@@ -277,7 +277,11 @@ def build_preview(model, plan_file: str, profile_path: str | None = None) -> dic
                     continue
                 expert_name = _module_path(expert, names)
                 params = [
-                    {"name": name, "shape": list(param.shape), "bytes": param.numel() * param.element_size()}
+                    {
+                        "name": f"{expert_name}.{name}" if name else expert_name,
+                        "shape": list(param.shape),
+                        "bytes": param.numel() * param.element_size(),
+                    }
                     for name, param in expert.named_parameters()
                 ]
                 add({
@@ -299,10 +303,18 @@ def build_preview(model, plan_file: str, profile_path: str | None = None) -> dic
         module = layers[layer]
         base_bytes = parameter_bytes(module)
         structured_bytes = removed_by_layer.get(layer, 0)
+        parameters = [
+            {"name": f"{layer_path}.{layer}.{name}" if name else f"{layer_path}.{layer}",
+             "shape": list(parameter.shape),
+             "bytes": parameter.numel() * parameter.element_size(),
+             "aliases": aliases.get(id(parameter), [])}
+            for name, parameter in module.named_parameters()
+        ]
         add({
             "kind": "transformer_layer_remove",
             "layer": layer,
             "module": f"{layer_path}.{layer}",
+            "parameters": parameters,
             "parameter_bytes_before": base_bytes,
             "prior_structural_bytes_removed": structured_bytes,
             "estimated_bytes_removed": max(0, base_bytes - structured_bytes),
@@ -324,7 +336,7 @@ def build_preview(model, plan_file: str, profile_path: str | None = None) -> dic
     }
 
 
-def run_preview(model_path: str, plan_path: str, profile_path: str | None = None, device: str = "auto") -> dict:
+def run_preview(model_path: str, plan_path: str, profile_path: Optional[str] = None, device: str = "auto") -> dict:
     device = resolve_device(device)
     model, _ = _load_hf(model_path, device)
     return build_preview(model, plan_path, profile_path)
