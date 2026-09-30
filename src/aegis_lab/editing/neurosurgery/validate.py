@@ -45,21 +45,36 @@ def next_token_logprobs(model, tokenizer, prompts: list[str], batch_size: int) -
 
 
 def compare_logprobs(base: list[torch.Tensor], candidate: list[torch.Tensor]) -> dict:
+    if not base:
+        raise ValueError("cannot validate an empty prompt set")
     if len(base) != len(candidate):
         raise ValueError("baseline/candidate sample count mismatch")
     kls = []
     agree = 0
-    for p_log, q_log in zip(base, candidate):
+    for index, (p_log, q_log) in enumerate(zip(base, candidate)):
+        if p_log.ndim != 1 or q_log.ndim != 1 or p_log.shape != q_log.shape:
+            raise ValueError(f"sample {index} has incompatible vocabulary logits")
+        if not torch.isfinite(p_log).all() or not torch.isfinite(q_log).all():
+            raise ValueError(f"sample {index} contains non-finite log probabilities")
         p = p_log.exp()
         kl = torch.sum(p * (p_log - q_log)).item()
+        if not torch.isfinite(torch.tensor(kl)):
+            raise ValueError(f"sample {index} produced non-finite KL divergence")
         kls.append(kl)
         agree += int(int(torch.argmax(p_log)) == int(torch.argmax(q_log)))
     return {
         "samples": len(kls),
-        "mean_kl": sum(kls) / max(len(kls), 1),
-        "max_kl": max(kls) if kls else 0.0,
-        "top1_agreement": agree / max(len(kls), 1),
+        "mean_kl": sum(kls) / len(kls),
+        "max_kl": max(kls),
+        "top1_agreement": agree / len(kls),
     }
+
+
+def assert_compatible_tokenizers(base, candidate) -> None:
+    if base.get_vocab() != candidate.get_vocab():
+        raise ValueError("baseline and candidate tokenizers have different vocabularies")
+    if base.special_tokens_map != candidate.special_tokens_map:
+        raise ValueError("baseline and candidate tokenizers have different special tokens")
 
 
 def run_validate(
@@ -84,6 +99,7 @@ def run_validate(
 
     LOG.info("candidate logits: %s", candidate_path)
     cand_model, cand_tok = _load_hf(candidate_path, device)
+    assert_compatible_tokenizers(tok, cand_tok)
     cand = next_token_logprobs(cand_model, cand_tok, prompts, batch_size)
     metrics = compare_logprobs(base, cand)
     metrics["passed"] = max_mean_kl is None or metrics["mean_kl"] <= max_mean_kl
