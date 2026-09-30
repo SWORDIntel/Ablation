@@ -20,6 +20,8 @@ The `aegis-neurosurgery` CLI currently supports:
 
 The physical operations are deliberately behind architecture adapters. Search can be generic; changing shapes cannot.
 
+Use `preview` before `apply` to inspect the resolved targets, original and resulting tensor shapes, kept indices, tied-parameter aliases, selection checksums, and approximate parameter bytes removed. Preview is read-only; it does not rewrite or reload-test the candidate checkpoint.
+
 ## Basic sequence
 
 ```bash
@@ -68,7 +70,7 @@ aegis-neurosurgery apply \
   --plan runs/opt/optimized_plan.yaml \
   --out /models/Qwen3-8B-surgery
 
-# 6. Independent KEEP validation
+# 7. Independent KEEP validation
 aegis-neurosurgery validate \
   --base /models/Qwen3-8B \
   --candidate /models/Qwen3-8B-surgery \
