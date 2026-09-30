@@ -10,7 +10,7 @@ import torch
 from tqdm import tqdm
 
 from .adapters import get_attention_adapter
-from .common import LOG, batches, file_sha256, load_prompts, resolve_device
+from .common import LOG, batches, file_sha256, load_tensor_artifact, load_prompts, resolve_device
 from .validate import _load_hf, compare_logprobs, next_token_logprobs
 
 EPS = 1e-8
@@ -226,7 +226,7 @@ def run_attention_search(
 ) -> None:
     device = resolve_device(device)
     prompts = load_prompts(keep_path, max_prompts)
-    profile = torch.load(profile_path, map_location="cpu", weights_only=False)
+    profile = load_tensor_artifact(profile_path)
     keep_imp = profile["keep_importance"]
     drop_imp = profile["drop_importance"]
 
