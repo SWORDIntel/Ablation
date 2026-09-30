@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from .common import LOG, batches, load_prompts, resolve_device
+from .common import LOG, batches, load_prompts, resolve_device, trust_remote_code_enabled
 
 
 def _load_hf(model_path: str, device: str):
@@ -18,11 +18,11 @@ def _load_hf(model_path: str, device: str):
         from transformers import AutoModelForCausalLM, AutoTokenizer
     except ImportError as e:
         raise RuntimeError("transformers is required: pip install -e .") from e
-    tok = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    tok = AutoTokenizer.from_pretrained(model_path, trust_remote_code=trust_remote_code_enabled())
     if tok.pad_token_id is None:
         tok.pad_token = tok.eos_token
     tok.padding_side = "left"
-    kwargs = {"trust_remote_code": True}
+    kwargs = {"trust_remote_code": trust_remote_code_enabled()}
     if device != "cpu":
         kwargs["device_map"] = device
     model = AutoModelForCausalLM.from_pretrained(model_path, **kwargs)
