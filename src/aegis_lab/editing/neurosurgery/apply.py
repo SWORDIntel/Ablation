@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Optional
 
 import torch
 import yaml
@@ -101,11 +102,18 @@ def _apply_structured(model, plan_file: Path, plan: dict) -> dict:
     return log
 
 
-def run_apply(model_path: str, profile_path: str, plan_path: str, out_dir: str, device: str = "auto") -> None:
+def run_apply(model_path: str, profile_path: Optional[str], plan_path: str, out_dir: str, device: str = "auto") -> None:
     device = resolve_device(device)
-    profile = torch.load(profile_path, map_location="cpu", weights_only=False)
     plan_file = Path(plan_path)
     plan = yaml.safe_load(plan_file.read_text(encoding="utf-8"))
+    ablation = plan.get("ablation") or {}
+    directional_layers = [int(x) for x in ablation.get("layers", [])]
+    if directional_layers:
+        if not profile_path:
+            raise ValueError("--profile is required when plan contains directional ablation layers")
+        profile = torch.load(profile_path, map_location="cpu", weights_only=False)
+    else:
+        profile = None
     model, tokenizer = _load_hf(model_path, device)
     params_before = sum(p.numel() for p in model.parameters())
     bytes_before = parameter_bytes(model)
@@ -113,7 +121,7 @@ def run_apply(model_path: str, profile_path: str, plan_path: str, out_dir: str, 
     layers = list(layers_obj)
 
     operation_log: dict[str, object] = {
-        "directional": _apply_directional(model, layers, profile, plan),
+        "directional": _apply_directional(model, layers, profile, plan) if profile is not None else [],
         "structured": _apply_structured(model, plan_file, plan),
     }
 
@@ -135,9 +143,9 @@ def run_apply(model_path: str, profile_path: str, plan_path: str, out_dir: str, 
     model.save_pretrained(out, safe_serialization=True)
     tokenizer.save_pretrained(out)
     manifest = {
-        "version": 3,
+        "version": int(plan.get("version", 3)),
         "source_model": model_path,
-        "profile": str(profile_path),
+        "profile": str(profile_path) if profile_path else None,
         "plan": str(plan_path),
         "plan_sha256": file_sha256(plan_path),
         "layer_path": layer_path,
