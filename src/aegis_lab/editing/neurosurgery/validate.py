@@ -107,6 +107,17 @@ def assert_compatible_tokenizers(base, candidate) -> None:
         raise ValueError("baseline and candidate tokenizers have different special tokens")
 
 
+def assert_same_tokenization(base, candidate, prompts: list[str], batch_size: int) -> None:
+    for batch in batches(prompts, batch_size):
+        base_enc = base(batch, return_tensors="pt", padding=True, truncation=True)
+        candidate_enc = candidate(batch, return_tensors="pt", padding=True, truncation=True)
+        for key in ("input_ids", "attention_mask"):
+            if key not in base_enc or key not in candidate_enc:
+                raise ValueError(f"tokenizer output missing {key}")
+            if not torch.equal(base_enc[key], candidate_enc[key]):
+                raise ValueError(f"baseline and candidate tokenize validation text differently ({key})")
+
+
 def run_validate(
     base_path: str,
     candidate_path: str,
@@ -131,6 +142,7 @@ def run_validate(
     LOG.info("candidate logits: %s", candidate_path)
     cand_model, cand_tok = _load_hf(candidate_path, device)
     assert_compatible_tokenizers(tok, cand_tok)
+    assert_same_tokenization(tok, cand_tok, prompts, batch_size)
     cand = next_token_logprobs(cand_model, cand_tok, prompts, batch_size)
     candidate_nll = mean_teacher_forced_nll(cand_model, cand_tok, prompts, batch_size)
     metrics = compare_logprobs(base, cand)
