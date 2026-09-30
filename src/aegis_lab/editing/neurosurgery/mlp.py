@@ -165,10 +165,13 @@ def select_mlp_channels(
         if k.ndim != 1 or d.shape != k.shape:
             raise ValueError(f"layer {i} malformed importance vectors")
         n = int(k.numel())
-        target = max(1, int(n * keep_ratio))
-        if align_to > 1 and target >= align_to:
-            target = max(align_to, (target // align_to) * align_to)
-        target = min(n, target)
+        if keep_ratio >= 1.0:
+            target = n
+        else:
+            target = max(1, int(n * keep_ratio))
+            if align_to > 1 and target >= align_to:
+                target = max(align_to, (target // align_to) * align_to)
+            target = min(n, target)
         if expected_k is None:
             expected_k = target
         elif target != expected_k:
