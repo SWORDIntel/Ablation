@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional, Union
+
 import json
 from pathlib import Path
 
@@ -20,7 +22,7 @@ SUSPICIOUS_MODALITY_TOKENS = (
 )
 
 
-def run_inventory(model_path: str, out_path: str | None = None, device: str = "cpu") -> dict:
+def run_inventory(model_path: str, out_path: Optional[str] = None, device: str = "cpu") -> dict:
     """Inventory large named modules and modality-looking branches.
 
     This is intentionally read-only. A module appearing here is not proof that it
