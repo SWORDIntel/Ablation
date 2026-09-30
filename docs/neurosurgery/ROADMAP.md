@@ -63,11 +63,14 @@ Acceptance: tiny real-model fixtures exercise identity, changed candidate, empty
 ### Stage 4B — explicit component selection and operation contract
 
 - [ ] Build a typed selector over adapter-resolved module paths, layer IDs, MLP channels, attention heads/groups, experts/router rows, tensor slices, and runtime activation positions.
-- [ ] Provide a dry-run resolved edit list: exact names, shapes, original indices, dependent tensors, tied parameters, expected dimensions, and estimated memory changes.
+- [x] Add read-only `aegis-neurosurgery preview` for the current surgery-plan format. It resolves target names, original indices, dependent tensor shapes, tied-parameter aliases, adapter geometry, and per-operation byte estimates.
 - [ ] Unify mask, scale, clamp, project, replace, low-rank delta, and physical remove under one plan schema. Each operation declares runtime-only versus persistent semantics and export support.
-- [ ] Validate bounds, duplicate/conflicting selections, shared weights, GQA grouping, router top-k, residual dimensions, and config representability before mutation.
-- [ ] Track original-to-current indices through operation composition. Reject unsupported paths rather than selecting similarly named tensors.
+- [x] Preview validates selection bounds/duplicates, supported GQA grouping, MoE top-k, directional dimensions, and required config fields before apply. Tied aliases are reported; unsafe shared-weight edits and conflicting operation detection remain open.
+- [x] Report the current fixed order (directional edits, structured slices, layer removal) and preserve original model indices in preview output.
+- [ ] Support arbitrary edit composition with original-to-current index remapping. Reject unsupported paths rather than selecting similarly named tensors.
 - [ ] Add a capability matrix per adapter and operation, with tested architecture/version fixtures. Integrate legacy intervention modules only after contract tests pass.
+
+Progress: a read-only preview command and MLP dry-run regression tests were added on 2026-09-30. CI for this phase is pending. Preview does not mutate weights; it is not yet a substitute for apply followed by save/reload validation.
 
 Acceptance: an operator can preview and apply an exact MLP-channel, attention-group, or expert edit; invalid combinations fail before any write; unselected tensors remain unchanged except declared dependent tensors. Structural edits survive save/reload and cached generation.
 
