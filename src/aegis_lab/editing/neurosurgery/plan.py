@@ -9,7 +9,7 @@ import torch
 import yaml
 
 from .attention import select_attention_groups
-from .common import file_sha256
+from .common import file_sha256, load_tensor_artifact
 from .mlp import select_mlp_channels
 from .moe import select_moe_experts
 
@@ -48,7 +48,7 @@ def _load_checked_profile(search: dict, profile_path: Optional[str], label: str)
     expected = search.get("profile_sha256")
     if expected and file_sha256(path) != expected:
         raise ValueError(f"{label} profile checksum does not match search artifact")
-    return path, torch.load(path, map_location="cpu", weights_only=False)
+    return path, load_tensor_artifact(path)
 
 
 def _write_selection(out_path: Path, suffix: str, payload: dict) -> tuple[Path, str]:
