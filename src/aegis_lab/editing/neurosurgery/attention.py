@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional, Union
+
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,7 +20,7 @@ EPS = 1e-8
 class _AttentionAccumulator:
     sums: list[torch.Tensor]
     counts: list[int]
-    attention_mask: torch.Tensor | None = None
+    attention_mask: Optional[torch.Tensor] = None
 
 
 def _accumulate_o_input(acc: _AttentionAccumulator, layer_idx: int, pack, args) -> None:
@@ -79,7 +81,7 @@ def run_attention_profile(
     drop_path: str,
     out_dir: str,
     batch_size: int = 2,
-    max_prompts: int | None = 64,
+    max_prompts: Optional[int] = 64,
     device: str = "auto",
 ) -> None:
     device = resolve_device(device)
@@ -218,7 +220,7 @@ def run_attention_search(
     out_dir: str,
     keep_ratios: list[float],
     batch_size: int = 2,
-    max_prompts: int | None = 64,
+    max_prompts: Optional[int] = 64,
     contrast_weight: float = 0.25,
     device: str = "auto",
 ) -> None:
