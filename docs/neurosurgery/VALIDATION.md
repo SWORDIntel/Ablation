@@ -1,6 +1,6 @@
 # Neurosurgery Validation
 
-The structural search gate compares next-token KL divergence from the untouched model on a KEEP workload, plus top-1 token agreement. This is a cheap candidate-ranking gate, not proof of retained task competence.
+The structural search gate compares next-token KL divergence from the untouched model on a KEEP workload, plus top-1 token agreement. The validate command also reports teacher-forced mean NLL across each supplied text sequence. These are useful drift measurements, not proof of retained task competence.
 
 ## Current checks
 
@@ -20,6 +20,6 @@ The structural search gate compares next-token KL divergence from the untouched 
 6. Run task-specific benchmarks before promotion.
 7. Quantize or produce hardware-specific packed artifacts only after quality acceptance.
 
-For aggressive surgery, add teacher-forced continuation loss, long-generation evaluations, perplexity, task benchmarks, and domain-specific regression suites. A low one-token KL can miss failures that appear later in generation. Validation currently checks the prompt's final-position next-token distribution; it does not yet measure whether the candidate successfully changes a target behavior.
+Teacher-forced NLL scores every unpadded next-token target in the provided text, skipping padding and each sequence's first token. Its delta indicates how the candidate's fit to that text changed; it is not a desired-answer score. For aggressive surgery, add long-generation evaluations, perplexity, task benchmarks, and domain-specific regression suites. A low one-token KL or NLL can miss failures that appear in generation. Validation does not yet measure whether the candidate successfully changes a target behavior.
 
 Do not reuse the exact search corpus as the only final validation corpus.
