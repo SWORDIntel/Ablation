@@ -8,7 +8,7 @@ from pathlib import Path
 import torch
 from tqdm import tqdm
 
-from .common import LOG, batches, get_layers, load_prompts, resolve_device
+from .common import LOG, batches, get_layers, load_prompts, resolve_device, trust_remote_code_enabled
 from .math_ops import contrast_direction, preservation_basis
 
 
@@ -17,11 +17,11 @@ def _load_hf(model_path: str, device: str):
         from transformers import AutoModelForCausalLM, AutoTokenizer
     except ImportError as e:
         raise RuntimeError("transformers is required: pip install -e .") from e
-    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=trust_remote_code_enabled())
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
-    kwargs = {"trust_remote_code": True}
+    kwargs = {"trust_remote_code": trust_remote_code_enabled()}
     if device != "cpu":
         kwargs["device_map"] = device
     model = AutoModelForCausalLM.from_pretrained(model_path, **kwargs)
