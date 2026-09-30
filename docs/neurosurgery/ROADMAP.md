@@ -44,7 +44,9 @@ Required now: 4A, 4B, then a narrow 4C and Stage 5 implementation, followed by 4
 ### Stage 4A — trustworthy measurement and reversible artifacts
 
 - [ ] Separate KEEP, CHANGE, and DROP datasets; require disjoint discovery/search/validation/test splits and dataset fingerprints. CHANGE includes desired outputs; DROP includes a task-specific suppression measure.
-- [ ] Add teacher-forced continuation loss/perplexity, sequence-level task scoring, and multi-token generation regression alongside KL/top-1. Use identical tokenization for distribution comparisons; reject incompatible vocabularies.
+- [x] Add teacher-forced mean NLL over unpadded tokens in each supplied text sequence; report candidate-minus-baseline delta alongside KL/top-1.
+- [ ] Add sequence-level task scoring and multi-token generation regression. NLL over arbitrary prompt text is a drift metric, not task success.
+- [ ] Verify identical tokenization per sample, not only equal vocabulary and special-token maps; reject incompatible vocabularies.
 - [x] Reject empty prompt sets, mismatched comparison counts, incompatible vocabulary dimensions, and non-finite log probabilities in the current next-token comparison.
 - [ ] Reject missing required task scores and unsupported evaluation modes; report per-domain and worst-slice damage, not just a mean.
 - [ ] Evaluate the exact combined candidate, including directional edits, then reload and evaluate the physical export. Independently gate KEEP preservation and target-change success.
@@ -54,7 +56,7 @@ Required now: 4A, 4B, then a narrow 4C and Stage 5 implementation, followed by 4
 - [ ] Keep the source checkpoint immutable. Write candidates to separate directories; retain parent manifests and required original tensors/checkpoints for restoration. Verify restoration hashes where exact reconstruction is promised.
 - [ ] Add bounded-memory activation capture and baseline caching keyed to all inputs affecting scores.
 
-Progress: unit tests for restricted artifact loading, remote-code opt-in, tokenizer compatibility, and invalid comparison scores were added on 2026-09-30. They have not been executed in this GitHub-only session.
+Progress: unit tests for restricted artifact loading, remote-code opt-in, tokenizer compatibility, invalid comparison scores, and padding-aware teacher-forced NLL were added on 2026-09-30. GitHub Actions CI passed for the safety tests before the NLL addition; CI for the NLL addition is pending.
 
 Acceptance: tiny real-model fixtures exercise identity, changed candidate, empty/non-finite input rejection, stale-model plan rejection, export/reload parity, and restoration. A candidate must not pass when a required metric is unavailable. Publish one reproducible held-out evaluation report without simulation/fallback scoring.
 
