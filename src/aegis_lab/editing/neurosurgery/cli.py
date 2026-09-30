@@ -76,6 +76,28 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("search-moe", help="Search physical expert-pruning candidates")
     _add_search_common(p)
 
+    p = sub.add_parser("optimize", help="Stage-4 joint constrained structural search")
+    p.add_argument("--model", required=True)
+    p.add_argument("--keep", required=True)
+    p.add_argument("--out", required=True)
+    p.add_argument("--mlp-profile")
+    p.add_argument("--attention-profile")
+    p.add_argument("--moe-profile")
+    p.add_argument("--layer-search")
+    p.add_argument("--mlp-ratios", type=_ratios, default=[1.0, 0.95, 0.9, 0.85, 0.8])
+    p.add_argument("--attention-ratios", type=_ratios, default=[1.0, 0.875, 0.75, 0.625])
+    p.add_argument("--moe-ratios", type=_ratios, default=[1.0, 0.875, 0.75, 0.625])
+    p.add_argument("--max-drop-layers", type=int, default=3)
+    p.add_argument("--max-mean-kl", type=float, default=0.02)
+    p.add_argument("--min-top1-agreement", type=float, default=0.95)
+    p.add_argument("--max-trials", type=int, default=64)
+    p.add_argument("--strategy", choices=["frontier", "exhaustive"], default="frontier")
+    p.add_argument("--contrast-weight", type=float, default=0.25)
+    p.add_argument("--align-to", type=int, default=64)
+    p.add_argument("--batch-size", type=int, default=2)
+    p.add_argument("--max-prompts", type=int, default=64)
+    p.add_argument("--device", default="auto")
+
     p = sub.add_parser("search-layers", help="Evaluate every single transformer-layer deletion")
     p.add_argument("--model", required=True)
     p.add_argument("--keep", required=True)
@@ -117,7 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("apply", help="Apply a reviewed plan and save a new checkpoint")
     p.add_argument("--model", required=True)
-    p.add_argument("--profile", required=True)
+    p.add_argument("--profile", help="residual profile.pt; required only when plan contains directional ablation")
     p.add_argument("--plan", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--device", default="auto")
@@ -165,6 +187,32 @@ def main() -> None:
     if args.cmd == "search-moe":
         from .moe import run_moe_search
         run_moe_search(args.model, args.keep, args.profile, args.out, args.ratios, args.batch_size, args.max_prompts, args.contrast_weight, args.device)
+        return
+    if args.cmd == "optimize":
+        from .optimizer import run_optimizer
+        report = run_optimizer(
+            args.model,
+            args.keep,
+            args.out,
+            args.mlp_profile,
+            args.attention_profile,
+            args.moe_profile,
+            args.layer_search,
+            args.mlp_ratios,
+            args.attention_ratios,
+            args.moe_ratios,
+            args.max_drop_layers,
+            args.max_mean_kl,
+            args.min_top1_agreement,
+            args.max_trials,
+            args.strategy,
+            args.contrast_weight,
+            args.align_to,
+            args.batch_size,
+            args.max_prompts,
+            args.device,
+        )
+        print(json.dumps(report["best"], indent=2))
         return
     if args.cmd == "search-layers":
         from .search_layers import run_layer_search
