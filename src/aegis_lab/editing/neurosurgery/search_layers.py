@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional, Union
+
 import json
 from pathlib import Path
 
@@ -14,7 +16,7 @@ def run_layer_search(
     keep_path: str,
     out_dir: str,
     batch_size: int = 4,
-    max_prompts: int | None = 64,
+    max_prompts: Optional[int] = 64,
     device: str = "auto",
 ) -> None:
     device = resolve_device(device)
