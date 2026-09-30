@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional, Union
+
 import json
 from pathlib import Path
 
@@ -14,7 +16,7 @@ def run_greedy_layer_search(
     max_mean_kl: float = 0.02,
     max_layers: int = 4,
     batch_size: int = 4,
-    max_prompts: int | None = 64,
+    max_prompts: Optional[int] = 64,
     device: str = "auto",
 ) -> None:
     """Greedy interacting layer deletion search.
