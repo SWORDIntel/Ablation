@@ -64,7 +64,15 @@ aegis-neurosurgery optimize \
   --min-top1-agreement 0.95 \
   --max-trials 64
 
-# 5. Physical surgery from the optimizer's exact selections
+# 5. Preview the exact edits without modifying the model
+aegis-neurosurgery preview \
+  --model /models/Qwen3-8B \
+  --plan runs/opt/optimized_plan.yaml
+
+# If the plan includes directional edits, also pass:
+#   --profile runs/residual/profile.pt
+
+# 6. Physical surgery from the reviewed selections
 aegis-neurosurgery apply \
   --model /models/Qwen3-8B \
   --plan runs/opt/optimized_plan.yaml \
