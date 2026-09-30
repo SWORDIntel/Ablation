@@ -29,3 +29,5 @@ python -m unittest \
   tests.unit.test_quantization_unit \
   tests.unit.test_thermal_unit \
   -v
+
+python -m unittest discover -s tests/unit -p 'test_neurosurgery_*.py' -v
