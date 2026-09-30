@@ -70,7 +70,7 @@ Acceptance: tiny real-model fixtures exercise identity, changed candidate, empty
 - [ ] Support arbitrary edit composition with original-to-current index remapping. Reject unsupported paths rather than selecting similarly named tensors.
 - [ ] Add a capability matrix per adapter and operation, with tested architecture/version fixtures. Integrate legacy intervention modules only after contract tests pass.
 
-Progress: a read-only preview command and MLP dry-run regression tests were added on 2026-09-30. CI for this phase is pending. Preview does not mutate weights; it is not yet a substitute for apply followed by save/reload validation.
+Progress: read-only previews for MLP, attention, and MoE selections are covered by unit tests. GitHub Actions CI passed for the combined phase at commit `b4cdb3e` (2026-09-30). Preview does not mutate weights; it is not yet a substitute for apply followed by save/reload validation.
 
 Acceptance: an operator can preview and apply an exact MLP-channel, attention-group, or expert edit; invalid combinations fail before any write; unselected tensors remain unchanged except declared dependent tensors. Structural edits survive save/reload and cached generation.
 
