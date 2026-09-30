@@ -1,19 +1,25 @@
 # Neurosurgery Validation
 
-The search metric is next-token KL divergence from the untouched model on a held-out KEEP workload, plus top-1 token agreement.
+The structural search gate compares next-token KL divergence from the untouched model on a KEEP workload, plus top-1 token agreement. This is a cheap candidate-ranking gate, not proof of retained task competence.
 
-This metric is intentionally cheap enough to run for many structural candidates. It is a **gate**, not a claim that the models are behaviorally identical.
+## Current checks
 
-Recommended acceptance sequence:
+- Baseline and candidate tokenizers must have identical vocabularies and special-token maps.
+- Empty prompt sets, sample-count mismatches, incompatible vocabulary dimensions, and non-finite log probabilities fail closed.
+- Model repository code is disabled by default. To run a model that requires custom code, set `AEGIS_TRUST_REMOTE_CODE=1` only after reviewing and trusting that repository. This executes its code in the current Python process.
+- Neurosurgery profile and selection `.pt` files load with PyTorch `weights_only=True`. Treat older artifacts that cannot be loaded this way as untrusted; regenerate them rather than enabling unrestricted pickle loading.
+- These checks do not yet bind validation to immutable model/tokenizer revisions or dataset fingerprints.
 
-1. search candidates on a calibration KEEP set;
-2. generate a checksum-bound surgery plan;
-3. apply structural edits once;
-4. reload the saved checkpoint from disk;
-5. run `aegis-neurosurgery validate` on a separate KEEP validation set;
-6. run task-specific benchmarks before promotion;
-7. only then quantize or produce hardware-specific packed artifacts.
+## Recommended acceptance sequence
 
-For aggressive surgery, add long-generation evaluations, perplexity, task benchmarks, and domain-specific regression suites. A low one-token KL can miss failures that appear later in generation.
+1. Search candidates on a calibration KEEP set.
+2. Generate a checksum-bound surgery plan.
+3. Apply structural edits once to a separate output directory.
+4. Reload the saved checkpoint from disk.
+5. Run `aegis-neurosurgery validate` on a separate KEEP validation set.
+6. Run task-specific benchmarks before promotion.
+7. Quantize or produce hardware-specific packed artifacts only after quality acceptance.
+
+For aggressive surgery, add teacher-forced continuation loss, long-generation evaluations, perplexity, task benchmarks, and domain-specific regression suites. A low one-token KL can miss failures that appear later in generation. Validation currently checks the prompt's final-position next-token distribution; it does not yet measure whether the candidate successfully changes a target behavior.
 
 Do not reuse the exact search corpus as the only final validation corpus.
