@@ -20,7 +20,7 @@ The `aegis-neurosurgery` CLI currently supports:
 
 The physical operations are deliberately behind architecture adapters. Search can be generic; changing shapes cannot.
 
-Use `preview` before `apply` to inspect the resolved targets, original and resulting tensor shapes, kept indices, tied-parameter aliases, selection checksums, and approximate parameter bytes removed. Preview is read-only; it does not rewrite or reload-test the candidate checkpoint.
+Use `select` to compile explicit typed selectors into a checksum-bound surgery plan and read-only preview. Use `preview` before `apply` to inspect the resolved targets, original and resulting tensor shapes, kept indices, tied-parameter aliases, selection checksums, and approximate parameter bytes removed. Preview is read-only; it does not rewrite or reload-test the candidate checkpoint.
 
 ## Basic sequence
 
@@ -114,3 +114,34 @@ Dense MLP and attention surgery cover the common Llama/Qwen/Mistral/Gemma-style 
 MoE surgery currently covers HF-style blocks exposing a `ModuleList` named `experts` and a linear `gate` or `router`, including Mixtral-like layouts and compatible derivatives. Shared experts are intentionally left untouched.
 
 Unsupported shapes fail closed rather than guessing.
+
+## Explicit selector files
+
+A selector file uses schema version 1. It accepts layer deletion, directional module paths, and the current structural adapters. Every structural map must name every supported layer and retain the same number of channels/groups/experts per layer so the result remains representable by the model config.
+
+```yaml
+version: 1
+drop_layers: [5]
+directional:
+  layers: [2, 3]
+  targets: [self_attn.o_proj]
+  strength: 0.5
+  norm_preserve: true
+  preserve_subspace: true
+mlp:
+  keep_indices:
+    "0": [0, 2, 4, 6]
+    "1": [1, 3, 5, 7]
+```
+
+Compile and inspect it before applying:
+
+```bash
+aegis-neurosurgery select --model /models/model --selectors selectors.yaml \
+  --profile runs/residual/profile.pt --out runs/compiled
+aegis-neurosurgery preview --model /models/model \
+  --plan runs/compiled/surgery_plan.yaml --profile runs/residual/profile.pt
+# Review surgery_plan.yaml and preview.json, then apply to a separate output path.
+```
+
+Structural selector sections are `mlp.keep_indices`, `attention.keep_groups`, and `moe.keep_experts`; each maps layer IDs to explicit retained indices. Omit sections for untouched structures. Directional `targets` are module paths relative to each selected transformer layer and must resolve to 2D weights. The compiler rejects unknown fields, invalid indices, incomplete maps, and an existing output directory. Compilation does not edit model weights. The compiled plan still requires operator review and independent KEEP/target validation; selectors do not establish quality or safe composition.
