@@ -5,6 +5,7 @@ from typing import Optional, Union
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Iterable
 
@@ -132,3 +133,19 @@ def file_sha256(path: Union[str, Path]) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+
+def load_tensor_artifact(path: Union[str, Path]):
+    """Load tensor-and-primitive artifacts without enabling Python pickle globals."""
+    return torch.load(Path(path), map_location="cpu", weights_only=True)
+
+
+def trust_remote_code_enabled() -> bool:
+    """Remote model code is disabled unless the operator explicitly opts in."""
+    enabled = os.environ.get("AEGIS_TRUST_REMOTE_CODE", "").strip() == "1"
+    if enabled:
+        LOG.warning(
+            "AEGIS_TRUST_REMOTE_CODE=1 enables execution of code from the selected model repository"
+        )
+    return enabled
