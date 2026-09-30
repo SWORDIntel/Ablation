@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional, Union
+
 import hashlib
 import json
 import logging
@@ -18,7 +20,7 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
-def load_prompts(path: str | Path, max_prompts: int | None = None) -> list[str]:
+def load_prompts(path: Union[str, Path], max_prompts: Optional[int] = None) -> list[str]:
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(p)
@@ -124,7 +126,7 @@ def parameter_bytes(module: torch.nn.Module) -> int:
     return sum(p.numel() * p.element_size() for p in module.parameters())
 
 
-def file_sha256(path: str | Path) -> str:
+def file_sha256(path: Union[str, Path]) -> str:
     h = hashlib.sha256()
     with Path(path).open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
