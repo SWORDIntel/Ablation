@@ -154,6 +154,14 @@ def build_preview(model, plan_file: str, profile_path: str | None = None) -> dic
             direction = profile["directions"][layer]
             if not isinstance(direction, torch.Tensor) or direction.numel() not in weight.shape:
                 raise ValueError(f"direction shape is incompatible with layer {layer} target {target}")
+            basis = None
+            if bool(ablation.get("preserve_subspace", True)):
+                bases = profile.get("preserve_bases")
+                if not isinstance(bases, list) or len(bases) != len(layers):
+                    raise ValueError("directional profile preserve_bases are missing or malformed")
+                basis = bases[layer]
+                if not isinstance(basis, torch.Tensor) or basis.ndim != 2 or basis.shape[0] not in weight.shape:
+                    raise ValueError(f"preservation basis is incompatible with layer {layer} target {target}")
             add({
                 "kind": "directional_weight_edit",
                 "layer": layer,
@@ -162,6 +170,7 @@ def build_preview(model, plan_file: str, profile_path: str | None = None) -> dic
                 "shape_before": list(weight.shape),
                 "shape_after": list(weight.shape),
                 "direction_length": int(direction.numel()),
+                "preserve_basis_shape": list(basis.shape) if basis is not None else None,
                 "strength": float(ablation.get("strength", 0.5)),
                 "preserve_subspace": bool(ablation.get("preserve_subspace", True)),
                 "parameter_aliases": aliases.get(id(weight), []),
@@ -179,6 +188,10 @@ def build_preview(model, plan_file: str, profile_path: str | None = None) -> dic
         counts = {int(x.numel()) for x in kept}
         if len(counts) != 1:
             raise ValueError(f"MLP selection counts are not reload-compatible: {sorted(counts)}")
+        config = getattr(model, "config", None)
+        text_config = getattr(config, "text_config", None) if config is not None else None
+        if not any(hasattr(x, "intermediate_size") for x in (config, text_config) if x is not None):
+            raise ValueError("model config has no intermediate_size field to repair")
         for i, (triplet, idx) in enumerate(zip(triplets, kept)):
             k = int(idx.numel())
             for module, parameter_name, shape, axis in (
@@ -203,6 +216,15 @@ def build_preview(model, plan_file: str, profile_path: str | None = None) -> dic
         counts = {int(x.numel()) for x in kept}
         if len(counts) != 1 or len({p.group_size for p in packs}) != 1 or len({p.head_dim for p in packs}) != 1:
             raise ValueError("attention selections do not have reload-compatible geometry")
+        new_kv_heads = next(iter(counts))
+        new_heads = new_kv_heads * packs[0].group_size
+        config = getattr(model, "config", None)
+        text_config = getattr(config, "text_config", None) if config is not None else None
+        config_candidates = [x for x in (config, text_config) if x is not None]
+        if not any(hasattr(x, "num_attention_heads") for x in config_candidates):
+            raise ValueError("model config has no num_attention_heads field to repair")
+        if new_heads != new_kv_heads and not any(hasattr(x, "num_key_value_heads") for x in config_candidates):
+            raise ValueError("GQA model config has no num_key_value_heads field to repair")
         for i, (pack, groups) in enumerate(zip(packs, kept)):
             group_ids = groups.tolist()
             q_heads = [g * pack.group_size + offset for g in group_ids for offset in range(pack.group_size)]
@@ -232,6 +254,15 @@ def build_preview(model, plan_file: str, profile_path: str | None = None) -> dic
         counts = {int(x.numel()) for x in kept}
         if len(counts) != 1:
             raise ValueError(f"MoE selection counts are not reload-compatible: {sorted(counts)}")
+        kept_count = next(iter(counts))
+        config = getattr(model, "config", None)
+        text_config = getattr(config, "text_config", None) if config is not None else None
+        config_candidates = [x for x in (text_config, config) if x is not None]
+        top_k = next((int(x.num_experts_per_tok) for x in config_candidates if hasattr(x, "num_experts_per_tok")), None)
+        if top_k is not None and kept_count < top_k:
+            raise ValueError(f"cannot keep {kept_count} experts when num_experts_per_tok={top_k}")
+        if not any(hasattr(x, attr) for x in config_candidates for attr in ("num_local_experts", "num_experts")):
+            raise ValueError("model config has no expert-count field to repair")
         for block, idx in zip(blocks, kept):
             k = int(idx.numel())
             weight = block.router.weight
