@@ -204,9 +204,12 @@ def exhaustive_search(
             )
         )
     ranked.sort()
+    baseline_key = CandidateState().as_tuple()
+    ordered = [row for row in ranked if row[-1] == baseline_key]
+    ordered.extend(row for row in ranked if row[-1] != baseline_key)
     if max_trials > 0:
-        ranked = ranked[:max_trials]
-    return [evaluate_fn(CandidateState.from_tuple(row[-1])) for row in ranked]
+        ordered = ordered[:max_trials]
+    return [evaluate_fn(CandidateState.from_tuple(row[-1])) for row in ordered]
 
 
 def _load_profile(path: Optional[str]) -> Optional[Dict[str, Any]]:
