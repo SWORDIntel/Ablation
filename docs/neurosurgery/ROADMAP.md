@@ -62,15 +62,15 @@ Acceptance: tiny real-model fixtures exercise identity, changed candidate, empty
 
 ### Stage 4B — explicit component selection and operation contract
 
-- [ ] Build a typed selector over adapter-resolved module paths, layer IDs, MLP channels, attention heads/groups, experts/router rows, tensor slices, and runtime activation positions.
+- [x] Add typed YAML selectors for layer deletion, directional module paths, MLP channels, attention groups, and MoE experts; compile to the current checksum-bound plan and preview format. Arbitrary tensor slices and runtime activation positions remain unsupported.
 - [x] Add read-only `aegis-neurosurgery preview` for the current surgery-plan format. It resolves target names, original indices, dependent tensor shapes, tied-parameter aliases, adapter geometry, and per-operation byte estimates.
 - [ ] Unify mask, scale, clamp, project, replace, low-rank delta, and physical remove under one plan schema. Each operation declares runtime-only versus persistent semantics and export support.
 - [x] Preview validates selection bounds/duplicates, supported GQA grouping, MoE top-k, directional dimensions, and required config fields before apply. Tied aliases are reported; unsafe shared-weight edits and conflicting operation detection remain open.
 - [x] Report the current fixed order (directional edits, structured slices, layer removal) and preserve original model indices in preview output.
-- [ ] Support arbitrary edit composition with original-to-current index remapping. Reject unsupported paths rather than selecting similarly named tensors.
+- [ ] Support arbitrary edit composition with original-to-current index remapping. Reject unsupported paths rather than selecting similarly named tensors. Current selectors preserve source layer IDs and require uniform kept counts; they do not provide general index remapping.
 - [ ] Add a capability matrix per adapter and operation, with tested architecture/version fixtures. Integrate legacy intervention modules only after contract tests pass.
 
-Progress: read-only previews for MLP, attention, and MoE selections are covered by unit tests. GitHub Actions CI passed for the combined phase at commit `b4cdb3e` (2026-09-30). Preview does not mutate weights; it is not yet a substitute for apply followed by save/reload validation.
+Progress: read-only previews for MLP, attention, and MoE selections are covered by unit tests. Typed YAML selectors now compile explicit choices to plan artifacts and a preview report, with validation for supported fields, layer coverage, bounds, and output collisions. GitHub Actions CI passed for preview at commit `b4cdb3e` (2026-09-30); CI for selector compilation is pending. Preview does not mutate weights; it is not yet a substitute for apply followed by save/reload validation.
 
 Acceptance: an operator can preview and apply an exact MLP-channel, attention-group, or expert edit; invalid combinations fail before any write; unselected tensors remain unchanged except declared dependent tensors. Structural edits survive save/reload and cached generation.
 
@@ -169,7 +169,7 @@ Deliver 4A first without broadening architecture support:
 4. Validate the full materialized candidate after reload.
 5. Add a tiny-model end-to-end fixture and documented baseline/edit/restore example.
 
-Then implement typed selectors and preview (4B), one causal patching workflow (4C), and selected-module LoRA recovery (5). This sequence makes existing surgery measurable before adding more ways to mutate a model.
+Typed selectors and preview now cover the initial 4B slice. Next, resolve shared-weight conflicts and operation composition, then implement one causal patching workflow (4C) and selected-module LoRA recovery (5). This sequence makes existing surgery measurable before adding more ways to mutate a model.
 
 ## Validation and provenance policy
 
