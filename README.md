@@ -207,13 +207,16 @@ python3 fw_launcher.py aegis-benchmark
 
 AEGIS-LAB now includes a structural **model neurosurgery** workflow for reducing checkpoint size and inference memory traffic rather than only changing behavior in-place.
 
-Implemented through Stage 3:
+Implemented through Stage 4:
 
 - KEEP/DROP residual profiling with contrastive directional edits and SVD preservation bases;
 - reversible whole-layer deletion search and greedy interacting deletion;
 - gated-MLP channel profiling, masked search, and physical gate/up/down tensor slicing;
 - GQA/MHA group profiling and physical Q/K/V/O slicing while preserving GQA grouping;
 - MoE router profiling and physical router/expert slicing for supported HF-style expert blocks;
+- Stage-4 joint constrained search across layers, MLP width, attention groups, and MoE experts;
+- Pareto reporting over resident bytes removed, estimated dense MACs removed, and KL;
+- automatic checksum-bound `optimized_plan.yaml` materialization;
 - checksum-bound surgery plans and post-surgery KL/top-1 validation.
 
 Install the project normally, then use the dedicated entry point:
