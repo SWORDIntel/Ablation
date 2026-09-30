@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional, Union
+
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,7 +21,7 @@ class _RouterAccumulator:
     probability_sums: list[torch.Tensor]
     topk_counts: list[torch.Tensor]
     token_counts: list[int]
-    attention_mask: torch.Tensor | None = None
+    attention_mask: Optional[torch.Tensor] = None
 
 
 def _configured_top_k(model, expert_count: int) -> int:
@@ -106,7 +108,7 @@ def run_moe_profile(
     drop_path: str,
     out_dir: str,
     batch_size: int = 2,
-    max_prompts: int | None = 64,
+    max_prompts: Optional[int] = 64,
     device: str = "auto",
 ) -> None:
     device = resolve_device(device)
@@ -249,7 +251,7 @@ def run_moe_search(
     out_dir: str,
     keep_ratios: list[float],
     batch_size: int = 2,
-    max_prompts: int | None = 64,
+    max_prompts: Optional[int] = 64,
     contrast_weight: float = 0.25,
     device: str = "auto",
 ) -> None:
