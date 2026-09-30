@@ -246,7 +246,7 @@ def run_mlp_search(
 ) -> None:
     device = resolve_device(device)
     prompts = load_prompts(keep_path, max_prompts)
-    profile = torch.load(profile_path, map_location="cpu", weights_only=False)
+    profile = load_tensor_artifact(profile_path)
     keep_imp = profile["keep_importance"]
     drop_imp = profile["drop_importance"]
 
