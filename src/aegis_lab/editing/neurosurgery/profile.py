@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional, Union
+
 import json
 from pathlib import Path
 
@@ -75,7 +77,7 @@ def run_profile(
     batch_size: int = 4,
     basis_rank: int = 32,
     basis_samples: int = 64,
-    max_prompts: int | None = None,
+    max_prompts: Optional[int] = None,
     device: str = "auto",
 ) -> None:
     device = resolve_device(device)
