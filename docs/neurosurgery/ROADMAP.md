@@ -28,18 +28,17 @@
 - reversible router masking
 - physical expert/router slicing with config repair
 
+### Stage 4 — constrained multi-objective search
+- joint search across layer deletion, MLP width, attention groups, and MoE experts
+- best-first constrained frontier search with exhaustive fallback
+- combined candidate evaluation against the untouched model
+- hard KEEP gates for mean KL and top-1 token agreement
+- Pareto front over resident bytes removed, estimated dense MACs removed, and KL
+- overlap-corrected savings when whole layers and internal structures are removed together
+- automatic materialization of exact checksum-bound selections into `optimized_plan.yaml`
+- no fake latency claims from masked candidates; latency work uses an explicit structural compute proxy until the final checkpoint exists
+
 ## Next
-
-### Stage 4 — search optimizer
-Replace hand-supplied ratio sweeps with constrained multi-objective search. Candidate objective:
-
-```text
-maximize bytes_removed / latency_improvement
-subject to KEEP mean_KL <= threshold
-           retained task scores >= floors
-```
-
-The search engine should operate on masks and only materialize the final candidate.
 
 ### Stage 5 — recovery/distillation
 Use the untouched model or a stronger teacher on H100/L40S-class hardware to recover quality after a structural cut. First target: short post-surgery LoRA/full-parameter recovery on retained-domain data.
