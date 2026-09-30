@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional, Union
+
 import json
 from pathlib import Path
 
@@ -13,8 +15,8 @@ from .moe import select_moe_experts
 
 
 def _select_drop_layers(
-    search_path: str | None,
-    greedy_search_path: str | None,
+    search_path: Optional[str],
+    greedy_search_path: Optional[str],
     max_mean_kl: float,
     max_drop_layers: int,
 ) -> list[int]:
@@ -31,7 +33,7 @@ def _select_drop_layers(
     return [int(r["layer"]) for r in passing[:max_drop_layers]]
 
 
-def _choose_structured_candidate(search: dict, max_mean_kl: float) -> dict | None:
+def _choose_structured_candidate(search: dict, max_mean_kl: float) -> Optional[dict]:
     passing = [r for r in search.get("results", []) if float(r["mean_kl"]) <= max_mean_kl]
     if not passing:
         return None
@@ -39,7 +41,7 @@ def _choose_structured_candidate(search: dict, max_mean_kl: float) -> dict | Non
     return passing[0]
 
 
-def _load_checked_profile(search: dict, profile_path: str | None, label: str) -> tuple[Path, dict]:
+def _load_checked_profile(search: dict, profile_path: Optional[str], label: str) -> tuple[Path, dict]:
     path = Path(profile_path or search.get("profile", ""))
     if not path.exists():
         raise FileNotFoundError(f"{label} profile not found: {path}")
@@ -55,7 +57,7 @@ def _write_selection(out_path: Path, suffix: str, payload: dict) -> tuple[Path, 
     return selection_path, file_sha256(selection_path)
 
 
-def _build_mlp_plan(search_path: str | None, profile_path: str | None, out: Path, max_mean_kl: float):
+def _build_mlp_plan(search_path: Optional[str], profile_path: Optional[str], out: Path, max_mean_kl: float):
     if not search_path:
         return None
     search = json.loads(Path(search_path).read_text(encoding="utf-8"))
@@ -98,7 +100,7 @@ def _build_mlp_plan(search_path: str | None, profile_path: str | None, out: Path
     }
 
 
-def _build_attention_plan(search_path: str | None, profile_path: str | None, out: Path, max_mean_kl: float):
+def _build_attention_plan(search_path: Optional[str], profile_path: Optional[str], out: Path, max_mean_kl: float):
     if not search_path:
         return None
     search = json.loads(Path(search_path).read_text(encoding="utf-8"))
@@ -138,7 +140,7 @@ def _build_attention_plan(search_path: str | None, profile_path: str | None, out
     }
 
 
-def _build_moe_plan(search_path: str | None, profile_path: str | None, out: Path, max_mean_kl: float):
+def _build_moe_plan(search_path: Optional[str], profile_path: Optional[str], out: Path, max_mean_kl: float):
     if not search_path:
         return None
     search = json.loads(Path(search_path).read_text(encoding="utf-8"))
@@ -182,19 +184,19 @@ def _build_moe_plan(search_path: str | None, profile_path: str | None, out: Path
 
 def generate_plan(
     profile_path: str,
-    search_path: str | None,
+    search_path: Optional[str],
     out_path: str,
     max_mean_kl: float = 0.02,
     max_drop_layers: int = 1,
     ablation_layers: int = 3,
     ablation_strength: float = 0.5,
-    greedy_search_path: str | None = None,
-    mlp_search_path: str | None = None,
-    mlp_profile_path: str | None = None,
-    attention_search_path: str | None = None,
-    attention_profile_path: str | None = None,
-    moe_search_path: str | None = None,
-    moe_profile_path: str | None = None,
+    greedy_search_path: Optional[str] = None,
+    mlp_search_path: Optional[str] = None,
+    mlp_profile_path: Optional[str] = None,
+    attention_search_path: Optional[str] = None,
+    attention_profile_path: Optional[str] = None,
+    moe_search_path: Optional[str] = None,
+    moe_profile_path: Optional[str] = None,
 ) -> dict:
     profile = json.loads(Path(profile_path).read_text(encoding="utf-8"))
     out = Path(out_path)
