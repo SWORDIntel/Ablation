@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional, Union
+
 import gc
 import json
 from pathlib import Path
@@ -65,9 +67,9 @@ def run_validate(
     candidate_path: str,
     keep_path: str,
     batch_size: int,
-    max_prompts: int | None,
-    max_mean_kl: float | None,
-    out_path: str | None,
+    max_prompts: Optional[int],
+    max_mean_kl: Optional[float],
+    out_path: Optional[str],
     device: str,
 ) -> dict:
     device = resolve_device(device)
