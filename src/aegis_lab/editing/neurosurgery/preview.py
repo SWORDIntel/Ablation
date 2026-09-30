@@ -339,4 +339,7 @@ def build_preview(model, plan_file: str, profile_path: Optional[str] = None) -> 
 def run_preview(model_path: str, plan_path: str, profile_path: Optional[str] = None, device: str = "auto") -> dict:
     device = resolve_device(device)
     model, _ = _load_hf(model_path, device)
-    return build_preview(model, plan_path, profile_path)
+    report = build_preview(model, plan_path, profile_path)
+    report["source_model"] = model_path
+    report["device"] = device
+    return report
