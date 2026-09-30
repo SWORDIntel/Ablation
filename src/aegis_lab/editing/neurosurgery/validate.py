@@ -44,6 +44,35 @@ def next_token_logprobs(model, tokenizer, prompts: list[str], batch_size: int) -
     return result
 
 
+def mean_teacher_forced_nll(model, tokenizer, prompts: list[str], batch_size: int) -> dict:
+    """Return mean next-token cross-entropy over unpadded tokens in the supplied text."""
+    total_nll = 0.0
+    total_tokens = 0
+    with torch.inference_mode():
+        for batch in tqdm(list(batches(prompts, batch_size)), desc="sequence-nll", unit="batch"):
+            enc = tokenizer(batch, return_tensors="pt", padding=True, truncation=True)
+            enc = {k: v.to(model.device) for k, v in enc.items()}
+            labels = enc["input_ids"][:, 1:]
+            valid = enc.get("attention_mask", torch.ones_like(enc["input_ids"]))[:, 1:].bool()
+            if labels.numel() == 0 or not valid.any():
+                continue
+            out = model(**enc, use_cache=False, return_dict=True)
+            logits = out.logits[:, :-1, :].float()
+            losses = F.cross_entropy(
+                logits.reshape(-1, logits.shape[-1]),
+                labels.reshape(-1),
+                reduction="none",
+            ).reshape(labels.shape)
+            selected = losses.masked_select(valid)
+            if not torch.isfinite(selected).all():
+                raise ValueError("teacher-forced scoring produced non-finite token loss")
+            total_nll += float(selected.sum().item())
+            total_tokens += int(selected.numel())
+    if total_tokens == 0:
+        raise ValueError("no next-token targets available for teacher-forced scoring")
+    return {"mean_nll": total_nll / total_tokens, "tokens": total_tokens}
+
+
 def compare_logprobs(base: list[torch.Tensor], candidate: list[torch.Tensor]) -> dict:
     if not base:
         raise ValueError("cannot validate an empty prompt set")
@@ -92,6 +121,7 @@ def run_validate(
     LOG.info("baseline logits: %s", base_path)
     base_model, tok = _load_hf(base_path, device)
     base = next_token_logprobs(base_model, tok, prompts, batch_size)
+    base_nll = mean_teacher_forced_nll(base_model, tok, prompts, batch_size)
     del base_model
     gc.collect()
     if torch.cuda.is_available():
@@ -101,7 +131,12 @@ def run_validate(
     cand_model, cand_tok = _load_hf(candidate_path, device)
     assert_compatible_tokenizers(tok, cand_tok)
     cand = next_token_logprobs(cand_model, cand_tok, prompts, batch_size)
+    candidate_nll = mean_teacher_forced_nll(cand_model, cand_tok, prompts, batch_size)
     metrics = compare_logprobs(base, cand)
+    metrics["base_teacher_forced_nll"] = base_nll["mean_nll"]
+    metrics["candidate_teacher_forced_nll"] = candidate_nll["mean_nll"]
+    metrics["teacher_forced_nll_delta"] = candidate_nll["mean_nll"] - base_nll["mean_nll"]
+    metrics["teacher_forced_tokens"] = min(base_nll["tokens"], candidate_nll["tokens"])
     metrics["passed"] = max_mean_kl is None or metrics["mean_kl"] <= max_mean_kl
     if out_path:
         Path(out_path).write_text(json.dumps(metrics, indent=2), encoding="utf-8")
