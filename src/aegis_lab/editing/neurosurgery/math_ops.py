@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional, Union
+
 import torch
 import torch.nn.functional as F
 
@@ -32,7 +34,7 @@ def preservation_basis(samples: torch.Tensor, rank: int) -> torch.Tensor:
     return vh[:r].T.contiguous()
 
 
-def constrain_update_to_preserve_basis(delta: torch.Tensor, basis: torch.Tensor | None) -> torch.Tensor:
+def constrain_update_to_preserve_basis(delta: torch.Tensor, basis: Optional[torch.Tensor]) -> torch.Tensor:
     """Remove update components that lie inside a preservation subspace.
 
     For a weight update [out,in] and basis [out,r], project in output space:
@@ -79,7 +81,7 @@ def apply_constrained_directional_surgery(
     weight: torch.Tensor,
     direction: torch.Tensor,
     strength: float,
-    preserve_basis: torch.Tensor | None = None,
+    preserve_basis: Optional[torch.Tensor] = None,
     norm_preserve: bool = True,
 ) -> torch.Tensor:
     delta = projected_weight_update(weight, direction, strength)
