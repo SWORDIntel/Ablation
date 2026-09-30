@@ -56,7 +56,7 @@ Required now: 4A, 4B, then a narrow 4C and Stage 5 implementation, followed by 4
 - [ ] Keep the source checkpoint immutable. Write candidates to separate directories; retain parent manifests and required original tensors/checkpoints for restoration. Verify restoration hashes where exact reconstruction is promised.
 - [ ] Add bounded-memory activation capture and baseline caching keyed to all inputs affecting scores.
 
-Progress: unit tests for restricted artifact loading, remote-code opt-in, tokenizer compatibility, invalid comparison scores, and padding-aware teacher-forced NLL were added on 2026-09-30. GitHub Actions CI passed for the initial safety tests before the sequence-scoring addition; the expanded suite is running.
+Progress: unit tests for restricted artifact loading, remote-code opt-in, tokenizer compatibility, invalid comparison scores, and padding-aware teacher-forced NLL were added on 2026-09-30. GitHub Actions CI passed for the expanded suite at commit `88775ff` (2026-09-30), including `ci_smoke.sh` and neurosurgery unit-test discovery.
 
 Acceptance: tiny real-model fixtures exercise identity, changed candidate, empty/non-finite input rejection, stale-model plan rejection, export/reload parity, and restoration. A candidate must not pass when a required metric is unavailable. Publish one reproducible held-out evaluation report without simulation/fallback scoring.
 
