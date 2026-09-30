@@ -144,7 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", required=True)
     p.add_argument("--device", default="auto")
 
-    p = sub.add_parser("validate", help="Compare candidate next-token distribution against base")
+    p = sub.add_parser("validate", help="Compare candidate next-token distributions and teacher-forced text loss")
     p.add_argument("--base", required=True)
     p.add_argument("--candidate", required=True)
     p.add_argument("--keep", required=True)
