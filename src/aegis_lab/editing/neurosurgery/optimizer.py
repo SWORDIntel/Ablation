@@ -12,7 +12,7 @@ import yaml
 
 from .adapters import get_attention_adapter, get_mlp_adapter, get_moe_adapter
 from .attention import _register_attention_masks, select_attention_groups
-from .common import LOG, file_sha256, get_layers, load_prompts, parameter_bytes, resolve_device, set_layers
+from .common import LOG, file_sha256, get_layers, load_tensor_artifact, load_prompts, parameter_bytes, resolve_device, set_layers
 from .mlp import _register_mlp_masks, select_mlp_channels
 from .moe import _configured_top_k, _register_router_masks, select_moe_experts
 from .validate import _load_hf, compare_logprobs, next_token_logprobs
@@ -215,7 +215,7 @@ def exhaustive_search(
 def _load_profile(path: Optional[str]) -> Optional[Dict[str, Any]]:
     if not path:
         return None
-    return torch.load(path, map_location="cpu", weights_only=False)
+    return load_tensor_artifact(path)
 
 
 def _layer_order(search_path: Optional[str], max_drop_layers: int) -> List[int]:
