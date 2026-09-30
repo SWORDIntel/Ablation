@@ -4,7 +4,7 @@ The structural search gate compares next-token KL divergence from the untouched 
 
 ## Current checks
 
-- Baseline and candidate tokenizers must have identical vocabularies and special-token maps.
+- Baseline and candidate tokenizers must have identical vocabularies and special-token maps. Validation also compares each sample's token IDs and attention mask before comparing scores.
 - Empty prompt sets, sample-count mismatches, incompatible vocabulary dimensions, and non-finite log probabilities fail closed.
 - Model repository code is disabled by default. To run a model that requires custom code, set `AEGIS_TRUST_REMOTE_CODE=1` only after reviewing and trusting that repository. This executes its code in the current Python process.
 - Neurosurgery profile and selection `.pt` files load with PyTorch `weights_only=True`. Treat older artifacts that cannot be loaded this way as untrusted; regenerate them rather than enabling unrestricted pickle loading.
