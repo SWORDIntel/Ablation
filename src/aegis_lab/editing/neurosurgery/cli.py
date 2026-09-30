@@ -137,6 +137,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--ablation-layers", type=int, default=3)
     p.add_argument("--ablation-strength", type=float, default=0.5)
 
+    p = sub.add_parser("preview", help="Resolve and inspect a surgery plan without modifying the model")
+    p.add_argument("--model", required=True)
+    p.add_argument("--plan", required=True)
+    p.add_argument("--profile", help="profile.pt; required when plan contains directional edits")
+    p.add_argument("--device", default="cpu")
+
     p = sub.add_parser("apply", help="Apply a reviewed plan and save a new checkpoint")
     p.add_argument("--model", required=True)
     p.add_argument("--profile", help="residual profile.pt; required only when plan contains directional ablation")
@@ -245,6 +251,10 @@ def main() -> None:
             args.moe_profile,
         )
         print(json.dumps(plan, indent=2))
+        return
+    if args.cmd == "preview":
+        from .preview import run_preview
+        print(json.dumps(run_preview(args.model, args.plan, args.profile, args.device), indent=2))
         return
     if args.cmd == "apply":
         from .apply import run_apply
