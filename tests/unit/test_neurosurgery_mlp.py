@@ -41,6 +41,12 @@ class MockModel(nn.Module):
 
 
 class TestMLPSurgery(unittest.TestCase):
+    def test_identity_ratio_does_not_align_away_channels(self):
+        keep = [torch.ones(10)]
+        drop = [torch.ones(10)]
+        selected = select_mlp_channels(keep, drop, 1.0, contrast_weight=0.25, align_to=8)
+        self.assertEqual(selected[0].numel(), 10)
+
     def test_select_channels_is_contrastive(self):
         keep = [torch.tensor([10.0, 9.0, 8.0, 1.0]), torch.tensor([9.0, 8.0, 7.0, 1.0])]
         drop = [torch.tensor([1.0, 1.0, 1.0, 10.0]), torch.tensor([1.0, 1.0, 1.0, 9.0])]
