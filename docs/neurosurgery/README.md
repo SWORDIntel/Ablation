@@ -15,7 +15,8 @@ The `aegis-neurosurgery` CLI currently supports:
 5. HF-style MoE router profiling, masked search, and physical expert/router slicing;
 6. checksum-bound YAML surgery plans;
 7. post-surgery KL/top-1 validation against the untouched model;
-8. read-only inventory of likely modality-specific branches.
+8. read-only inventory of likely modality-specific branches;
+9. Stage-4 joint constrained search across layers, MLP width, attention groups, and MoE experts with Pareto reporting and automatic plan materialization.
 
 The physical operations are deliberately behind architecture adapters. Search can be generic; changing shapes cannot.
 
@@ -47,19 +48,24 @@ aegis-neurosurgery search-attention \
   --profile runs/attn/attention_profile.pt --out runs/attn-search \
   --ratios 0.875,0.75,0.625
 
-# 4. Build one reproducible plan
-aegis-neurosurgery plan \
-  --profile runs/residual/profile.json \
-  --mlp-search runs/mlp-search/mlp_search.json \
-  --attention-search runs/attn-search/attention_search.json \
-  --out runs/plan.yaml \
-  --max-mean-kl 0.02
+# 4. Stage-4 joint optimizer
+aegis-neurosurgery optimize \
+  --model /models/Qwen3-8B \
+  --keep keep.txt \
+  --out runs/opt \
+  --mlp-profile runs/mlp/mlp_profile.pt \
+  --attention-profile runs/attn/attention_profile.pt \
+  --layer-search runs/layers/greedy_layer_search.json \
+  --mlp-ratios 1,0.95,0.90,0.85,0.80 \
+  --attention-ratios 1,0.875,0.75,0.625 \
+  --max-mean-kl 0.02 \
+  --min-top1-agreement 0.95 \
+  --max-trials 64
 
-# 5. Physical surgery
+# 5. Physical surgery from the optimizer's exact selections
 aegis-neurosurgery apply \
   --model /models/Qwen3-8B \
-  --profile runs/residual/profile.pt \
-  --plan runs/plan.yaml \
+  --plan runs/opt/optimized_plan.yaml \
   --out /models/Qwen3-8B-surgery
 
 # 6. Independent KEEP validation
@@ -70,7 +76,13 @@ aegis-neurosurgery validate \
   --max-mean-kl 0.02
 ```
 
-For MoE models, add `profile-moe`, `search-moe`, and `--moe-search` to the plan command.
+For MoE models, generate `moe_profile.pt` with `profile-moe` and pass it to `optimize --moe-profile`. The optimizer produces `optimization.json`, a Pareto front, checksum-bound selection artifacts, and `optimized_plan.yaml`.
+
+### Stage-4 search behavior
+
+The default `frontier` strategy starts from the unmodified model and expands only candidates that still satisfy the KEEP constraints. This makes the search practical when the full Cartesian product would be expensive. `--strategy exhaustive` evaluates the highest-value states from the complete grid and always includes the identity baseline.
+
+The optimizer deliberately does **not** report mask-search wall-clock time as expected deployment speedup. Reversible masks leave the original tensor shapes in place, so that timing would be misleading. Instead it reports exact resident parameter bytes removed for the supported physical cuts and an estimated dense linear-MAC reduction per token. Real latency is measured after the selected structure is materialized.
 
 ## Invariants
 
