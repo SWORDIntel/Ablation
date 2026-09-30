@@ -137,6 +137,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--ablation-layers", type=int, default=3)
     p.add_argument("--ablation-strength", type=float, default=0.5)
 
+    p = sub.add_parser("select", help="Compile typed surgery selectors into a plan and read-only preview")
+    p.add_argument("--model", required=True)
+    p.add_argument("--selectors", required=True, help="selector YAML")
+    p.add_argument("--out", required=True, help="new output directory")
+    p.add_argument("--profile", help="profile.pt; required for directional edits")
+    p.add_argument("--device", default="cpu")
+
     p = sub.add_parser("preview", help="Resolve and inspect a surgery plan without modifying the model")
     p.add_argument("--model", required=True)
     p.add_argument("--plan", required=True)
@@ -251,6 +258,10 @@ def main() -> None:
             args.moe_profile,
         )
         print(json.dumps(plan, indent=2))
+        return
+    if args.cmd == "select":
+        from .selectors import run_select
+        print(json.dumps(run_select(args.model, args.selectors, args.out, args.profile, args.device), indent=2))
         return
     if args.cmd == "preview":
         from .preview import run_preview
