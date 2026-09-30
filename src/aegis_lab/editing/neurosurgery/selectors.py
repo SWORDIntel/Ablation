@@ -95,7 +95,7 @@ def _write_selector_outputs(
     unknown = sorted(set(spec) - _ALLOWED_ROOT)
     if unknown:
         raise ValueError(f"unsupported selector fields: {unknown}")
-    if spec.get("version") != 1:
+    if isinstance(spec.get("version"), bool) or spec.get("version") != 1:
         raise ValueError("selector version must be 1")
 
     layer_path, layers_obj = get_layers(model)
