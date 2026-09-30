@@ -53,7 +53,8 @@ def mean_teacher_forced_nll(model, tokenizer, prompts: list[str], batch_size: in
             enc = tokenizer(batch, return_tensors="pt", padding=True, truncation=True)
             enc = {k: v.to(model.device) for k, v in enc.items()}
             labels = enc["input_ids"][:, 1:]
-            valid = enc.get("attention_mask", torch.ones_like(enc["input_ids"]))[:, 1:].bool()
+            attention_mask = enc.get("attention_mask", torch.ones_like(enc["input_ids"])).bool()
+            valid = attention_mask[:, 1:] & attention_mask[:, :-1]
             if labels.numel() == 0 or not valid.any():
                 continue
             out = model(**enc, use_cache=False, return_dict=True)
