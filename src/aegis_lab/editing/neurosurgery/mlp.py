@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional, Union
+
 import hashlib
 import json
 from dataclasses import dataclass
@@ -19,10 +21,10 @@ EPS = 1e-8
 class _ActivationAccumulator:
     sums: list[torch.Tensor]
     counts: list[int]
-    attention_mask: torch.Tensor | None = None
+    attention_mask: Optional[torch.Tensor] = None
 
 
-def _sha256(path: str | Path) -> str:
+def _sha256(path: Union[str, Path]) -> str:
     h = hashlib.sha256()
     with Path(path).open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
@@ -85,7 +87,7 @@ def run_mlp_profile(
     drop_path: str,
     out_dir: str,
     batch_size: int = 2,
-    max_prompts: int | None = 64,
+    max_prompts: Optional[int] = 64,
     device: str = "auto",
 ) -> None:
     device = resolve_device(device)
@@ -234,7 +236,7 @@ def run_mlp_search(
     out_dir: str,
     keep_ratios: list[float],
     batch_size: int = 2,
-    max_prompts: int | None = 64,
+    max_prompts: Optional[int] = 64,
     contrast_weight: float = 0.25,
     align_to: int = 64,
     device: str = "auto",
