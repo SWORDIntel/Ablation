@@ -203,6 +203,29 @@ python3 fw_launcher.py aegis-benchmark
 
 ---
 
+## Model Neurosurgery
+
+AEGIS-LAB now includes a structural **model neurosurgery** workflow for reducing checkpoint size and inference memory traffic rather than only changing behavior in-place.
+
+Implemented through Stage 3:
+
+- KEEP/DROP residual profiling with contrastive directional edits and SVD preservation bases;
+- reversible whole-layer deletion search and greedy interacting deletion;
+- gated-MLP channel profiling, masked search, and physical gate/up/down tensor slicing;
+- GQA/MHA group profiling and physical Q/K/V/O slicing while preserving GQA grouping;
+- MoE router profiling and physical router/expert slicing for supported HF-style expert blocks;
+- checksum-bound surgery plans and post-surgery KL/top-1 validation.
+
+Install the project normally, then use the dedicated entry point:
+
+```bash
+aegis-neurosurgery --help
+```
+
+The detailed workflow, invariants, architecture constraints, validation guidance, and roadmap are in [docs/neurosurgery/README.md](docs/neurosurgery/README.md).
+
+---
+
 ## Model Editing Workflow
 
 Submit a staged ablation job through the unified launcher:
