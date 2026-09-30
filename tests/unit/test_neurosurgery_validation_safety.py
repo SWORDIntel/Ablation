@@ -10,6 +10,7 @@ import torch
 from aegis_lab.editing.neurosurgery.common import load_tensor_artifact, trust_remote_code_enabled
 from aegis_lab.editing.neurosurgery.validate import (
     assert_compatible_tokenizers,
+    assert_same_tokenization,
     compare_logprobs,
     mean_teacher_forced_nll,
 )
@@ -43,6 +44,15 @@ class ToyModel:
     def __call__(self, input_ids, attention_mask, use_cache, return_dict):
         batch, length = input_ids.shape
         return SimpleNamespace(logits=torch.zeros(batch, length, 3))
+
+
+class DifferentToyTokenizer(ToyTokenizer):
+    def __call__(self, batch, return_tensors, padding, truncation):
+        encoded = [[{"a": 1, "b": 1}[char] for char in text] for text in batch]
+        width = max(len(row) for row in encoded)
+        ids = [[0] * (width - len(row)) + row for row in encoded]
+        masks = [[0] * (width - len(row)) + [1] * len(row) for row in encoded]
+        return {"input_ids": torch.tensor(ids), "attention_mask": torch.tensor(masks)}
 
 
 class TestNeurosurgeryValidationSafety(unittest.TestCase):
@@ -80,6 +90,11 @@ class TestNeurosurgeryValidationSafety(unittest.TestCase):
             compare_logprobs([torch.tensor([0.0, -1.0])], [torch.tensor([0.0])])
         with self.assertRaisesRegex(ValueError, "non-finite"):
             compare_logprobs([torch.tensor([0.0, float("nan")])], [torch.tensor([0.0, -1.0])])
+
+    def test_validation_requires_identical_tokenization(self):
+        assert_same_tokenization(ToyTokenizer(), ToyTokenizer(), ["ab"], 1)
+        with self.assertRaisesRegex(ValueError, "tokenize"):
+            assert_same_tokenization(ToyTokenizer(), DifferentToyTokenizer(), ["ab"], 1)
 
     def test_teacher_forced_nll_ignores_left_padding_and_first_token(self):
         result = mean_teacher_forced_nll(ToyModel(), ToyTokenizer(), ["ab", "a"], 2)
