@@ -8,7 +8,7 @@ import torch
 import yaml
 
 from .adapters import get_attention_adapter, get_mlp_adapter, get_moe_adapter
-from .common import LOG, file_sha256, get_layers, nested_getattr, parameter_bytes, resolve_device, set_layers
+from .common import LOG, file_sha256, get_layers, load_tensor_artifact, nested_getattr, parameter_bytes, resolve_device, set_layers
 from .math_ops import apply_constrained_directional_surgery
 from .validate import _load_hf
 
@@ -64,7 +64,7 @@ def _resolve_selection(plan_path: Path, cfg: dict) -> tuple[Path, dict]:
     actual = file_sha256(selection)
     if expected and actual != expected:
         raise ValueError(f"selection checksum mismatch: {selection}")
-    payload = torch.load(selection, map_location="cpu", weights_only=False)
+    payload = load_tensor_artifact(selection)
     return selection, payload
 
 
@@ -111,7 +111,7 @@ def run_apply(model_path: str, profile_path: Optional[str], plan_path: str, out_
     if directional_layers:
         if not profile_path:
             raise ValueError("--profile is required when plan contains directional ablation layers")
-        profile = torch.load(profile_path, map_location="cpu", weights_only=False)
+        profile = load_tensor_artifact(profile_path)
     else:
         profile = None
     model, tokenizer = _load_hf(model_path, device)
