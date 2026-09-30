@@ -14,6 +14,14 @@ class TestNeurosurgeryCLI(unittest.TestCase):
         ])
         self.assertEqual(args.cmd, "search-moe")
 
+    def test_parses_read_only_preview_command(self):
+        args = build_parser().parse_args([
+            "preview", "--model", "m", "--plan", "plan.yaml"
+        ])
+        self.assertEqual(args.cmd, "preview")
+        self.assertIsNone(args.profile)
+        self.assertEqual(args.device, "cpu")
+
 
 if __name__ == "__main__":
     unittest.main()
