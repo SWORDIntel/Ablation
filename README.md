@@ -207,17 +207,24 @@ python3 fw_launcher.py aegis-benchmark
 
 AEGIS-LAB now includes a structural **model neurosurgery** workflow for reducing checkpoint size and inference memory traffic rather than only changing behavior in-place.
 
-Implemented through Stage 4:
+Implemented across Stages 0–9 and End-to-End Workflow:
 
 - KEEP/DROP residual profiling with contrastive directional edits and SVD preservation bases;
-- reversible whole-layer deletion search and greedy interacting deletion;
-- gated-MLP channel profiling, masked search, and physical gate/up/down tensor slicing;
+- Reversible whole-layer deletion search and greedy interacting deletion;
+- Gated-MLP channel profiling, masked search, and physical gate/up/down tensor slicing;
 - GQA/MHA group profiling and physical Q/K/V/O slicing while preserving GQA grouping;
 - MoE router profiling and physical router/expert slicing for supported HF-style expert blocks;
-- Stage-4 joint constrained search across layers, MLP width, attention groups, and MoE experts;
-- Pareto reporting over resident bytes removed, estimated dense MACs removed, and KL;
-- automatic checksum-bound `optimized_plan.yaml` materialization;
-- checksum-bound surgery plans and post-surgery KL/top-1 validation.
+- Stage-4 joint constrained search across layers, MLP width, attention groups, and MoE experts with Pareto reporting;
+- Stage 4A: Trustworthy measurement, multi-token task scoring, dataset fingerprinting, provenance manifests, exact restoration;
+- Stage 4B: Unified 7-operation contract, aliasing/conflict detection, dynamic index remapping, adapter capability matrices;
+- Stage 4C: Causal localization, clean/corrupted activation patching, causal ranking controls, SAE/feature adapters, interacting component search;
+- Stage 4D: Multi-objective constrained hypertuning, successive budget allocation, Pareto frontier tracking, and resume journals;
+- Stage 5: Targeted LoRA recovery, parameter freeze masks, multi-objective distillation loss, DROP rebound monitoring, and merge parity;
+- Stage 6: Uniform affine INT8/INT4 quantization, sensitivity profiling, mixed precision, and packed slicing guards;
+- Stage 7: Runtime deployable packaging (SafeTensors/PyTorch), asset preservation, prefill/decode latency, and memory benchmarking;
+- Stage 8: Multimodal DAG dependency mapping, dead branch verification, physical branch amputation with shared trunk protection;
+- Stage 9: Knowledge editing (rank-1 and low-rank), interference matrices, empirical unlearning evaluation, extraction probes, and Wilson intervals;
+- End-to-end operator workflow engine (`workflow.py`), declarative campaign runner (`pipeline_runner.py`), and extended CLI subcommands (`cli_extended.py`).
 
 Install the project normally, then use the dedicated entry point:
 

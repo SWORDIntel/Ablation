@@ -6,17 +6,29 @@ The design goal is simple: **remove parameters, memory traffic, and capabilities
 
 ## Implemented workflow
 
-The `aegis-neurosurgery` CLI currently supports:
+The `aegis-neurosurgery` CLI and extended tooling currently support:
 
-1. residual KEEP/DROP profiling and contrastive directional editing;
-2. whole-transformer-layer deletion search, including greedy interacting deletion;
-3. gated-MLP intermediate-channel profiling, masked search, and physical tensor slicing;
-4. GQA/MHA attention-group profiling, masked search, and physical Q/K/V/O slicing;
-5. HF-style MoE router profiling, masked search, and physical expert/router slicing;
-6. checksum-bound YAML surgery plans;
-7. post-surgery KL/top-1 validation against the untouched model;
-8. read-only inventory of likely modality-specific branches;
-9. Stage-4 joint constrained search across layers, MLP width, attention groups, and MoE experts with Pareto reporting and automatic plan materialization.
+1. **Residual KEEP/DROP profiling and contrastive directional editing** (`profile.py`, `math_ops.py`, `apply.py`).
+2. **Whole-transformer-layer deletion search**, including greedy interacting deletion (`search_layers.py`, `search_greedy.py`).
+3. **Gated-MLP intermediate-channel profiling**, masked search, and physical tensor slicing (`mlp.py`).
+4. **GQA/MHA attention-group profiling**, masked search, and physical Q/K/V/O slicing (`attention.py`).
+5. **HF-style MoE router profiling**, masked search, and physical expert/router slicing (`moe.py`).
+6. **Checksum-bound YAML surgery plans** and read-only pre-flight inspection (`plan.py`, `preview.py`, `selectors.py`).
+7. **Post-surgery KL/top-1 and teacher-forced sequence loss validation** (`validate.py`).
+8. **Read-only inventory** of large layers and modality branches (`inventory.py`).
+9. **Stage-4 joint constrained search** across layers, MLP width, attention groups, and MoE experts with Pareto reporting (`optimizer.py`).
+10. **Stage 4A — Trustworthy measurement & reversible artifacts**: disjoint KEEP/CHANGE/DROP dataset enforcement, multi-token task scoring, worst-slice damage, provenance manifests, and exact restoration integrity (`stage4a_provenance.py`).
+11. **Stage 4B — Unified operation contract & composition**: unified 7-operation contract (`mask`, `scale`, `clamp`, `project`, `replace`, `low_rank_delta`, `physical_remove`), aliasing/conflict detection, dynamic index remapping, and adapter capability matrices (`stage4b_contract.py`).
+12. **Stage 4C — Causal localization & selective modification**: bounded activation caching, clean/corrupted activation patching, causal ranking with random/magnitude controls, SAE/feature adapters, and interacting component search (`stage4c_causal.py`).
+13. **Stage 4D — Constrained hypertuning**: multi-objective search over locations, strengths, pruning ratios, LoRA hyperparameters, successive halving, Pareto frontier tracking, and resume journals (`stage4d_hypertuning.py`).
+14. **Stage 5 — Post-surgery recovery & distillation**: targeted LoRA injection, parameter freeze masks, multi-objective distillation loss, DROP rebound monitoring, and merge parity verification (`stage5_recovery.py`).
+15. **Stage 6 — Quantization after surgery**: uniform affine INT8 and bit-exact packed INT4 quantization, calibration binding manifests, per-layer sensitivity profiling, mixed precision, and packed slicing protection (`stage6_quantization.py`).
+16. **Stage 7 — Target-specific export & packing**: runtime deployable packaging (SafeTensors/PyTorch), asset preservation, prefill/decode latency, throughput (tokens/s), and peak resident memory benchmarking (`stage7_export.py`).
+17. **Stage 8 — Modality & branch removal**: multimodal DAG dependency mapping, dead-branch proof, physical branch removal with shared trunk protection, config/processor repair, and input rejection guards (`stage8_modality.py`).
+18. **Stage 9 — Knowledge editing & empirical unlearning**: factual edit benchmarks, closed-form rank-1 and factorized editing with atomic rollback, sequential interference matrices, extraction probe suites, and Wilson uncertainty bounds (`stage9_unlearning.py`).
+19. **End-to-end operator workflow**: 7-step orchestrator with telemetry, gate checks, and rollback safety (`workflow.py`).
+20. **Declarative campaign pipeline runner**: YAML multi-stage campaign executor with preflight validation, step checkpointing, and resume support (`pipeline_runner.py`).
+21. **Unified CLI subcommand extensions**: commands for all stages (`patch`, `recover`, `hypertune`, `quantize`, `export-runtime`, `ampute`, `unlearn`, `workflow`) via `cli_extended.py`.
 
 The physical operations are deliberately behind architecture adapters. Search can be generic; changing shapes cannot.
 
