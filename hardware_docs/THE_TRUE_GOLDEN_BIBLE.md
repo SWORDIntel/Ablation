@@ -1,3 +1,5 @@
+> Historical hardware research archive, separate from the model surgery workflow. Commands and platform-specific claims are preserved as research context; this is not setup guidance for Ablation.
+
 # THE TRUE GOLDEN BIBLE: THE COMPLETE ARCHIVE OF SUFFERING
 
 **This document contains the raw, unadulterated technical output of ALL exploitation attempts.**

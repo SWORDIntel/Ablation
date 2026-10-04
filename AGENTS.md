@@ -1,5 +1,11 @@
 # Repository Guidelines
 
+## Documentation and interface boundaries
+- Frame the project as an all-in-one model brain surgery kit; distinguish available instruments from qualified end-to-end workflows.
+- `aegis-neurosurgery` is the core CLI. Advanced commands currently use `python3 -m aegis_lab.editing.neurosurgery.cli_extended`; its dispatcher does not handle inherited core commands.
+- Read `docs/neurosurgery/CAPABILITIES.md` before documenting workflow/campaign results: default wrapper steps include placeholder and synthetic behavior.
+- Keep current examples relative to the repository root; do not publish fixture counts as real-model quality or hardware performance.
+
 ## Project Structure & Module Organization
 Primary Python sources live inside `src/aegis_lab/`, with `orchestrator/`, `workers/`, `state/`, `editing/`, `verification/`, `api/`, and `gui/` subpackages reflecting the runtime surfaces. Rust helpers are under `src/native/vpu_core/`, while shared native artifacts (QIHSE, OpenVINO archives) sit in `QIHSE/` and `scripts/`. Core relaxed data lives in `models/`, configuration sets in `configs/`, and reusable prompt pairs for ablation experiments belong in `data/ablation-smoke/`. Tests are grouped by scope in `tests/unit/`, `tests/integration/`, `tests/recovery/`, and `tests/performance/`. Documentation, diagrams, and hardware notes appear in `docs/` and `hardware_docs/`, and orchestration helpers such as `bootstrap.sh`, `launch.sh`, and `run_mission.sh` live at the repo root.
 

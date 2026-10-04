@@ -2,12 +2,14 @@
 
 The structural search gate compares next-token KL divergence from the untouched model on a KEEP workload, plus top-1 token agreement. The validate command also reports teacher-forced mean NLL across each supplied text sequence. These are useful drift measurements, not proof of retained task competence.
 
-## Current checks
+## Core checks and optional library gates
 
 - Baseline and candidate tokenizers must have identical vocabularies and special-token maps. Validation also compares each sample's token IDs and attention mask before comparing scores.
 - Empty prompt sets, sample-count mismatches, incompatible vocabulary dimensions, and non-finite log probabilities fail closed.
 - Model repository code is disabled by default. To run a model that requires custom code, set `AEGIS_TRUST_REMOTE_CODE=1` only after reviewing and trusting that repository. This executes its code in the current Python process.
 - Neurosurgery profile and selection `.pt` files load with PyTorch `weights_only=True`. Treat older artifacts that cannot be loaded this way as untrusted; regenerate them rather than enabling unrestricted pickle loading.
+The following Stage 4A helpers require explicit integration; do not assume every core command or workflow wrapper invokes them:
+
 - Provenance manifests (`ProvenanceManifest`, `SurgeryManifest`) bind validation and plans to immutable model/tokenizer hashes, dataset fingerprints, seeds, adapter versions, and operation ordering.
 - Disjoint split validation enforces zero prompt overlap across `discovery`, `search`, `validation`, and `test` partitions.
 - Exact restoration integrity checks verify SHA-256 hashes against original parent checkpoint manifests before and after restoration.
@@ -24,6 +26,14 @@ The structural search gate compares next-token KL divergence from the untouched 
 8. Quantize (INT8/INT4 with mixed precision) and package runtime deployment exports after quality acceptance.
 9. Verify exact restoration integrity against the original baseline checkpoint.
 
-Teacher-forced NLL scores every unpadded next-token target in the provided text, skipping padding and each sequence's first token. Its delta indicates how the candidate's fit to that text changed; it is not a desired-answer score. For aggressive surgery, add long-generation evaluations, perplexity, task benchmarks, and domain-specific regression suites. A low one-token KL or NLL can miss failures that appear in generation. Validation does not yet measure whether the candidate successfully changes a target behavior.
+Teacher-forced NLL scores every unpadded next-token target in the provided text, skipping padding and each sequence's first token. Its delta indicates how the candidate's fit to that text changed; it is not a desired-answer score. For aggressive surgery, add long-generation evaluations, perplexity, task benchmarks, and domain-specific regression suites. A low one-token KL or NLL can miss failures that appear in generation. The core validate command does not measure whether the candidate successfully changes a target behavior.
 
 Do not reuse the exact search corpus as the only final validation corpus.
+
+## Wrapper reports and target-runtime acceptance
+
+The advanced workflow handler contains placeholder stages. The campaign runner's default profiling and recovery include random or constant synthetic values. Their completion reports cannot satisfy task or restoration gates. See [capabilities](CAPABILITIES.md) for the exact integration boundaries.
+
+Use real sequence-level task evaluators and required metric checks from Stage 4A, or equivalent explicit evaluators, to measure CHANGE/DROP independently from KEEP drift. Record per-domain and worst-slice results. Re-evaluate after recovery, quantization and final runtime export. Test the actual runtime at fixed batch/context/warmup/device settings; storage reduction and fixture parity do not establish latency gains.
+
+Fixture tests cover implementation contracts. The [verification record](../VERIFICATION.md) states what was run and what remains unqualified.

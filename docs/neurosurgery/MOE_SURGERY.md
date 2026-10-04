@@ -30,7 +30,7 @@ Shared experts are not removed by this adapter.
 
 ## Supported shape
 
-The v0.3 adapter requires an HF-style MoE block with:
+The current adapter requires an HF-style MoE block with:
 
 ```text
 block.experts -> torch.nn.ModuleList
@@ -38,3 +38,7 @@ block.gate or block.router -> linear module with [num_experts, hidden] weight
 ```
 
 Mixtral-like blocks fit this contract. Compatible Qwen MoE derivatives may also fit through feature detection. Architectures with packed expert tensors or custom router semantics require a dedicated adapter.
+
+## Operator sequence
+
+Use the matching profile/search commands from the [manual](README.md), then the [joint optimizer](OPTIMIZER.md) or typed selectors. Preview the exact plan, apply to a separate checkpoint, and run [independent validation](VALIDATION.md) after reload. Channel/group/expert ranking proposes cuts; it does not prove target behavior is localized there.

@@ -1,3 +1,5 @@
+> Historical study/design notes for HIGH-GRAVITY/Khoj, a separate system. Predictions and reported measurements here are not acceptance evidence for the model surgery kit.
+
 # Khoj Semantic Search Ablation Study
 **HIGH-GRAVITY Integration Performance Analysis**
 

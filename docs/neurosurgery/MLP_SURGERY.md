@@ -42,4 +42,8 @@ down_proj cols -> selected channels
 config.intermediate_size -> selected count
 ```
 
-Stock HF configs expose one `intermediate_size`, so v0.3 requires the same surviving channel count in every edited layer. The actual channel identities may differ by layer.
+Stock HF configs expose one `intermediate_size`, so the current adapter requires the same surviving channel count in every edited layer. The actual channel identities may differ by layer.
+
+## Operator sequence
+
+Use the matching profile/search commands from the [manual](README.md), then the [joint optimizer](OPTIMIZER.md) or typed selectors. Preview the exact plan, apply to a separate checkpoint, and run [independent validation](VALIDATION.md) after reload. Channel/group/expert ranking proposes cuts; it does not prove target behavior is localized there.

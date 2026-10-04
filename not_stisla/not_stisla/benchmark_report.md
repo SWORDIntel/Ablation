@@ -1,3 +1,5 @@
+> Historical search-kernel benchmark. These timings do not measure model surgery, inference or deployment performance.
+
 ## NOT_STISLA Benchmark Comparison
 
 | Metric | Binary Search | NOT_STISLA Search | NOT_STISLA Batch Parallel |

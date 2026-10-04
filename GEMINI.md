@@ -1,6 +1,6 @@
 # GEMINI.md
 
-AEGIS-LAB is a hardware-aware model editing and ablation framework designed for secure, reproducible, and performant LLM experimentation.
+Ablation / AEGIS-LAB is an all-in-one model brain surgery kit. Start with the direct local neurosurgery workflow in README.md; services and hardware workers are optional. See docs/neurosurgery/CAPABILITIES.md for core/advanced dispatch and synthetic workflow limits.
 
 ## Project Overview
 

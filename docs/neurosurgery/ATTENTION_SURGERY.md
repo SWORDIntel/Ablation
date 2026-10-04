@@ -33,3 +33,7 @@ After a candidate passes the KL gate, the exact group indices are stored in the 
 ## Limitations
 
 The adapter intentionally rejects attention implementations whose Q/K/V/O tensor geometry does not match `heads × head_dim`. Architectures with fused QKV matrices, latent attention, head-specific nonlinearities, or non-contiguous GQA mappings need dedicated adapters.
+
+## Operator sequence
+
+Use the matching profile/search commands from the [manual](README.md), then the [joint optimizer](OPTIMIZER.md) or typed selectors. Preview the exact plan, apply to a separate checkpoint, and run [independent validation](VALIDATION.md) after reload. Channel/group/expert ranking proposes cuts; it does not prove target behavior is localized there.

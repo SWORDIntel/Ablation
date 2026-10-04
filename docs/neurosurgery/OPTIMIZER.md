@@ -88,9 +88,11 @@ Use exhaustive search when the space is small or when interactions appear non-mo
 
 ## Example
 
+First create the referenced MLP/attention profiles and greedy layer-search artifact using the [manual](README.md#basic-sequence). Model/data paths and quality tolerances are examples.
+
 ```bash
 aegis-neurosurgery optimize \
-  --model /models/Qwen3-8B \
+  --model models/Qwen3-8B \
   --keep data/keep-calibration.txt \
   --out runs/qwen3-stage4 \
   --mlp-profile runs/mlp/mlp_profile.pt \
@@ -119,21 +121,34 @@ The selection artifacts are SHA-256 bound into the plan. `apply` verifies them b
 
 ## Materialization
 
+The optimizer writes version 4, but current preview accepts versions 1–3. Recompile the exact selections through the typed-selector interface:
+
+```bash
+python3 docs/examples/optimizer_to_selectors.py \
+  runs/qwen3-stage4/optimized_plan.yaml runs/qwen3-stage4/selectors.yaml
+aegis-neurosurgery select --model models/Qwen3-8B \
+  --selectors runs/qwen3-stage4/selectors.yaml --out runs/qwen3-reviewed
+aegis-neurosurgery preview --model models/Qwen3-8B \
+  --plan runs/qwen3-reviewed/surgery_plan.yaml
+```
+
+The example checks selection hashes and preserves retained indices. The compiler checks geometry and emits a supported plan; it does not rerun candidate quality measurements.
+
 Stage-4 plans contain no directional edit by default, so a residual profile is not required:
 
 ```bash
 aegis-neurosurgery apply \
-  --model /models/Qwen3-8B \
-  --plan runs/qwen3-stage4/optimized_plan.yaml \
-  --out /models/Qwen3-8B-surgery
+  --model models/Qwen3-8B \
+  --plan runs/qwen3-reviewed/surgery_plan.yaml \
+  --out models/Qwen3-8B-surgery
 ```
 
 Then validate the physical result on a separate KEEP set:
 
 ```bash
 aegis-neurosurgery validate \
-  --base /models/Qwen3-8B \
-  --candidate /models/Qwen3-8B-surgery \
+  --base models/Qwen3-8B \
+  --candidate models/Qwen3-8B-surgery \
   --keep data/keep-validation.txt \
   --max-mean-kl 0.02
 ```

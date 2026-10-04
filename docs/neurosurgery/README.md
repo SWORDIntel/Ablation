@@ -1,70 +1,63 @@
-# AEGIS-LAB Model Neurosurgery
+# Model brain surgery manual
 
-Model neurosurgery is the structural counterpart to AEGIS-LAB's existing behavioral ablation tools. Instead of only editing directions in weight space, it profiles a model against **KEEP** and **DROP** workloads, searches reversible masks, measures damage, and only then rewrites tensor shapes.
+The core of Ablation's all-in-one kit is a measured structural and directional surgery path: inspect, profile, search reversible candidates, preview exact edits, apply to a separate checkpoint, and validate after reload.
 
-The design goal is simple: **remove parameters, memory traffic, and capabilities the deployment does not need while preserving measured behavior on the retained workload.**
+Set KEEP / CHANGE / DROP objectives for the experiment. The core search commands gate KEEP drift; independent task evaluators establish CHANGE or DROP success. Learned behaviors overlap, so exact component selection does not imply isolated concept removal.
 
-## Implemented workflow
+## Interfaces and instruments
 
-The `aegis-neurosurgery` CLI and extended tooling currently support:
+`aegis-neurosurgery` supports residual profiling/directional editing, whole-layer search, gated-MLP channel cuts, GQA/MHA group cuts, supported MoE expert cuts, typed selectors, previews, constrained joint optimization and drift validation.
 
-1. **Residual KEEP/DROP profiling and contrastive directional editing** (`profile.py`, `math_ops.py`, `apply.py`).
-2. **Whole-transformer-layer deletion search**, including greedy interacting deletion (`search_layers.py`, `search_greedy.py`).
-3. **Gated-MLP intermediate-channel profiling**, masked search, and physical tensor slicing (`mlp.py`).
-4. **GQA/MHA attention-group profiling**, masked search, and physical Q/K/V/O slicing (`attention.py`).
-5. **HF-style MoE router profiling**, masked search, and physical expert/router slicing (`moe.py`).
-6. **Checksum-bound YAML surgery plans** and read-only pre-flight inspection (`plan.py`, `preview.py`, `selectors.py`).
-7. **Post-surgery KL/top-1 and teacher-forced sequence loss validation** (`validate.py`).
-8. **Read-only inventory** of large layers and modality branches (`inventory.py`).
-9. **Stage-4 joint constrained search** across layers, MLP width, attention groups, and MoE experts with Pareto reporting (`optimizer.py`).
-10. **Stage 4A — Trustworthy measurement & reversible artifacts**: disjoint KEEP/CHANGE/DROP dataset enforcement, multi-token task scoring, worst-slice damage, provenance manifests, and exact restoration integrity (`stage4a_provenance.py`).
-11. **Stage 4B — Unified operation contract & composition**: unified 7-operation contract (`mask`, `scale`, `clamp`, `project`, `replace`, `low_rank_delta`, `physical_remove`), aliasing/conflict detection, dynamic index remapping, and adapter capability matrices (`stage4b_contract.py`).
-12. **Stage 4C — Causal localization & selective modification**: bounded activation caching, clean/corrupted activation patching, causal ranking with random/magnitude controls, SAE/feature adapters, and interacting component search (`stage4c_causal.py`).
-13. **Stage 4D — Constrained hypertuning**: multi-objective search over locations, strengths, pruning ratios, LoRA hyperparameters, successive halving, Pareto frontier tracking, and resume journals (`stage4d_hypertuning.py`).
-14. **Stage 5 — Post-surgery recovery & distillation**: targeted LoRA injection, parameter freeze masks, multi-objective distillation loss, DROP rebound monitoring, and merge parity verification (`stage5_recovery.py`).
-15. **Stage 6 — Quantization after surgery**: uniform affine INT8 and bit-exact packed INT4 quantization, calibration binding manifests, per-layer sensitivity profiling, mixed precision, and packed slicing protection (`stage6_quantization.py`).
-16. **Stage 7 — Target-specific export & packing**: runtime deployable packaging (SafeTensors/PyTorch), asset preservation, prefill/decode latency, throughput (tokens/s), and peak resident memory benchmarking (`stage7_export.py`).
-17. **Stage 8 — Modality & branch removal**: multimodal DAG dependency mapping, dead-branch proof, physical branch removal with shared trunk protection, config/processor repair, and input rejection guards (`stage8_modality.py`).
-18. **Stage 9 — Knowledge editing & empirical unlearning**: factual edit benchmarks, closed-form rank-1 and factorized editing with atomic rollback, sequential interference matrices, extraction probe suites, and Wilson uncertainty bounds (`stage9_unlearning.py`).
-19. **End-to-end operator workflow**: 7-step orchestrator with telemetry, gate checks, and rollback safety (`workflow.py`).
-20. **Declarative campaign pipeline runner**: YAML multi-stage campaign executor with preflight validation, step checkpointing, and resume support (`pipeline_runner.py`).
-21. **Unified CLI subcommand extensions**: commands for all stages (`patch`, `recover`, `hypertune`, `quantize`, `export-runtime`, `ampute`, `unlearn`, `workflow`) via `cli_extended.py`.
+Advanced stage libraries add causal localization, operation contracts, targeted LoRA recovery, hypertuning, quantization, runtime packaging, modality dependencies and factual editing/unlearning experiments. Their module CLI is separate:
 
-The physical operations are deliberately behind architecture adapters. Search can be generic; changing shapes cannot.
+```bash
+python3 -m aegis_lab.editing.neurosurgery.cli_extended --help
+```
 
-Use `select` to compile explicit typed selectors into a checksum-bound surgery plan and read-only preview. Use `preview` before `apply` to inspect the resolved targets, original and resulting tensor shapes, kept indices, tied-parameter aliases, selection checksums, and approximate parameter bytes removed. Preview is read-only; it does not rewrite or reload-test the candidate checkpoint.
+See [capabilities](CAPABILITIES.md) and [advanced instruments](ADVANCED.md) for dispatcher and integration limits. Workflow/campaign defaults include placeholder or synthetic steps; use the explicit core sequence below for structural edits.
+
+Physical surgery is adapter-specific. Search can be generic; changing tensor shapes cannot. Use `select` to compile typed selectors and `preview` to inspect resolved names, original/resulting shapes, indices, aliases and estimated parameter bytes. Preview cannot establish checkpoint reload parity or model quality.
 
 ## Basic sequence
+
+At committed revision `551992e`, standalone `search-mlp` has a missing-loader import. Use the root README's profile → optimizer route for MLP search until that code fix is published. The broader sequence below shows the component interfaces; see [known issues](CAPABILITIES.md#known-committed-source-issues).
+
+Run from the repository root after installation. Supply a compatible floating-point HF checkpoint, representative `keep.txt` / `drop.txt` discovery prompts and separate `keep-validation.txt`. These are example paths, ratios and tolerances; an 8B model is not a minimum requirement. Begin with the smaller [MLP-only quick start](../../README.md#first-operation-measured-mlp-compression) if resources are limited.
 
 ```bash
 # 1. Residual behavior map
 aegis-neurosurgery profile \
-  --model /models/Qwen3-8B \
+  --model models/Qwen3-8B \
   --keep keep.txt \
   --drop drop.txt \
   --out runs/residual
 
 # 2. Dense MLP search
 aegis-neurosurgery profile-mlp \
-  --model /models/Qwen3-8B --keep keep.txt --drop drop.txt --out runs/mlp
+  --model models/Qwen3-8B --keep keep.txt --drop drop.txt --out runs/mlp
 
 aegis-neurosurgery search-mlp \
-  --model /models/Qwen3-8B --keep keep.txt \
+  --model models/Qwen3-8B --keep keep.txt \
   --profile runs/mlp/mlp_profile.pt --out runs/mlp-search \
   --ratios 0.95,0.90,0.85,0.80
 
 # 3. Attention search
 aegis-neurosurgery profile-attention \
-  --model /models/Qwen3-8B --keep keep.txt --drop drop.txt --out runs/attn
+  --model models/Qwen3-8B --keep keep.txt --drop drop.txt --out runs/attn
 
 aegis-neurosurgery search-attention \
-  --model /models/Qwen3-8B --keep keep.txt \
+  --model models/Qwen3-8B --keep keep.txt \
   --profile runs/attn/attention_profile.pt --out runs/attn-search \
   --ratios 0.875,0.75,0.625
 
+# Generate the layer-search artifact used below.
+aegis-neurosurgery search-layers-greedy \
+  --model models/Qwen3-8B --keep keep.txt --out runs/layers \
+  --max-mean-kl 0.02 --max-layers 3
+
 # 4. Stage-4 joint optimizer
 aegis-neurosurgery optimize \
-  --model /models/Qwen3-8B \
+  --model models/Qwen3-8B \
   --keep keep.txt \
   --out runs/opt \
   --mlp-profile runs/mlp/mlp_profile.pt \
@@ -76,24 +69,30 @@ aegis-neurosurgery optimize \
   --min-top1-agreement 0.95 \
   --max-trials 64
 
+# Recompile the optimizer v4 selections into a supported preview/apply plan.
+python3 docs/examples/optimizer_to_selectors.py \
+  runs/opt/optimized_plan.yaml runs/opt/selectors.yaml
+aegis-neurosurgery select --model models/Qwen3-8B \
+  --selectors runs/opt/selectors.yaml --out runs/reviewed
+
 # 5. Preview the exact edits without modifying the model
 aegis-neurosurgery preview \
-  --model /models/Qwen3-8B \
-  --plan runs/opt/optimized_plan.yaml
+  --model models/Qwen3-8B \
+  --plan runs/reviewed/surgery_plan.yaml
 
 # If the plan includes directional edits, also pass:
 #   --profile runs/residual/profile.pt
 
 # 6. Physical surgery from the reviewed selections
 aegis-neurosurgery apply \
-  --model /models/Qwen3-8B \
-  --plan runs/opt/optimized_plan.yaml \
-  --out /models/Qwen3-8B-surgery
+  --model models/Qwen3-8B \
+  --plan runs/reviewed/surgery_plan.yaml \
+  --out models/Qwen3-8B-surgery
 
 # 7. Independent KEEP validation
 aegis-neurosurgery validate \
-  --base /models/Qwen3-8B \
-  --candidate /models/Qwen3-8B-surgery \
+  --base models/Qwen3-8B \
+  --candidate models/Qwen3-8B-surgery \
   --keep keep-validation.txt \
   --max-mean-kl 0.02
 ```
@@ -111,7 +110,7 @@ The optimizer deliberately does **not** report mask-search wall-clock time as ex
 - Search first, cut second.
 - Candidate search uses reversible masks rather than writing a checkpoint per trial.
 - Structured selection artifacts are SHA-256 bound into the YAML plan.
-- Stock Hugging Face reload is preserved by enforcing globally representable dimensions: one `intermediate_size`, one attention head geometry, and one expert count where the model config requires them.
+- Physical edits enforce globally representable dimensions for supported layouts; verify stock Hugging Face reload on the selected architecture/version: one `intermediate_size`, one attention head geometry, and one expert count where the model config requires them.
 - Quantized tensors are not physically shape-edited. Dequantize or operate on an unquantized checkpoint, then quantize after surgery.
 - Layer deletion is applied after per-layer structured surgery so recorded layer indices remain stable.
 
@@ -129,7 +128,7 @@ Unsupported shapes fail closed rather than guessing.
 
 ## Explicit selector files
 
-A selector file uses schema version 1. It accepts layer deletion, directional module paths, and the current structural adapters. Every structural map must name every supported layer and retain the same number of channels/groups/experts per layer so the result remains representable by the model config.
+The YAML below illustrates the selector schema, not a universally runnable selection. Inspect actual layer counts and channel geometry and provide every required structural layer map. A selector file uses schema version 1. It accepts layer deletion, directional module paths, and the current structural adapters. Every structural map must name every supported layer and retain the same number of channels/groups/experts per layer so the result remains representable by the model config.
 
 ```yaml
 version: 1
@@ -149,11 +148,15 @@ mlp:
 Compile and inspect it before applying:
 
 ```bash
-aegis-neurosurgery select --model /models/model --selectors selectors.yaml \
+aegis-neurosurgery select --model models/model --selectors selectors.yaml \
   --profile runs/residual/profile.pt --out runs/compiled
-aegis-neurosurgery preview --model /models/model \
+aegis-neurosurgery preview --model models/model \
   --plan runs/compiled/surgery_plan.yaml --profile runs/residual/profile.pt
 # Review surgery_plan.yaml and preview.json, then apply to a separate output path.
 ```
 
 Structural selector sections are `mlp.keep_indices`, `attention.keep_groups`, and `moe.keep_experts`; each maps layer IDs to explicit retained indices. Omit sections for untouched structures. Directional `targets` are module paths relative to each selected transformer layer and must resolve to 2D weights. The compiler rejects unknown fields, invalid indices, incomplete maps, and an existing output directory. Compilation does not edit model weights. The compiled plan still requires operator review and independent KEEP/target validation; selectors do not establish quality or safe composition.
+
+## Next steps
+
+Read the [component guides](../README.md#instruments), [validation gates](VALIDATION.md), [artifact schemas](../schemas/schemas.md), [advanced instruments](ADVANCED.md) and [roadmap](ROADMAP.md). Retain the parent checkpoint and replay artifacts for every accepted candidate.
