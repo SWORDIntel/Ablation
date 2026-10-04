@@ -422,6 +422,7 @@ class NeurosurgeryWorkflow:
 
         # Backup & state snapshots for rollback and restoration
         self._original_state_dict: Optional[Dict[str, torch.Tensor]] = None
+        self._input_audit = None
         self._baseline_model: Optional[nn.Module] = None
         self._baseline_cache: Optional[BaselineCache] = BaselineCache()
         self._active_hooks: List[Any] = []
@@ -595,27 +596,7 @@ class NeurosurgeryWorkflow:
                     baseline_cache=self._baseline_cache,
                 )
             else:
-                # Default identity baseline when no dataset provided
-                self.baseline_eval = EvaluationReport(
-                    keep_report=SlicedMetricsReport(
-                        kind="keep",
-                        sample_count=1,
-                        overall_score=1.0,
-                        worst_slice_score=1.0,
-                        worst_slice_damage=0.0,
-                        worst_slice_domain="default",
-                        domain_metrics={"default": {"score": 1.0, "damage": 0.0}},
-                    ),
-                    drop_report=SlicedMetricsReport(
-                        kind="drop",
-                        sample_count=1,
-                        overall_score=0.1,  # baseline high leak / low suppression
-                        worst_slice_score=0.1,
-                        worst_slice_damage=0.9,
-                        worst_slice_domain="default",
-                        domain_metrics={"default": {"score": 0.1, "leak": 0.9}},
-                    ),
-                )
+                raise NeurosurgeryWorkflowError("Baseline evaluation requires datasets or an explicit measured evaluator")
 
             # 2. Check baseline sanity
             if self.baseline_eval.keep_report is not None:
@@ -724,6 +705,14 @@ class NeurosurgeryWorkflow:
                         # Quick sanity check forward call under reversible hook
                         experimental_metrics["reversible_hook_active"] = True
                         experimental_metrics["target_module"] = target_mod_name
+                        if self.config.custom_evaluator is not None:
+                            evaluation = self.config.custom_evaluator(self.model, "validation")
+                        else:
+                            evaluation = run_end_to_end_evaluation(
+                                candidate_model=self.model, tokenizer=self.config.tokenizer,
+                                datasets=self.config.datasets, split="validation",
+                                baseline_model=self._baseline_model, baseline_cache=self._baseline_cache)
+                        experimental_metrics["evaluation"] = evaluation.to_dict()
                     finally:
                         # Remove hook cleanly
                         hook_handle.remove()
@@ -781,15 +770,12 @@ class NeurosurgeryWorkflow:
                 # Custom surgery editor supplied
                 self.config.candidate_editor_fn(self.model)
             else:
-                # Standard candidate edit: apply targeted rank/scale dampening on candidates
-                with torch.no_grad():
-                    for name, mod in self.model.named_modules():
-                        if name in candidates and hasattr(mod, "weight") and mod.weight is not None:
-                            # Apply directional / magnitude scaling surgery
-                            mod.weight.data.mul_(0.8)
-                            for p_name, _ in mod.named_parameters():
-                                full_pname = f"{name}.{p_name}" if name else p_name
-                                modified_tensors.append(full_pname)
+                if self.config.plan is None:
+                    raise NeurosurgeryWorkflowError("Materialization requires an explicit surgery plan or editor")
+                from .apply import apply_to_model
+                plan_path = self.output_dir / "workflow_surgery_plan.yaml"
+                plan_path.write_text(yaml.safe_dump(self.config.plan))
+                apply_to_model(self.model, self.config.metadata.get("profile"), str(plan_path))
 
             candidate_state = self.model.state_dict()
             source_hashes = compute_state_dict_hashes(source_state)
@@ -824,27 +810,7 @@ class NeurosurgeryWorkflow:
                     baseline_cache=self._baseline_cache,
                 )
             else:
-                # Default validation report reflecting edit effects
-                self.candidate_eval = EvaluationReport(
-                    keep_report=SlicedMetricsReport(
-                        kind="keep",
-                        sample_count=1,
-                        overall_score=0.95,
-                        worst_slice_score=0.92,
-                        worst_slice_damage=0.08,
-                        worst_slice_domain="default",
-                        domain_metrics={"default": {"score": 0.95, "damage": 0.05}},
-                    ),
-                    drop_report=SlicedMetricsReport(
-                        kind="drop",
-                        sample_count=1,
-                        overall_score=0.88,
-                        worst_slice_score=0.85,
-                        worst_slice_damage=0.15,
-                        worst_slice_domain="default",
-                        domain_metrics={"default": {"score": 0.88, "leak": 0.12}},
-                    ),
-                )
+                raise NeurosurgeryWorkflowError("Candidate validation requires datasets or an explicit measured evaluator")
 
             # 4. Gate Evaluation against explicit objectives
             gate_thresh = self.config.objectives.to_gate_thresholds()
@@ -930,87 +896,32 @@ class NeurosurgeryWorkflow:
 
             # Run LoRA recovery if enabled
             if self.config.enable_recovery:
-                candidates = self.step_records[WorkflowStep.PROFILE_BASELINE].data.get("located_candidates", [])
-                target_mods = candidates[:2] if candidates else ["mlp.down_proj"]
-                rec_cfg = self.config.recovery_config or RecoveryConfig(
-                    max_steps=min(self.config.budgets.max_recovery_steps, 5),
-                    max_drop_rebound=self.config.objectives.max_drop_rebound,
-                )
-
-                # Inject LoRA and freeze base parameters
-                injected_names = inject_lora(self.model, target_modules=target_mods)
-                apply_freeze_mask(self.model, allow_lora_only=True)
-                trainable_report = verify_trainable_parameters(
-                    self.model, allowed_patterns=["lora_A", "lora_B"], strict=True
-                )
-
-                # Prepare recovery training data
-                vocab_sz = 32
-                for module in self.model.modules():
-                    if isinstance(module, nn.Embedding):
-                        vocab_sz = module.num_embeddings
-                        break
-                dev = next(self.model.parameters()).device
-                synthetic_batch = torch.randint(0, max(vocab_sz, 2), (2, 8), device=dev)
-
-                # Perform recovery training
-                recovery_res = run_recovery_training(
-                    model=self.model,
-                    keep_data=[synthetic_batch],
-                    config=rec_cfg,
-                    drop_evaluator=lambda m: 0.15,  # low drop score indicating suppression maintained
-                )
-
-                # Parity check before in-place merge
-                parity = verify_merge_parity(adapter_model=self.model, sample_inputs=synthetic_batch)
-                if not parity.get("parity", True):
-                    raise NeurosurgeryWorkflowError("LoRA merge parity verification failed.")
-
-                # Merge LoRA in-place
-                merge_lora(self.model)
-                for p in self.model.parameters():
-                    p.requires_grad = True
-
-                recovery_dict = {
-                    "success": recovery_res.success,
-                    "status": recovery_res.status,
-                    "steps_completed": recovery_res.steps_completed,
-                    "final_loss": recovery_res.final_loss,
-                    "initial_drop_score": recovery_res.initial_drop_score,
-                    "final_drop_score": recovery_res.final_drop_score,
-                    "drop_violation": recovery_res.drop_violation,
-                }
-
-                # DROP Rebound Guard: ensure recovery did not restore forbidden behaviors
-                if recovery_res.drop_violation:
-                    failure_msg = "DROP behavioral rebound detected during recovery training."
-                    rec.gate_passed = False
-                    rec.status = StepStatus.FAILED
-                    rec.error_message = failure_msg
-                    rec.data = {"failures": [failure_msg], "recovery_result": recovery_dict}
-                    if self.config.auto_rollback_on_failure:
-                        self.rollback()
-                    return rec
-
-                # Update materialized candidate checkpoint with recovered weights
-                cand_ckpt_path = self.candidate_dir / "pytorch_model.bin"
-                torch.save(self.model.state_dict(), str(cand_ckpt_path))
-
-                rec.data = {
-                    "mode": "recovery",
-                    "injected_modules": list(injected_names.keys()) if isinstance(injected_names, dict) else list(injected_names),
-                    "trainable_parameters": trainable_report.trainable_params,
-                    "recovery_result": recovery_dict,
-                    "parity": parity,
-                    "candidate_checkpoint": str(cand_ckpt_path),
-                }
+                from .measured import recover_model
+                def training_prompts(kind):
+                    dataset = self.config.datasets.get(kind)
+                    if dataset is None:
+                        return None
+                    samples = dataset.get_split("search") or dataset.get_split("discovery")
+                    if kind == "change":
+                        return [dict(prompt=sample.prompt, target=sample.target) for sample in samples]
+                    return [sample.prompt for sample in samples]
+                cfg = self.config.recovery_config or RecoveryConfig(
+                    max_steps=self.config.budgets.max_recovery_steps,
+                    max_drop_rebound=self.config.objectives.max_drop_rebound)
+                self.model, recovery = recover_model(
+                    self.model, self.config.tokenizer, training_prompts("keep"),
+                    training_prompts("drop"), training_prompts("change"),
+                    steps=cfg.max_steps, lr=cfg.lr, max_rebound=cfg.max_drop_rebound,
+                    seed=self.config.seed)
+                if not hasattr(self.model, "save_pretrained"):
+                    raise NeurosurgeryWorkflowError("Measured recovery requires a reloadable HF checkpoint")
+                self.model.save_pretrained(self.candidate_dir, safe_serialization=True)
+                self.config.tokenizer.save_pretrained(self.candidate_dir)
+                rec.data = dict(mode="recovery", recovery_result=recovery,
+                                candidate_checkpoint=str(self.candidate_dir))
             elif self.config.enable_hypertuning:
-                # Hypertuning mode
-                rec.data = {
-                    "mode": "hypertuning",
-                    "trials_completed": 1,
-                    "winning_trial_id": "trial_001",
-                }
+                raise NeurosurgeryWorkflowError(
+                    "Workflow hypertuning requires an explicit measured evaluator; use the hypertune command")
 
             rec.gate_passed = True
             rec.status = StepStatus.COMPLETED
@@ -1073,29 +984,8 @@ class NeurosurgeryWorkflow:
                     baseline_cache=self._baseline_cache,
                 )
             else:
-                # Default passing test report
-                self.test_eval = EvaluationReport(
-                    keep_report=SlicedMetricsReport(
-                        kind="keep",
-                        sample_count=1,
-                        overall_score=0.94,
-                        worst_slice_score=0.91,
-                        worst_slice_damage=0.09,
-                        worst_slice_domain="default",
-                        domain_metrics={"default": {"score": 0.94, "damage": 0.06}},
-                    ),
-                    drop_report=SlicedMetricsReport(
-                        kind="drop",
-                        sample_count=1,
-                        overall_score=0.87,
-                        worst_slice_score=0.84,
-                        worst_slice_damage=0.16,
-                        worst_slice_domain="default",
-                        domain_metrics={"default": {"score": 0.87, "leak": 0.13}},
-                    ),
-                )
+                raise NeurosurgeryWorkflowError("Held-out evaluation requires datasets or an explicit measured evaluator")
 
-            # Test gate verification
             gate_thresh = self.config.objectives.to_gate_thresholds()
             test_gate_res = gate_evaluation(self.test_eval, gate_thresh)
 
@@ -1252,9 +1142,32 @@ class NeurosurgeryWorkflow:
             (WorkflowStep.MANIFEST_ARCHIVE, self.step_manifest_archive),
         ]
 
+        from .operator_audit import implementation_binding, callable_binding
+        from .stage4a_provenance import compute_tokenizer_hash
+        implementation = implementation_binding()
+        dataset_binding = {name: dataset.fingerprint().sha256 for name, dataset in self.config.datasets.items()}
+        tokenizer_binding = compute_tokenizer_hash(self.config.tokenizer)
+        self._input_audit = dict(source_model_hash=compute_model_hash(self.model),
+            tokenizer_hash=tokenizer_binding, datasets=dataset_binding,
+            implementation=implementation, edit_order=[step.value for step, _ in steps_sequence],
+            editor=callable_binding(self.config.candidate_editor_fn),
+            evaluator=callable_binding(self.config.custom_evaluator))
+        audit_path = self.output_dir / "workflow_input_audit.json"
+        audit_path.write_text(json.dumps(self._input_audit, indent=2))
+        (self.output_dir / "workflow_datasets.json").write_text(json.dumps(
+            {name: dataset.to_dict() for name, dataset in self.config.datasets.items()}, indent=2))
         try:
             for step_enum, step_fn in steps_sequence:
                 rec = step_fn()
+                if implementation_binding() != implementation:
+                    raise NeurosurgeryWorkflowError("Operator implementation changed during workflow")
+                if compute_tokenizer_hash(self.config.tokenizer) != tokenizer_binding:
+                    raise NeurosurgeryWorkflowError("Tokenizer changed during workflow")
+                if {name: dataset.fingerprint().sha256 for name, dataset in self.config.datasets.items()} != dataset_binding:
+                    raise NeurosurgeryWorkflowError("Task datasets changed during workflow")
+                self._input_audit["latest_model_hash"] = compute_model_hash(self.model)
+                self._input_audit["last_step"] = step_enum.value
+                audit_path.write_text(json.dumps(self._input_audit, indent=2))
 
                 # Check gate failure or step failure for early exit
                 if rec.status == StepStatus.FAILED or rec.gate_passed is False:
@@ -1300,15 +1213,29 @@ class NeurosurgeryWorkflow:
         restored_params = []
         restored_files = []
 
-        # 1. Restore in-memory weights if original snapshot exists
+        # Physical cuts and LoRA injection can change keys/shapes as well as values.
         if self._original_state_dict is not None and self.model is not None:
-            with torch.no_grad():
-                current_state = self.model.state_dict()
-                for name, param in current_state.items():
-                    if name in self._original_state_dict:
+            current_state = self.model.state_dict()
+            topology_changed = (set(current_state) != set(self._original_state_dict) or
+                any(current_state[k].shape != self._original_state_dict[k].shape
+                    for k in current_state if k in self._original_state_dict))
+            if topology_changed:
+                if self._baseline_model is None:
+                    raise NeurosurgeryWorkflowError("Cannot restore changed topology without a baseline model snapshot")
+                restored_params = sorted(self._original_state_dict)
+                restored_attributes = copy.deepcopy(self._baseline_model.__dict__)
+                self.model.__dict__.clear()
+                self.model.__dict__.update(restored_attributes)
+            else:
+                with torch.no_grad():
+                    for name, param in current_state.items():
                         if not torch.equal(param, self._original_state_dict[name]):
                             param.copy_(self._original_state_dict[name])
                             restored_params.append(name)
+            restored_state = self.model.state_dict()
+            if set(restored_state) != set(self._original_state_dict) or any(
+                not torch.equal(restored_state[k], v) for k, v in self._original_state_dict.items()):
+                raise NeurosurgeryWorkflowError("Rollback failed exact original-state verification")
 
         # 2. Clean up or flag materialized candidate directory
         if self.candidate_dir.exists():

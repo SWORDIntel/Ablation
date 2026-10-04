@@ -38,6 +38,7 @@ dev = [
 [project.scripts]
 aegis = "aegis_lab.cli.main:main"
 aegis-neurosurgery = "aegis_lab.editing.neurosurgery.cli:main"
+aegis-neurosurgery-advanced = "aegis_lab.editing.neurosurgery.cli_extended:main"
 
 [build-system]
 requires = ["setuptools>=61.0"]

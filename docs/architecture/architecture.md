@@ -18,7 +18,7 @@ checkpoint + KEEP/CHANGE/DROP workloads
 | Layer | Source under src/aegis_lab/ | Responsibility |
 | --- | --- | --- |
 | Core entry | `editing/neurosurgery/cli.py`, `__main__.py` | Installed `aegis-neurosurgery` and module command |
-| Advanced entry | `editing/neurosurgery/cli_extended.py` | Separate dispatcher for patch/recover/hypertune/quantize/export-runtime/ampute/unlearn/workflow |
+| Advanced entry | `editing/neurosurgery/cli_extended.py` | Installed advanced entry point; shared core dispatch plus patch/recover/hypertune/quantize/export-runtime/ampute/unlearn/workflow |
 | Model access | `editing/neurosurgery/common.py`, `adapters/` | Loading, transformer paths, device selection and supported geometry |
 | Measurement | `profile.py`, `mlp.py`, `attention.py`, `moe.py`, `validate.py` within neurosurgery | Activations, rankings, masks and drift scores |
 | Planning | `plan.py`, `selectors.py`, `preview.py`, `optimizer.py` within neurosurgery | Typed targets, selection hashes, constrained search and geometry inspection |
@@ -26,7 +26,7 @@ checkpoint + KEEP/CHANGE/DROP workloads
 | Advanced instruments | `editing/neurosurgery/stage4a_provenance.py` through `stage9_unlearning.py` | Evaluation/provenance, contracts, causal experiments, recovery, compression, export and knowledge edits |
 | Workflow research | `editing/neurosurgery/workflow.py`, `pipeline_runner.py` | State tracking, campaign configuration and handler composition |
 
-The Stage 4B operation-contract library is distinct from the core selector/plan format. Having a Python operation implemented does not make it available through `select` or `apply`. Workflow/campaign defaults contain demonstration behavior; consult [capabilities](../neurosurgery/CAPABILITIES.md) before treating their reports as measurements.
+Core preview/apply enforce Stage 4B alias/composition checks and accept persistent unified-operation plans with original-index remapping. Measured workflows use explicit plans, real data, required gates and reloadable outputs; consult [capabilities](../neurosurgery/CAPABILITIES.md) and [qualification evidence](../neurosurgery/QUALIFICATION.md) for acceptance boundaries.
 
 ## Optional platform
 

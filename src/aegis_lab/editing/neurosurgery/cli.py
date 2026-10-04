@@ -169,9 +169,15 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
-    args = build_parser().parse_args()
+def main(argv=None) -> None:
+    args = build_parser().parse_args(argv)
     setup_logging(args.verbose)
+    from .operator_audit import audited_dispatch
+    return audited_dispatch(args, dispatch_core)
+
+
+def dispatch_core(args):
+    """Execute a parsed core command, shared by both installed entry points."""
 
     if args.cmd == "profile":
         from .profile import run_profile

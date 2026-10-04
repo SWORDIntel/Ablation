@@ -112,9 +112,23 @@ def create_jsonl_dataset(path: Path, prompts: list[str]) -> Path:
 def setup_test_campaign_env(tmp_dir: Path) -> tuple[TinyCausalLM, Path, Path, Path, Path]:
     model_dir = tmp_dir / "tiny_model"
     model_dir.mkdir(parents=True, exist_ok=True)
-    model = TinyCausalLM(num_layers=3, dim=16)
-    (model_dir / "config.json").write_text(json.dumps(model.config), encoding="utf-8")
-    torch.save(model.state_dict(), model_dir / "model.pt")
+    from transformers import LlamaConfig, LlamaForCausalLM, PreTrainedTokenizerFast
+    from tokenizers import Tokenizer
+    from tokenizers.models import WordLevel
+    from tokenizers.pre_tokenizers import Whitespace
+    raw = Tokenizer(WordLevel({"[PAD]": 0, "[UNK]": 1, "[EOS]": 2,
+                              "keep": 3, "drop": 4, "prompt": 5, "calibration": 6,
+                              **{str(i): i + 7 for i in range(16)}}, unk_token="[UNK]"))
+    raw.pre_tokenizer = Whitespace()
+    tok = PreTrainedTokenizerFast(tokenizer_object=raw, pad_token="[PAD]",
+                                 unk_token="[UNK]", eos_token="[EOS]")
+    tok.model_input_names = ["input_ids", "attention_mask"]
+    model = LlamaForCausalLM(LlamaConfig(vocab_size=32, hidden_size=16, intermediate_size=32,
+                    num_hidden_layers=3, num_attention_heads=2, num_key_value_heads=2, head_dim=8,
+                    pad_token_id=0, eos_token_id=2))
+    model.tokenizer = tok
+    model.save_pretrained(model_dir)
+    tok.save_pretrained(model_dir)
 
     keep_file = create_jsonl_dataset(
         tmp_dir / "data" / "keep.jsonl",

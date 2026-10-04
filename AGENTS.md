@@ -2,8 +2,8 @@
 
 ## Documentation and interface boundaries
 - Frame the project as an all-in-one model brain surgery kit; distinguish available instruments from qualified end-to-end workflows.
-- `aegis-neurosurgery` is the core CLI. Advanced commands currently use `python3 -m aegis_lab.editing.neurosurgery.cli_extended`; its dispatcher does not handle inherited core commands.
-- Read `docs/neurosurgery/CAPABILITIES.md` before documenting workflow/campaign results: default wrapper steps include placeholder and synthetic behavior.
+- `aegis-neurosurgery` is the core CLI. `aegis-neurosurgery-advanced` and the equivalent `cli_extended` module dispatch advanced commands and share core dispatch.
+- Read `docs/neurosurgery/CAPABILITIES.md` before documenting workflow/campaign results: measured defaults require real data and explicit acceptance gates; installed operators retain mandatory local-input audits, while custom handlers and deployment claims need qualification.
 - Keep current examples relative to the repository root; do not publish fixture counts as real-model quality or hardware performance.
 
 ## Project Structure & Module Organization

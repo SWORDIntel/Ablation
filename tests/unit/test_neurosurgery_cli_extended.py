@@ -554,9 +554,8 @@ class TestSubcommandDispatch(unittest.TestCase):
                 dry_run=True,
                 device="cpu",
             )
-            res = dispatch_extended(ns)
-            self.assertEqual(res["command"], "workflow")
-            self.assertEqual(res["mode"], "dry_run")
+            with self.assertRaises(CLIValidationError):
+                dispatch_extended(ns)
 
     def test_dispatch_unknown_cmd_raises_cli_error(self):
         ns = argparse.Namespace(cmd="unrecognized_command")
@@ -575,8 +574,8 @@ class TestSubcommandDispatch(unittest.TestCase):
                 "--stages", "inspect,plan",
                 "--dry-run",
             ])
-            self.assertEqual(exit_code, 0)
-            self.assertTrue((out_dir / "workflow_report.json").exists())
+            self.assertEqual(exit_code, 2)
+            self.assertFalse((out_dir / "workflow_report.json").exists())
 
 
 class TestSubcommandHandlersExecution(unittest.TestCase):
@@ -623,6 +622,7 @@ class TestSubcommandHandlersExecution(unittest.TestCase):
 
     def test_handle_recover_execution(self):
         model = DummyLanguageModel()
+        model.tokenizer = DummyTokenizer()
         with tempfile.TemporaryDirectory() as tmpdir:
             k_file = Path(tmpdir) / "keep.txt"
             k_file.write_text("sample prompt 1\nsample prompt 2\n")
@@ -717,10 +717,9 @@ class TestSubcommandHandlersExecution(unittest.TestCase):
                 verify_reload=False,
                 device="cpu",
             )
-            rep = handle_quantize(args)
-            self.assertTrue(rep["passed"])
-            self.assertTrue((out_dir / "quantize_report.json").exists())
-            self.assertTrue((out_dir / "quantized_model.pt").exists())
+            with self.assertRaisesRegex(CLIValidationError, "calibration-data"):
+                handle_quantize(args)
+            self.assertFalse((out_dir / "quantize_report.json").exists())
 
     def test_handle_export_runtime_execution(self):
         class ExportableModel(nn.Module):
@@ -836,10 +835,9 @@ class TestSubcommandHandlersExecution(unittest.TestCase):
                 dry_run=False,
                 device="cpu",
             )
-            rep = handle_workflow(args)
-            self.assertEqual(rep["status"], "success")
-            self.assertTrue((out_dir / "workflow_manifest.json").exists())
-            self.assertTrue((out_dir / "workflow_report.json").exists())
+            with self.assertRaises(CLIValidationError):
+                handle_workflow(args)
+            self.assertFalse((out_dir / "workflow_report.json").exists())
 
 
 if __name__ == "__main__":

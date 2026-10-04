@@ -105,6 +105,10 @@ def build_preview(model, plan_file: str, profile_path: Optional[str] = None) -> 
     if plan.get("version") not in (1, 2, 3, 4):
         raise ValueError(f"unsupported surgery plan version: {plan.get('version')}")
 
+    if "operations" in plan:
+        from .core_contract import preview_unified_plan
+        return preview_unified_plan(model, plan, plan_path)
+
     layer_path, layers_obj = get_layers(model)
     layers = list(layers_obj)
     names = _module_names(model)
@@ -320,6 +324,8 @@ def build_preview(model, plan_file: str, profile_path: Optional[str] = None) -> 
             "estimated_bytes_removed": max(0, base_bytes - structured_bytes),
         })
 
+    from .core_contract import validate_core_contract
+    contract = validate_core_contract(model, operations)
     return {
         "version": 1,
         "model_type": getattr(getattr(model, "config", None), "model_type", type(model).__name__),
@@ -327,6 +333,7 @@ def build_preview(model, plan_file: str, profile_path: Optional[str] = None) -> 
         "plan": str(plan_path.resolve()),
         "plan_sha256": file_sha256(plan_path),
         "operation_order": ["directional edits", "MLP/attention/MoE slicing", "layer removal"],
+        "contract": contract,
         "operations": operations,
         "summary": {
             "operation_count": len(operations),

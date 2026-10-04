@@ -113,12 +113,7 @@ def _prepare_data_batches(
             batches.append(enc)
         return batches
 
-    batches = []
-    for i in range(0, len(data), batch_size):
-        chunk = data[i : i + batch_size]
-        t = torch.randint(1, 10, (len(chunk), default_seq_len))
-        batches.append({"input_ids": t, "attention_mask": torch.ones_like(t)})
-    return batches
+    raise CLIValidationError("Text training data requires a tokenizer; supply pre-tokenized tensors otherwise")
 
 
 def _load_model_and_tokenizer(
@@ -438,12 +433,19 @@ def handle_recover(args: argparse.Namespace) -> dict[str, Any]:
         raise FileNotFoundError(f"KEEP data file not found: {keep_path}")
     keep_prompts = load_prompts(keep_path)
 
-    change_prompts = load_prompts(args.change) if args.change and Path(args.change).exists() else None
-    distill_prompts = load_prompts(args.distill) if args.distill and Path(args.distill).exists() else None
-
-    keep_batches = _prepare_data_batches(keep_prompts, tokenizer=tokenizer)
-    change_batches = _prepare_data_batches(change_prompts, tokenizer=tokenizer)
-    distill_batches = _prepare_data_batches(distill_prompts, tokenizer=tokenizer)
+    from .measured import load_change_examples, training_batches, text_nll
+    import math
+    change_prompts = load_change_examples(args.change) if args.change else None
+    distill_prompts = load_prompts(args.distill) if args.distill else None
+    drop_path = getattr(args, "drop", None)
+    drop_prompts = load_prompts(drop_path) if drop_path else None
+    if (args.max_drop_threshold is not None or args.max_drop_rebound is not None) and not drop_prompts:
+        raise CLIValidationError("Configured DROP gates require --drop evaluation data")
+    if tokenizer is None:
+        raise CLIValidationError("Recovery text data requires a tokenizer")
+    keep_batches = training_batches(tokenizer, model, keep_prompts)
+    change_batches = training_batches(tokenizer, model, change_prompts)
+    distill_batches = training_batches(tokenizer, model, distill_prompts)
 
     teacher_model = None
     if args.teacher:
@@ -485,6 +487,7 @@ def handle_recover(args: argparse.Namespace) -> dict[str, Any]:
         change_data=change_batches,
         distill_data=distill_batches,
         teacher_model=teacher_model,
+        drop_evaluator=(lambda current: math.exp(-text_nll(current, tokenizer, drop_prompts))) if drop_prompts else None,
         config=rec_cfg,
     )
 
@@ -493,7 +496,11 @@ def handle_recover(args: argparse.Namespace) -> dict[str, Any]:
 
     if args.merge:
         merged = merge_lora(model)
-        torch.save(merged.state_dict(), out_dir / "merged_model.pt")
+        if hasattr(merged, "save_pretrained"):
+            merged.save_pretrained(out_dir, safe_serialization=True)
+            tokenizer.save_pretrained(out_dir)
+        else:
+            torch.save(merged.state_dict(), out_dir / "merged_model.pt")
         save_mode = "merged"
     else:
         adapter_file = out_dir if out_dir.suffix else (out_dir / "lora_adapter.pt")
@@ -503,6 +510,7 @@ def handle_recover(args: argparse.Namespace) -> dict[str, Any]:
     report = {
         "command": "recover",
         "save_mode": save_mode,
+        "passed": result.success,
         "success": result.success,
         "status": result.status,
         "steps_completed": result.steps_completed,
@@ -619,6 +627,7 @@ def handle_quantize(args: argparse.Namespace) -> dict[str, Any]:
     """Stage 6: uniform affine INT8/INT4 quantization & mixed precision."""
     from .stage6_quantization import (
         QuantizationConfig,
+        QuantizationValidationThresholds,
         apply_mixed_precision_plan,
         assign_mixed_precision,
         bind_calibration_dataset,
@@ -640,16 +649,14 @@ def handle_quantize(args: argparse.Namespace) -> dict[str, Any]:
     model, tokenizer = _load_model_and_tokenizer(args.model, device=args.device)
     base_copy = copy.deepcopy(model)
 
-    calib_samples: list[Any] = [torch.randn(1, 8)]
-    if args.calibration_data:
-        calib_path = Path(args.calibration_data)
-        if not calib_path.exists():
-            raise FileNotFoundError(f"Calibration data not found: {calib_path}")
-        raw_prompts = load_prompts(calib_path)
-        if tokenizer is not None:
-            calib_samples = list(raw_prompts)
-        else:
-            calib_samples = [{"input_ids": torch.tensor([[1, 2, 3]])} for _ in raw_prompts]
+    if not args.calibration_data:
+        raise CLIValidationError("Quantization requires --calibration-data; synthetic calibration is unsupported")
+    calib_path = Path(args.calibration_data)
+    if not calib_path.exists():
+        raise FileNotFoundError(calib_path)
+    if tokenizer is None:
+        raise CLIValidationError("Text calibration requires a tokenizer")
+    calib_samples = load_prompts(calib_path)
 
     binding = bind_calibration_dataset(calib_samples, tokenizer=tokenizer)
     q_cfg = QuantizationConfig(
@@ -676,6 +683,7 @@ def handle_quantize(args: argparse.Namespace) -> dict[str, Any]:
     drift_report = validate_quantized_candidate(
         baseline_model=base_copy,
         quantized_model=qmodel,
+        thresholds=QuantizationValidationThresholds(max_kl_drift=args.max_drift_kl),
         keep_samples=calib_samples,
         tokenizer=tokenizer,
         device=args.device,
@@ -999,9 +1007,6 @@ def handle_unlearn(args: argparse.Namespace) -> dict[str, Any]:
 
 def handle_workflow(args: argparse.Namespace) -> dict[str, Any]:
     """Stage 8 / Workflow: End-to-end operator workflow runner."""
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
     config_data: dict[str, Any] = {}
     if args.config:
         cfg_p = Path(args.config)
@@ -1016,131 +1021,11 @@ def handle_workflow(args: argparse.Namespace) -> dict[str, Any]:
     if not model_target:
         raise CLIValidationError("Either --model or --config with 'model' specified is required.")
 
-    stages_str = args.stages or config_data.get(
-        "stages", "inspect,localize,plan,apply,recover,validate,export"
-    )
-    stages = [s.strip().lower() for s in stages_str.split(",") if s.strip()]
-
-    LOG.info("Running operator workflow with stages: %s", stages)
-    workflow_steps: dict[str, Any] = {}
-
-    # Dry-run validation mode
-    if args.dry_run:
-        dry_run_report = {
-            "command": "workflow",
-            "mode": "dry_run",
-            "model": str(model_target),
-            "stages": stages,
-            "status": "validation_passed",
-            "validated_steps": {s: "validated" for s in stages},
-        }
-        (out_dir / "workflow_report.json").write_text(
-            json.dumps(dry_run_report, indent=2), encoding="utf-8"
-        )
-        print(json.dumps(dry_run_report, indent=2))
-        return dry_run_report
-
-    model, tokenizer = _load_model_and_tokenizer(model_target, device=args.device)
-
-    # 1. Inspect
-    if "inspect" in stages:
-        from .stage8_modality import build_dependency_map
-        dep_map = build_dependency_map(model)
-        total_p = sum(p.numel() for p in model.parameters())
-        workflow_steps["inspect"] = {
-            "total_parameters": total_p,
-            "branches": list(dep_map.nodes.keys()),
-        }
-
-    # 2. Localize
-    candidate_layers = [0]
-    if "localize" in stages:
-        candidate_layers = [0]
-        workflow_steps["localize"] = {"selected_candidate_layers": candidate_layers}
-
-    # 3. Plan & Preview
-    plan_data = {"version": "1.0", "target_layers": candidate_layers}
-    if "plan" in stages:
-        if args.plan and Path(args.plan).exists():
-            with Path(args.plan).open("r", encoding="utf-8") as f:
-                plan_data = yaml.safe_load(f) or plan_data
-        (out_dir / "workflow_plan.json").write_text(
-            json.dumps(plan_data, indent=2), encoding="utf-8"
-        )
-        workflow_steps["plan"] = plan_data
-
-    # 4. Apply
-    if "apply" in stages:
-        workflow_steps["apply"] = {"status": "applied", "plan": plan_data}
-
-    # 5. Recover
-    if "recover" in stages:
-        from .stage5_recovery import (
-            RecoveryConfig,
-            apply_freeze_mask,
-            inject_lora,
-            run_recovery_training,
-        )
-        # Targeted recovery injection
-        inject_lora(model, target_modules=["layers.0", "fc", "q_proj", "v_proj"], r=args.lora_r)
-        apply_freeze_mask(model, allow_lora_only=True)
-        keep_data = _prepare_data_batches(["retained test prompt"], tokenizer=tokenizer)
-        rec_res = run_recovery_training(
-            model=model,
-            keep_data=keep_data,
-            config=RecoveryConfig(max_steps=min(5, args.max_recovery_steps)),
-        )
-        workflow_steps["recover"] = {
-            "success": rec_res.success,
-            "steps": rec_res.steps_completed,
-            "final_loss": rec_res.final_loss,
-        }
-
-    # 6. Validate
-    if "validate" in stages:
-        workflow_steps["validate"] = {"passed": True, "keep_kl": 0.005}
-
-    # 7. Quantize
-    if "quantize" in stages and args.quantize_bits:
-        from .stage6_quantization import QuantizationConfig, quantize_model
-        qcfg = QuantizationConfig(bits=args.quantize_bits)
-        model = quantize_model(model, qcfg)
-        workflow_steps["quantize"] = {"bits": args.quantize_bits, "status": "quantized"}
-
-    # 8. Export
-    if "export" in stages:
-        from .stage7_export import ExportFormat, RuntimeTarget, export_runtime_package
-        export_dir = out_dir / "exported_runtime"
-        exp_res = export_runtime_package(
-            model=model,
-            export_dir=export_dir,
-            format=ExportFormat(args.export_format),
-            target_runtime=RuntimeTarget.TRANSFORMERS,
-            tokenizer=tokenizer,
-        )
-        workflow_steps["export"] = {
-            "export_dir": str(export_dir),
-            "manifest_path": exp_res.manifest_path,
-        }
-
-    # Retain manifest and report
-    report = {
-        "command": "workflow",
-        "model": str(model_target),
-        "stages": stages,
-        "completed_steps": workflow_steps,
-        "status": "success",
-    }
-
-    manifest = {
-        "version": "1.0",
-        "model": str(model_target),
-        "stages": stages,
-        "output_directory": str(out_dir),
-    }
-
-    (out_dir / "workflow_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    (out_dir / "workflow_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    from .operator_workflow import run_operator
+    try:
+        report = run_operator(args, config_data)
+    except ValueError as exc:
+        raise CLIValidationError(str(exc)) from exc
     print(json.dumps(report, indent=2))
     return report
 
@@ -1201,6 +1086,7 @@ def _add_recover_subparser(sub: Any) -> argparse.ArgumentParser:
     p.add_argument("--model", required=True, help="Path to base/edited model")
     p.add_argument("--out", required=True, help="Directory to save recovered model/adapter")
     p.add_argument("--keep", required=True, help="Retained KEEP dataset file")
+    p.add_argument("--drop", help="DROP text evaluation data for rebound gates")
     p.add_argument("--change", help="CHANGE target output dataset file")
     p.add_argument("--distill", help="Teacher distillation dataset file")
     p.add_argument("--teacher", help="Teacher model path for distillation")
@@ -1491,9 +1377,10 @@ def _add_workflow_subparser(sub: Any) -> argparse.ArgumentParser:
     p.add_argument("--keep", help="KEEP dataset path")
     p.add_argument("--drop", help="DROP dataset path")
     p.add_argument("--change", help="CHANGE target dataset path")
+    p.add_argument("--validation-keep", help="Independent held-out KEEP dataset")
     p.add_argument(
         "--stages",
-        default="inspect,localize,plan,apply,recover,validate,export",
+        default=None,
         help="Comma-separated stages to run",
     )
     p.add_argument("--plan", help="Existing surgery plan path to execute")
@@ -1591,6 +1478,11 @@ def dispatch_extended(args: argparse.Namespace) -> Any:
     }
     if cmd in handlers:
         return handlers[cmd](args)
+    from .cli import build_parser, dispatch_core
+    core_commands = next(a.choices for a in build_parser()._actions
+                         if isinstance(a, argparse._SubParsersAction))
+    if cmd in core_commands:
+        return dispatch_core(args)
     raise CLIValidationError(f"No handler registered for command: {cmd!r}")
 
 
@@ -1600,11 +1492,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
     setup_logging(getattr(args, "verbose", False))
     try:
-        res = dispatch_extended(args)
+        from .operator_audit import audited_dispatch
+        res = audited_dispatch(args, dispatch_extended)
         if isinstance(res, dict) and "passed" in res and not res["passed"]:
             return 2
         return 0
-    except CLIValidationError as e:
+    except (CLIValidationError, ValueError) as e:
         LOG.error("Validation error: %s", e)
         return 2
     except Exception as e:

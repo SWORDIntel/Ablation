@@ -35,3 +35,5 @@ Ablation / AEGIS-LAB is an all-in-one model brain surgery kit. Start with a loca
 The [old platform overview](archive/README_PLATFORM_20261004.md), [hardware design](archive/VPU_INTEGRATION_20261004.md), [architecture](archive/ARCHITECTURE_20261004.md) and [schema notes](archive/SCHEMAS_20261004.md) preserve earlier descriptions. Their feature and performance claims require current verification.
 
 The [Khoj study](KHOJ_ABLATION_STUDY.md), [hardware notebook](../hardware_docs/THE_TRUE_GOLDEN_BIBLE.md) and [UI benchmark report](../not_stisla/not_stisla/benchmark_report.md) are separate historical/reference material, not acceptance evidence for model surgery.
+
+For measured operator integration and trained-model evidence, see [qualification](neurosurgery/QUALIFICATION.md).

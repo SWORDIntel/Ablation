@@ -14,7 +14,7 @@ Advanced stage libraries add causal localization, operation contracts, targeted 
 python3 -m aegis_lab.editing.neurosurgery.cli_extended --help
 ```
 
-See [capabilities](CAPABILITIES.md) and [advanced instruments](ADVANCED.md) for dispatcher and integration limits. Workflow/campaign defaults include placeholder or synthetic steps; use the explicit core sequence below for structural edits.
+See [capabilities](CAPABILITIES.md) and [advanced instruments](ADVANCED.md) for dispatcher and integration limits. Measured workflows and campaigns are available, with explicit data and acceptance requirements; the direct sequence below remains the simplest structural path.
 
 Physical surgery is adapter-specific. Search can be generic; changing tensor shapes cannot. Use `select` to compile typed selectors and `preview` to inspect resolved names, original/resulting shapes, indices, aliases and estimated parameter bytes. Preview cannot establish checkpoint reload parity or model quality.
 

@@ -21,6 +21,7 @@ import datetime
 from enum import Enum
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import resource
@@ -990,7 +991,7 @@ class CampaignPipelineRunner:
 
         # Internal references
         self.model: Optional[nn.Module] = self.config.model.model_instance
-        self.tokenizer: Optional[Any] = self.config.model.tokenizer_instance
+        self.tokenizer: Optional[Any] = self.config.model.tokenizer_instance or getattr(self.model, "tokenizer", None)
         self._baseline_model: Optional[nn.Module] = (
             copy.deepcopy(self.model) if self.model is not None else None
         )
@@ -1053,6 +1054,8 @@ class CampaignPipelineRunner:
 
     def _ensure_model_loaded(self) -> None:
         if self.model is not None:
+            if self.tokenizer is None:
+                self.tokenizer = getattr(self.model, "tokenizer", None)
             return
         p = Path(self.config.model.path)
         if not p.exists():
@@ -1073,6 +1076,11 @@ class CampaignPipelineRunner:
                 kwargs: dict[str, Any] = {
                     "trust_remote_code": self.config.model.trust_remote_code,
                 }
+                if self.config.model.dtype:
+                    dtype = getattr(torch, self.config.model.dtype, None)
+                    if not isinstance(dtype, torch.dtype):
+                        raise CampaignConfigError(f"Unsupported model dtype: {self.config.model.dtype}")
+                    kwargs["dtype"] = dtype
                 if device != "cpu":
                     kwargs["device_map"] = device
                 model = AutoModelForCausalLM.from_pretrained(str(p), **kwargs)
@@ -1082,14 +1090,9 @@ class CampaignPipelineRunner:
                 self.model = model
                 return
             except Exception as exc:
-                LOG.debug("AutoModel loading failed, attempting torch.load: %s", exc)
+                raise PreflightCheckError(f"HF model/tokenizer loading failed: {exc}") from exc
 
-        # Fallback to torch.load if .pt / .bin exists
-        weights_file = next(p.glob("*.pt"), None) or next(p.glob("*.bin"), None)
-        if weights_file:
-            self.model = torch.load(weights_file, map_location=device, weights_only=False)
-            if hasattr(self.model, "eval"):
-                self.model.eval()
+        raise PreflightCheckError("Measured campaigns require a local HF checkpoint/tokenizer or explicit model instances")
 
     def _step_profile(self, step_dir: Path, params: dict[str, Any]) -> dict[str, Any]:
         """Execute Stage 0 KEEP vs DROP residual profiling."""
@@ -1097,10 +1100,10 @@ class CampaignPipelineRunner:
         self._ensure_model_loaded()
 
         keep_spec = next(
-            (s for s in self.config.datasets.values() if s.kind == "keep"), None
+            (s for s in self.config.datasets.values() if s.kind == "keep" and s.split in {"discovery", "search"}), None
         )
         drop_spec = next(
-            (s for s in self.config.datasets.values() if s.kind == "drop"), None
+            (s for s in self.config.datasets.values() if s.kind == "drop" and s.split in {"discovery", "search"}), None
         )
         if not keep_spec or not drop_spec:
             raise CampaignConfigError("Step 'profile' requires at least one 'keep' and one 'drop' dataset")
@@ -1108,77 +1111,13 @@ class CampaignPipelineRunner:
         keep_prompts = load_prompts(keep_spec.path, max_prompts=params.get("max_prompts", 32))
         drop_prompts = load_prompts(drop_spec.path, max_prompts=params.get("max_prompts", 32))
 
-        # Check model layers
-        try:
-            layer_path, layers = get_layers(self.model)
-            num_layers = len(layers)
-        except Exception:
-            layer_path = "layers"
-            layers = getattr(self.model, "layers", [])
-            num_layers = len(layers) if isinstance(layers, (list, nn.ModuleList)) else 2
-
-        hidden_dim = 16
-        for p_param in self.model.parameters():
-            if p_param.ndim >= 2:
-                hidden_dim = p_param.shape[-1]
-                break
-
-        directions: list[torch.Tensor] = []
-        bases: list[torch.Tensor] = []
-        metrics: list[dict[str, Any]] = []
-
-        # Synthetic/observed contrast profiling
-        torch.manual_seed(self.config.seed)
-        for i in range(num_layers):
-            k_mean = torch.randn(hidden_dim, dtype=torch.float32)
-            d_mean = torch.randn(hidden_dim, dtype=torch.float32)
-            direction, sep = contrast_direction(k_mean, d_mean)
-            basis = preservation_basis(torch.randn(8, hidden_dim), rank=min(4, hidden_dim))
-            directions.append(direction.cpu())
-            bases.append(basis.cpu())
-            metrics.append({
-                "layer": i,
-                "keep_delta_ratio": 0.05 + 0.01 * i,
-                "drop_delta_ratio": 0.25 + 0.02 * i,
-                "drop_to_keep_ratio": (0.25 + 0.02 * i) / (0.05 + 0.01 * i),
-                "contrast_separation": float(sep),
-            })
-
-        profile_json = step_dir / "profile.json"
-        profile_json.write_text(
-            json.dumps(
-                {
-                    "model": self.config.model.path,
-                    "layer_path": layer_path,
-                    "num_layers": num_layers,
-                    "keep_prompts": len(keep_prompts),
-                    "drop_prompts": len(drop_prompts),
-                    "layers": metrics,
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-
-        profile_pt = step_dir / "profile.pt"
-        torch.save(
-            {
-                "model": self.config.model.path,
-                "layer_path": layer_path,
-                "directions": directions,
-                "preserve_bases": bases,
-                "metrics": metrics,
-            },
-            profile_pt,
-        )
-
-        mean_sep = sum(m["contrast_separation"] for m in metrics) / max(len(metrics), 1)
-        return {
-            "num_layers": num_layers,
-            "keep_prompts": len(keep_prompts),
-            "drop_prompts": len(drop_prompts),
-            "mean_contrast_separation": mean_sep,
-        }
+        from .measured import measured_profile
+        meta = measured_profile(self.model, self.tokenizer, keep_prompts, drop_prompts,
+                                step_dir, batch_size=params.get("batch_size", 2),
+                                basis_rank=params.get("basis_rank", 4))
+        return dict(num_layers=meta["num_layers"], keep_prompts=len(keep_prompts),
+                    drop_prompts=len(drop_prompts), measurement="model_activations",
+                    mean_contrast_separation=sum(m["contrast_separation"] for m in meta["layers"]) / meta["num_layers"])
 
     def _step_select(self, step_dir: Path, params: dict[str, Any]) -> dict[str, Any]:
         """Compile component selectors into an explicit surgery plan."""
@@ -1189,7 +1128,7 @@ class CampaignPipelineRunner:
         ablation = params.get(
             "ablation",
             {
-                "layers": [0] if not drop_layers else [],
+                "layers": [],
                 "targets": ["mlp.down_proj", "self_attn.o_proj"],
                 "strength": 0.5,
                 "norm_preserve": True,
@@ -1198,15 +1137,11 @@ class CampaignPipelineRunner:
         )
         structured = dict(params.get("structured", {}))
 
-        # Check layer bounds
-        try:
-            _, layers = get_layers(self.model)
-            total_layers = len(layers)
-            for idx in drop_layers:
-                if idx < 0 or idx >= total_layers:
-                    raise IndexError(f"drop_layer {idx} out of range [0, {total_layers})")
-        except Exception:
-            total_layers = 2
+        _, layers = get_layers(self.model)
+        total_layers = len(layers)
+        for idx in drop_layers:
+            if idx < 0 or idx >= total_layers:
+                raise IndexError(f"drop_layer {idx} out of range [0, {total_layers})")
 
         plan = {
             "version": 3,
@@ -1241,16 +1176,17 @@ class CampaignPipelineRunner:
         params_before = sum(p.numel() for p in self.model.parameters())
         bytes_before = parameter_bytes(self.model)
 
-        # Estimate parameters removed
+        from .preview import build_preview
+        profile = self.output_dir / "profile" / "profile.pt"
+        geometry = build_preview(self.model, str(plan_path), str(profile) if profile.exists() else None)
+        _, layers = get_layers(self.model)
         drop_layers = set(plan.get("drop_layers", []))
-        try:
-            _, layers = get_layers(self.model)
-            removed_params = 0
-            for i, layer in enumerate(layers):
-                if i in drop_layers:
-                    removed_params += sum(p.numel() for p in layer.parameters())
-        except Exception:
-            removed_params = int(params_before * (len(drop_layers) / 4.0))
+        removed_params = sum(sum(p.numel() for p in layers[i].parameters()) for i in drop_layers)
+        for op in geometry["operations"]:
+            if op.get("layer") not in drop_layers and "shape_before" in op:
+                removed_params += math.prod(op["shape_before"]) - math.prod(op["shape_after"])
+            elif op.get("layer") not in drop_layers and op.get("kind") == "moe_expert_remove":
+                removed_params += sum(math.prod(param["shape"]) for param in op["parameters"])
 
         params_after = params_before - removed_params
         reduction_ratio = removed_params / max(params_before, 1)
@@ -1263,6 +1199,7 @@ class CampaignPipelineRunner:
             "parameter_reduction_ratio": reduction_ratio,
             "bytes_before": bytes_before,
             "conflicts": [],
+            "geometry": geometry,
         }
 
         (step_dir / "preview.json").write_text(json.dumps(preview, indent=2), encoding="utf-8")
@@ -1297,49 +1234,18 @@ class CampaignPipelineRunner:
 
         params_before = sum(p.numel() for p in self.model.parameters())
 
-        # 3. Apply directional ablation if profile is available
+        from .apply import apply_to_model
         profile_path = self.output_dir / "profile" / "profile.pt"
-        if profile_path.exists() and plan.get("ablation"):
-            profile = load_tensor_artifact(profile_path)
-            ablation = plan["ablation"]
-            strength = float(ablation.get("strength", 0.5))
-            ablate_layers = [int(x) for x in ablation.get("layers", [])]
-            targets = list(ablation.get("targets", ["mlp.down_proj", "self_attn.o_proj"]))
-            try:
-                _, layers = get_layers(self.model)
-                with torch.no_grad():
-                    for idx in ablate_layers:
-                        if 0 <= idx < len(layers):
-                            direction = profile["directions"][idx]
-                            for t in targets:
-                                parts = t.split(".")
-                                mod = layers[idx]
-                                for p in parts:
-                                    mod = getattr(mod, p, None)
-                                    if mod is None:
-                                        break
-                                if mod is not None and hasattr(mod, "weight"):
-                                    new_w = apply_constrained_directional_surgery(
-                                        mod.weight.data, direction, strength=strength
-                                    )
-                                    mod.weight.data.copy_(new_w)
-            except Exception as exc:
-                LOG.debug("Directional surgery partial application: %s", exc)
-
-        # 4. Apply layer drops
-        drop_layers = sorted(set(int(x) for x in plan.get("drop_layers", [])))
-        if drop_layers:
-            layer_path, layers = get_layers(self.model)
-            new_layers = [l for i, l in enumerate(layers) if i not in drop_layers]
-            set_layers(self.model, layer_path, new_layers)
+        operations = apply_to_model(self.model, str(profile_path) if profile_path.exists() else None,
+                                    str(plan_path))
+        drop_layers = operations["dropped_layers"]
 
         params_after = sum(p.numel() for p in self.model.parameters())
         candidate_hashes = compute_state_dict_hashes(self.model.state_dict())
         edited_tensors = [
-            k for k in candidate_hashes if candidate_hashes.get(k) != source_hashes.get(k)
+            k for k in sorted(set(candidate_hashes) | set(source_hashes))
+            if candidate_hashes.get(k) != source_hashes.get(k)
         ]
-        if not edited_tensors:
-            edited_tensors = list(candidate_hashes.keys())[:1] or ["state_dict"]
 
         # 5. Save candidate model and manifests
         torch.save(self.model.state_dict(), step_dir / "candidate_model.pt")
@@ -1387,46 +1293,23 @@ class CampaignPipelineRunner:
         step_dir.mkdir(parents=True, exist_ok=True)
         self._ensure_model_loaded()
 
-        steps = int(params.get("steps", 5))
-        lr = float(params.get("lr", 1e-4))
-        max_rebound = float(
-            self.config.thresholds.max_drop_rebound
-            if self.config.thresholds.max_drop_rebound is not None
-            else params.get("max_drop_rebound", 0.1)
-        )
-
-        # Optimize active parameters
-        trainable = [p for p in self.model.parameters() if p.requires_grad]
-        initial_loss = 0.45
-        final_loss = 0.28
-        drop_rebound = 0.03
-
-        if trainable:
-            opt = torch.optim.AdamW(trainable, lr=lr)
-            # Simulated or short lightweight steps
-            for _ in range(steps):
-                opt.zero_grad()
-                loss = torch.tensor(final_loss, requires_grad=True)
-                loss.backward()
-                opt.step()
-
-        rebound_passed = drop_rebound <= max_rebound
-
-        recovered_pt = step_dir / "recovered_model.pt"
-        torch.save(self.model.state_dict(), recovered_pt)
-
-        report = {
-            "training_steps": steps,
-            "initial_loss": initial_loss,
-            "final_loss": final_loss,
-            "loss_delta": final_loss - initial_loss,
-            "drop_rebound_score": drop_rebound,
-            "rebound_threshold": max_rebound,
-            "rebound_passed": rebound_passed,
-            "trainable_parameters": sum(p.numel() for p in trainable),
-        }
-        (step_dir / "recovery_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-
+        from .measured import recover_model, load_change_examples
+        def prompts(kind):
+            spec = next((s for s in self.config.datasets.values() if s.kind == kind
+                         and s.split in {"discovery", "search"}), None)
+            if spec and kind == "change":
+                return load_change_examples(spec.path)
+            return load_prompts(spec.path, spec.max_prompts) if spec else None
+        self.model, report = recover_model(
+            self.model, self.tokenizer, prompts("keep"), prompts("drop"), prompts("change"),
+            steps=int(params.get("steps", 5)), lr=float(params.get("lr", 1e-4)),
+            rank=int(params.get("lora_r", 8)), seed=self.config.seed,
+            max_rebound=self.config.thresholds.max_drop_rebound)
+        if not hasattr(self.model, "save_pretrained"):
+            raise ValueError("Recovery requires a reloadable HF checkpoint")
+        self.model.save_pretrained(step_dir, safe_serialization=True)
+        self.tokenizer.save_pretrained(step_dir)
+        (step_dir / "recovery_report.json").write_text(json.dumps(report, indent=2))
         return report
 
     def _step_quantize(self, step_dir: Path, params: dict[str, Any]) -> dict[str, Any]:
@@ -1434,27 +1317,31 @@ class CampaignPipelineRunner:
         step_dir.mkdir(parents=True, exist_ok=True)
         self._ensure_model_loaded()
 
-        bits = int(params.get("bits", 8))
-        mem_before = parameter_bytes(self.model)
-        # 8-bit cuts byte footprint by ~2x; 4-bit cuts by ~4x
-        comp_ratio = 2.0 if bits == 8 else 4.0
-        mem_after = int(mem_before / comp_ratio)
-        mean_kl = 0.012
-
-        quantized_pt = step_dir / "quantized_model.pt"
-        torch.save(self.model.state_dict(), quantized_pt)
-
-        report = {
-            "quantization_bits": bits,
-            "memory_before_bytes": mem_before,
-            "memory_after_bytes": mem_after,
-            "compression_ratio": comp_ratio,
-            "mean_kl_drift": mean_kl,
-            "passed": True,
-        }
-        (step_dir / "quantization_report.json").write_text(
-            json.dumps(report, indent=2), encoding="utf-8"
-        )
+        from .stage6_quantization import (QuantizationConfig, quantize_model,
+            validate_quantized_candidate, QuantizationValidationThresholds,
+            export_quantized_checkpoint, bind_calibration_dataset, calculate_model_memory_bytes)
+        spec = next((s for s in self.config.datasets.values() if s.kind == "calibration"), None)
+        if spec is None or self.tokenizer is None:
+            raise ValueError("Quantization requires real calibration data and a tokenizer")
+        prompts = load_prompts(spec.path, spec.max_prompts)
+        baseline = copy.deepcopy(self.model)
+        cfg = QuantizationConfig(bits=int(params.get("bits", 8)))
+        self._quantization_config = cfg
+        before = calculate_model_memory_bytes(self.model)
+        self.model = quantize_model(self.model, cfg)
+        validation = validate_quantized_candidate(baseline, self.model, prompts,
+            tokenizer=self.tokenizer, device=self.config.model.device,
+            thresholds=QuantizationValidationThresholds(
+                max_kl_drift=self.config.thresholds.max_mean_kl
+                if self.config.thresholds.max_mean_kl is not None else 0.5))
+        self._quantization_binding = bind_calibration_dataset(prompts, tokenizer=self.tokenizer)
+        export_quantized_checkpoint(self.model, step_dir, cfg,
+                                   calibration_binding=self._quantization_binding)
+        after = calculate_model_memory_bytes(self.model)
+        report = dict(quantization_bits=cfg.bits, memory_before_bytes=before,
+                      memory_after_bytes=after, compression_ratio=before / max(after, 1),
+                      mean_kl_drift=validation.kl_drift, passed=validation.passed)
+        (step_dir / "quantization_report.json").write_text(json.dumps(report, indent=2))
         return report
 
     def _step_export(self, step_dir: Path, params: dict[str, Any]) -> dict[str, Any]:
@@ -1462,51 +1349,31 @@ class CampaignPipelineRunner:
         step_dir.mkdir(parents=True, exist_ok=True)
         self._ensure_model_loaded()
 
-        export_format = str(params.get("format", "safetensors"))
+        from .stage7_export import benchmark_runtime_profile, BenchmarkProfile
+        from .stage6_quantization import QuantizedLinear, export_quantized_checkpoint, QuantizationConfig
         package_dir = step_dir / "package"
-        package_dir.mkdir(parents=True, exist_ok=True)
-
-        # Save weights in target format
-        if export_format == "safetensors":
-            try:
-                import safetensors.torch
-                safetensors.torch.save_file(
-                    self.model.state_dict(), package_dir / "model.safetensors"
-                )
-            except Exception:
-                torch.save(self.model.state_dict(), package_dir / "model.pt")
+        if any(isinstance(m, QuantizedLinear) for m in self.model.modules()):
+            export_quantized_checkpoint(self.model, package_dir,
+                                        self._quantization_config,
+                                        calibration_binding=self._quantization_binding)
+            runtime = "aegis torch dequantizing linear (custom loader required)"
         else:
-            torch.save(self.model.state_dict(), package_dir / "model.pt")
-
-        # Save configuration
-        if hasattr(self.model, "config") and getattr(self.model, "config", None) is not None:
-            cfg = self.model.config
-            cfg_dict = cfg if isinstance(cfg, dict) else getattr(cfg, "to_dict", lambda: {})()
-            (package_dir / "config.json").write_text(json.dumps(cfg_dict, indent=2), encoding="utf-8")
-
-        pkg_bytes = sum(f.stat().st_size for f in package_dir.iterdir() if f.is_file())
-        benchmark = {
-            "prefill_latency_ms": 14.5,
-            "decode_latency_ms": 4.2,
-            "tokens_per_sec": 238.1,
-            "resident_memory_mb": 112.4,
-        }
-
-        report = {
-            "export_format": export_format,
-            "package_dir": str(package_dir),
-            "package_bytes": pkg_bytes,
-            "benchmark": benchmark,
-        }
-        (step_dir / "export_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-
-        return {
-            "export_format": export_format,
-            "package_bytes": pkg_bytes,
-            "prefill_latency_ms": benchmark["prefill_latency_ms"],
-            "decode_latency_ms": benchmark["decode_latency_ms"],
-            "tokens_per_sec": benchmark["tokens_per_sec"],
-        }
+            if not hasattr(self.model, "save_pretrained"):
+                raise ValueError("Export requires a reloadable HF checkpoint")
+            self.model.save_pretrained(package_dir, safe_serialization=params.get("format") != "pytorch")
+            runtime = "transformers"
+        if self.tokenizer is None:
+            raise ValueError("Export requires tokenizer assets")
+        self.tokenizer.save_pretrained(package_dir)
+        benchmark = benchmark_runtime_profile(self.model, BenchmarkProfile(
+            prompt_length=int(params.get("prompt_length", 8)), decode_steps=int(params.get("decode_steps", 2))),
+            device=self.config.model.device, num_warmup=1, num_repeats=3).to_dict()
+        pkg_bytes = sum(p.stat().st_size for p in package_dir.rglob("*") if p.is_file())
+        report = dict(export_format=params.get("format", "safetensors"), package_dir=str(package_dir),
+                      package_bytes=pkg_bytes, runtime=runtime, benchmark=benchmark)
+        (step_dir / "export_report.json").write_text(json.dumps(report, indent=2))
+        return dict(package_bytes=pkg_bytes, prefill_latency_ms=benchmark["prefill_latency_ms"],
+                    decode_latency_ms=benchmark["decode_latency_per_token_ms"])
 
     # --------------------------------------------------------------------------
     # Execution Loop and Error Handling
@@ -1544,6 +1411,32 @@ class CampaignPipelineRunner:
             else:
                 LOG.warning("Preflight checks failed, proceeding non-strictly: %s", preflight.errors)
 
+        from .measured import bind_files, verify_binding
+        input_paths = {"model": self.config.model.path,
+                       **{f"dataset_{name}": spec.path for name, spec in self.config.datasets.items()}}
+        input_binding = bind_files(input_paths)
+        self._ensure_model_loaded()
+        source_model_hash = compute_model_hash(self.model)
+        source_tokenizer_hash = compute_tokenizer_hash(self.tokenizer)
+        from .operator_audit import implementation_binding, callable_binding
+        implementation = implementation_binding()
+        handlers = {name: callable_binding(handler) for name, handler in self.custom_step_handlers.items()}
+        binding_path = self.output_dir / "input_binding.json"
+        order = [step.to_dict() for step in self.config.steps if step.enabled]
+        if resume and binding_path.exists():
+            previous = json.loads(binding_path.read_text())
+            verify_binding(previous["binding"])
+            if previous.get("implementation") != implementation or previous.get("handlers") != handlers:
+                raise CampaignConfigError("Resume changed adapter/operator implementation or custom handlers")
+            if previous.get("source_model_hash") != source_model_hash or previous.get("tokenizer_hash") != source_tokenizer_hash:
+                raise CampaignConfigError("Resume changed the actual source model or tokenizer")
+            prior_order = previous["edit_order"]
+            if order[:len(prior_order)] != prior_order:
+                raise CampaignConfigError("Resume changed existing edit order or step parameters")
+        (binding_path).write_text(json.dumps(dict(binding=input_binding, edit_order=order,
+                                                   implementation=implementation, handlers=handlers,
+                                                   source_model_hash=source_model_hash, tokenizer_hash=source_tokenizer_hash), indent=2))
+
         # 2. Checkpoint resumption resolution
         resumed_step_names: set[str] = set()
         if resume:
@@ -1560,6 +1453,17 @@ class CampaignPipelineRunner:
                         all_valid = False
                         break
                 LOG.info("Resumed %d completed steps from checkpoint: %s", len(resumed_step_names), resumed_step_names)
+
+        if "apply" in resumed_step_names:
+            checkpoint_dir = self.output_dir / ("recover" if "recover" in resumed_step_names else "apply")
+            if "apply" not in self.custom_step_handlers:
+                from .validate import _load_hf
+                self.model, self.tokenizer = _load_hf(str(checkpoint_dir), self.config.model.device)
+            if "quantize" in resumed_step_names and "quantize" not in self.custom_step_handlers:
+                from .stage6_quantization import load_quantized_checkpoint, QuantizationConfig, CalibrationBinding
+                self.model, metadata = load_quantized_checkpoint(self.output_dir / "quantize", base_model=self.model)
+                self._quantization_config = QuantizationConfig.from_dict(metadata["quantization_config"])
+                self._quantization_binding = CalibrationBinding.from_dict(metadata["calibration_binding"])
 
         # 3. Sequential step execution
         enabled_steps = [s for s in self.config.steps if s.enabled]
@@ -1599,6 +1503,11 @@ class CampaignPipelineRunner:
                 else:
                     raise StepExecutionError(f"No execution handler registered for step '{step.name}'")
 
+                verify_binding(input_binding)
+                if compute_tokenizer_hash(self.tokenizer) != source_tokenizer_hash:
+                    raise CampaignConfigError("Tokenizer changed during campaign")
+                if implementation_binding() != implementation:
+                    raise CampaignConfigError("Operator implementation changed during campaign")
                 now_finish = datetime.datetime.now(datetime.timezone.utc)
                 st1 = now_finish.timestamp()
                 step_finish = now_finish.isoformat()
@@ -1782,8 +1691,10 @@ class CampaignPipelineRunner:
         # Helper to check a condition
         def check(crit: str, thresh: Optional[float], obs: Optional[float], op: str) -> None:
             nonlocal passed
-            if thresh is None or obs is None:
+            if thresh is None:
                 return
+            if obs is None or not math.isfinite(obs):
+                raise ThresholdGateError(f"Required measurement unavailable or non-finite: {crit}")
             ok = (obs <= thresh) if op == "<=" else (obs >= thresh)
             self.threshold_results[crit] = ThresholdResult(
                 criterion=crit,
@@ -1957,51 +1868,52 @@ class CampaignPipelineRunner:
 
     def _write_provenance_manifest(self, path: Path, created_at: str) -> None:
         """Write consolidated Stage 4A compliant ProvenanceManifest."""
-        model_hash = (
-            compute_model_hash(self.model)
-            if self.model is not None
-            else f"sha256:{hashlib.sha256(self.config.model.path.encode('utf-8')).hexdigest()}"
-        )
-        tok_hash = (
-            compute_tokenizer_hash(self.tokenizer)
-            if self.tokenizer is not None
-            else f"sha256:{'0'*64}"
-        )
-        cfg_hash = compute_config_hash(self.config.model.to_dict())
+        if self.model is None:
+            path.write_text(json.dumps({"status": "unavailable", "reason": "No model was loaded"}))
+            return
+        model_hash = compute_model_hash(self._baseline_model or self.model)
+        tok_hash = compute_tokenizer_hash(self.tokenizer)
+        cfg_hash = compute_config_hash(getattr(self._baseline_model or self.model, "config", {}))
 
         dataset_fingerprints: dict[str, Any] = {}
         for name, spec in self.config.datasets.items():
             p = Path(spec.path)
-            h = file_sha256(p) if p.exists() else "0" * 64
+            h = file_sha256(p)
+            count = len(load_prompts(p, spec.max_prompts))
             dataset_fingerprints[name] = DatasetFingerprint(
                 sha256=h,
-                sample_count=spec.max_prompts or 64,
-                split_counts={spec.split: spec.max_prompts or 64},
-                domain_counts={"general": spec.max_prompts or 64},
+                sample_count=count,
+                split_counts={spec.split: count},
+                domain_counts={"general": count},
             )
 
         if not dataset_fingerprints:
             dataset_fingerprints["default"] = DatasetFingerprint(
-                sha256="0" * 64,
-                sample_count=1,
-                split_counts={"discovery": 1},
-                domain_counts={"general": 1},
+                sha256=hashlib.sha256(b"[]").hexdigest(),
+                sample_count=0,
+                split_counts={},
+                domain_counts={},
+                metadata={"dataset_absent": True},
             )
 
-        step_hashes = {art.step: art.sha256 for art in self.artifacts}
+        from .operator_audit import implementation_binding
+        implementation = implementation_binding()
+        step_hashes = {f"{art.step}/{art.name}": art.sha256 for art in self.artifacts}
         manifest = ProvenanceManifest(
             schema_version="4a.1",
             model_hash=model_hash,
             tokenizer_hash=tok_hash,
             config_hash=cfg_hash,
             dataset_fingerprints=dataset_fingerprints,
-            adapter_version=self.config.model.architecture or "llama",
+            adapter_version="sha256:" + hashlib.sha256(json.dumps(implementation, sort_keys=True).encode()).hexdigest(),
             seed=self.config.seed,
-            dtype=self.config.model.dtype or "float32",
+            dtype=str(next((self._baseline_model or self.model).parameters()).dtype),
             operation_order=[s.name for s in self.config.steps if s.enabled],
             software_version="0.4.0",
             created_at=created_at,
-            metadata={"campaign_id": self.config.campaign_id, "step_hashes": step_hashes},
+            metadata={"campaign_id": self.config.campaign_id, "step_hashes": step_hashes,
+                      "candidate_model_hash": compute_model_hash(self.model),
+                      "implementation": implementation},
         )
         manifest_dict = manifest.to_dict()
         manifest_dict["manifest_hash"] = manifest.compute_manifest_hash()

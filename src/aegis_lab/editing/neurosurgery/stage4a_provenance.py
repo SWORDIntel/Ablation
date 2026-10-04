@@ -1329,13 +1329,24 @@ def compute_model_hash(model_or_state_dict: Union[torch.nn.Module, dict[str, tor
 
 def compute_tokenizer_hash(tokenizer: Any) -> str:
     """Compute deterministic SHA256 hash of a tokenizer."""
+    payload = {"class": f"{type(tokenizer).__module__}.{type(tokenizer).__qualname__}"}
     if hasattr(tokenizer, "get_vocab"):
-        vocab = tokenizer.get_vocab()
+        payload["vocab"] = tokenizer.get_vocab()
     elif hasattr(tokenizer, "vocab"):
-        vocab = tokenizer.vocab
+        payload["vocab"] = tokenizer.vocab
     else:
-        vocab = str(tokenizer)
-    canonical = json.dumps(vocab, sort_keys=True) if isinstance(vocab, dict) else str(vocab)
+        payload["state"] = vars(tokenizer) if hasattr(tokenizer, "__dict__") else None
+    backend = getattr(tokenizer, "backend_tokenizer", None)
+    if backend is not None and hasattr(backend, "to_str"):
+        payload["backend"] = json.loads(backend.to_str())
+        # Per-call batch padding/truncation caches are not tokenizer semantics.
+        payload["backend"].pop("padding", None)
+        payload["backend"].pop("truncation", None)
+    for name in ("special_tokens_map", "chat_template", "model_input_names", "model_max_length",
+                 "padding_side", "truncation_side", "clean_up_tokenization_spaces"):
+        if hasattr(tokenizer, name):
+            payload[name] = getattr(tokenizer, name)
+    canonical = json.dumps(payload, sort_keys=True, default=str)
     return f"sha256:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
 
 
@@ -1428,7 +1439,8 @@ class RestorationManifest:
             )
         for req in REQUIRED_RESTORATION_FIELDS:
             val = getattr(self, req, None)
-            if val is None or (isinstance(val, (str, list, dict)) and len(val) == 0):
+            no_op = req == "edited_tensors" and val == [] and self.source_hashes == self.candidate_hashes
+            if not no_op and (val is None or (isinstance(val, (str, list, dict)) and len(val) == 0)):
                 raise ValueError(f"Schema validation error: missing or empty required field '{req}'")
         if not isinstance(self.edited_tensors, list) or not all(isinstance(x, str) for x in self.edited_tensors):
             raise ValueError("edited_tensors must be a list of string tensor names")

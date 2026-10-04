@@ -118,6 +118,11 @@ def get_layers(model):
 def set_layers(model, layer_path: str, layers: list[torch.nn.Module]) -> None:
     nested_setattr(model, layer_path, torch.nn.ModuleList(layers))
     n = len(layers)
+    # HF cache slots follow current layer order, not source checkpoint indices.
+    for index, layer in enumerate(layers):
+        for module in layer.modules():
+            if hasattr(module, "layer_idx"):
+                module.layer_idx = index
     for cfg in (getattr(model, "config", None), getattr(getattr(model, "config", None), "text_config", None)):
         if cfg is not None and hasattr(cfg, "num_hidden_layers"):
             cfg.num_hidden_layers = n

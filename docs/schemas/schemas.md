@@ -33,3 +33,11 @@ Structural selector sections are `mlp.keep_indices`, `attention.keep_groups` and
 `state/db.py` defines jobs, stages and other metadata stores. `artifacts/store.py` stores file content at `<first-two-hash-chars>/<next-two>/<sha256>` beneath its configured root; metadata registration is optional. This file store does not imply complete model provenance or native database durability.
 
 Earlier job/manifest descriptions remain in the [schema archive](../archive/SCHEMAS_20261004.md); verify fields against the current producer before writing an integration.
+
+## Operator audit
+
+Installed commands always write `operator_audit.json` in an output directory, or `<output-file>.operator_audit.json` for file outputs. Commands without `--out` use the user state directory or `AEGIS_AUDIT_DIR`. Inputs must be local paths.
+
+The audit binds raw input bytes (model/tokenizer assets, datasets, plans and linked selections), every neurosurgery Python implementation file, CLI options, package versions, start/end timestamps, status and output hashes. Consumers verify audited producer artifacts and their model bindings. Missing legacy producer lineage is listed in `unbound_legacy_artifacts`; it is not silently described as complete lineage. Failed executions retain an audit in the state directory.
+
+Campaign `input_binding.json` additionally binds actual loaded model/tokenizer hashes, enabled step order/parameters and inspectable custom-handler source; resume rejects incompatible inputs or implementations. The older workflow library retains `workflow_input_audit.json` plus serialized task datasets, source and latest model-state hashes, tokenizer processing semantics and editor/evaluator source hashes. These records establish the declared execution inputs, not universal task acceptance or control of hidden external callback dependencies.

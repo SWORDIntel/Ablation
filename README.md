@@ -23,7 +23,7 @@ Define what the patient must **KEEP**, what should **CHANGE**, and what to **DRO
 | Branch and knowledge experiments | Dependency-aware modality removal, low-rank factual edits and empirical unlearning metrics | Advanced module CLI / Python |
 | Optional lab services | Workers, scheduling, QIHSE state, REST API and desktop GUI | Platform launchers |
 
-All-in-one means the instruments live together. Architecture support and integration differ across instruments; the current workflow wrappers still include demonstration steps. See the [capability and interface guide](docs/neurosurgery/CAPABILITIES.md).
+All-in-one means the instruments live together. Architecture support and integration differ across instruments; measured wrappers require real data and explicit acceptance gates. See the [capability and interface guide](docs/neurosurgery/CAPABILITIES.md).
 
 ## Install
 
@@ -37,7 +37,7 @@ python3 -m pip install -e .
 aegis-neurosurgery --help
 ```
 
-Python 3.9+ is declared in `pyproject.toml`. Dependencies include PyTorch, Transformers, PyYAML and pyzmq. Install a PyTorch build appropriate to your device. The core workflow can run on CPU and does not need a server, VPU or QIHSE library. Model size determines RAM/VRAM requirements.
+Python 3.9+ is declared in `pyproject.toml`. Dependencies include PyTorch, Transformers, PyYAML and pyzmq. Install a PyTorch build appropriate to your device. The core workflow can run on CPU and does not need a server, VPU or QIHSE library. Model size determines RAM/VRAM requirements. Installed operators require local checkpoints and input files so their mandatory audits can bind exact bytes; download remote checkpoints first.
 
 Optional extras are `.[dev]`, `.[api]`, `.[gui]` and `.[hardware]`. See [setup and operations](docs/OPERATIONS.md) for services and device qualification.
 
@@ -78,16 +78,16 @@ For attention, MoE, layer deletion, directional edits and typed selectors, conti
 
 ## Advanced instruments
 
-The installed entry point currently exposes the **core** commands. Use the separate module entry point for advanced commands:
+The core entry point exposes core commands. The installed advanced entry point also dispatches the stage instruments:
 
 ```bash
-python3 -m aegis_lab.editing.neurosurgery.cli_extended --help
+aegis-neurosurgery-advanced --help
 python3 -m aegis_lab.editing.neurosurgery.cli_extended recover --help
 python3 -m aegis_lab.editing.neurosurgery.cli_extended quantize --help
 python3 -m aegis_lab.editing.neurosurgery.cli_extended export-runtime --help
 ```
 
-The advanced parser also lists core commands, but its dispatcher handles advanced commands only. Use `aegis-neurosurgery` for core operations. The advanced command `ampute` is spelled that way in the source.
+The advanced entry point also dispatches core commands through the same handler. The module entry remains available. The advanced command `ampute` is spelled that way in the source.
 
 ## What results mean
 
@@ -95,7 +95,7 @@ The advanced parser also lists core commands, but its dispatcher handles advance
 - Dense surgery requires compatible separate projection tensors and representable config dimensions. Packed quantized tensors require format-specific handling.
 - KEEP KL/top-1 agreement and text NLL measure drift. They do not establish target success or complete retained competence.
 - Empirical unlearning reports tested suppression and residual failures; it cannot certify erasure of knowledge from weights.
-- Workflow and campaign reports can include placeholder or synthetic metrics. Use the explicit core path above and qualify advanced handlers against your own data.
+- Workflow and campaign defaults use real measurements and reject missing configured gates. Qualify task, architecture and runtime behavior against your own data; see the [trained-model diagnostic](docs/neurosurgery/QUALIFICATION.md).
 
 See [validation](docs/neurosurgery/VALIDATION.md), [capabilities](docs/neurosurgery/CAPABILITIES.md) and the [roadmap](docs/neurosurgery/ROADMAP.md) for the current boundaries.
 
@@ -108,6 +108,7 @@ python3 -m pip install -e '.[dev]'
 PYTHONPATH=src python3 -m unittest discover -s tests/unit -p 'test_neurosurgery_*.py'
 PYTHONPATH=src python3 -m unittest \
   tests.integration.test_neurosurgery_core_workflow \
+  tests.integration.test_neurosurgery_measured_workflow \
   tests.integration.test_neurosurgery_pipeline_acceptance
 ```
 

@@ -28,3 +28,15 @@ New regression coverage uses actual optimizer plan materialization for MLP, atte
 An offline tiny HF Llama workflow exercises MLP profiling/search, direct version-4 optimizer preview/apply, saved-checkpoint reload, held-out validation, cached generation and unchanged source weights. Its deliberately loose fixture gates force a structural cut; it is not a model-quality benchmark.
 
 Verification of the scoped fixes in an isolated checkout: **412 neurosurgery unit tests and 12 integration tests passed**, including the new core workflow and the existing pipeline acceptance module. CPU thread limits were used; no downloads were needed. Current documentation links and code fences were checked, and `git diff --check` passed.
+
+## Measured integration and operator audits (2026-10-04)
+
+The dedicated installed advanced entry point now dispatches core commands consistently. Advanced workflows and campaigns use real model activations, tokenized training data, checked plans, recovery measurements and reload validation. Missing or nonfinite required gate measurements are errors. General persistent operation composition and index remapping are integrated into core preview/apply; incompatible aliases and runtime-only exports are rejected before changing the source. Middle-layer removal also updates attention cache indices.
+
+Installed commands retain mandatory byte-level input, implementation, option and producer audits. Model-free plan generation carries forward source-model lineage. Workflow/campaign manifests also bind tokenizer processing semantics, edit order and inspectable custom callback sources; resume rejects changed inputs. Legacy artifacts without producer audits are explicitly marked. Lower-level numerical helpers are not independently audited operator runs.
+
+Verification in an isolated checkout, excluding existing local RX470 changes: **412 neurosurgery unit tests and 29 integration tests passed**. The integration suite exercises actual offline HF save/reload, recovery, held-out validation and cached generation, along with source/producer tampering, inherited model mismatch, missing metrics, supervised CHANGE targets, structural rollback, alias rejection, composition and remapping. Fixture quality gates do not qualify trained deployments.
+
+A separate [trained Qwen diagnostic](neurosurgery/QUALIFICATION.md) records real CPU recovery, stock reload, cached generation, disjoint held-out text checks, unchanged source hashes and host-specific benchmark measurements. Its optimizer rejected the proposed cut under the top-1 gate and selected the unchanged structural baseline: **zero parameters were removed**. The diagnostic predates the final audit integration and is not a released acceptance certificate. Five task/runtime/modality qualification items remain open in the [roadmap](neurosurgery/ROADMAP.md).
+
+Documentation links, code fences, entry-point metadata and CLI help were checked, and `git diff --check` passed.

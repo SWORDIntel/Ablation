@@ -1,6 +1,6 @@
 # Capability and interface boundaries
 
-The all-in-one model brain surgery kit has multiple entry points. Choose one explicitly rather than assuming a single launcher wires every stage together.
+The all-in-one model brain surgery kit has a core entry point and an installed advanced entry point. Both dispatch core commands; the advanced entry also dispatches the stage instruments.
 
 ## Core CLI
 
@@ -21,10 +21,12 @@ The older [dense selector conversion example](../examples/optimizer_to_selectors
 ## Advanced module CLI and libraries
 
 ```bash
+aegis-neurosurgery-advanced --help
+# Equivalent module entry:
 python3 -m aegis_lab.editing.neurosurgery.cli_extended --help
 ```
 
-This dispatcher handles `patch`, `recover`, `hypertune`, `quantize`, `export-runtime`, `ampute`, `unlearn` and `workflow`. Its help includes inherited core parsers, but core commands have no advanced dispatch handler. Invoke them with the core CLI.
+This dispatcher handles `patch`, `recover`, `hypertune`, `quantize`, `export-runtime`, `ampute`, `unlearn` and `workflow`. It also dispatches inherited core commands through the same core handler. Reinstall the package after updating to create `aegis-neurosurgery-advanced`.
 
 Stage modules provide separate contracts for provenance/task scoring, operation composition, causal patching, hypertuning, LoRA recovery, quantization, export, modality dependencies and knowledge-editing experiments. A passing fixture is evidence for that tested function and geometry, not universal model support. Advanced handlers need workload-specific qualification; see [advanced instruments](ADVANCED.md).
 
@@ -32,18 +34,21 @@ Stage modules provide separate contracts for provenance/task scoring, operation 
 
 The `workflow.py` library, advanced `workflow` handler and `pipeline_runner.py` campaign runner are distinct interfaces.
 
-- `cli_extended.handle_workflow` currently chooses layer 0 in its default localization step; its apply step records an `applied` status without calling the core plan applicator. Its recovery path builds data from a demonstration prompt. The dry-run branch emits a report without loading or validating the model's geometry or checking task acceptance.
-- `CampaignPipelineRunner._step_profile` generates seeded random directions/bases and fixed-form metrics instead of collecting real model activations. `_step_recover` reports constant losses and rebound values; its synthetic loss is not connected to model parameters.
-- Campaign handler registration enables real implementations to replace defaults, but the operator must supply and verify those handlers. Campaign completion, resume journals and report files do not make default metrics empirical measurements.
+- The advanced `workflow` command requires a local stock-HF checkpoint. It measures localization from KEEP/DROP activations, previews the actual surgery plan, calls core apply, trains LoRA on real tokenized KEEP/CHANGE data, saves merged checkpoints and independently reloads for held-out KEEP validation. `--validation-keep` must be disjoint from KEEP training prompts. Dry-run loads and previews actual geometry but does not apply, recover or claim task acceptance.
+- Workflow configuration can provide `profile`, `max_mean_kl` and `max_drop_rebound`. Explicit plans require their linked selections and residual profile when directional edits are present. CHANGE data must contain JSON/JSONL `prompt`/`target` records; recovery masks prompt labels and supervises target tokens.
+- Campaign defaults now collect real activations, use the checked core applicator, train real LoRA recovery, quantize actual weights and benchmark the actual runtime. Calibration data/tokenizer are required. Missing or non-finite configured measurements fail; no random profiles or constant quality/performance values substitute for measurements. Resume binds local inputs and rejects changed existing edit order/parameters.
+- The older workflow library requires datasets or an explicit evaluator and an explicit plan/editor. It no longer fabricates baseline/candidate/test reports or demo recovery tokens. Its convenience hypertuning mode rejects execution without a measured evaluator; the dedicated instrument remains available. Topology-changing rollback restores the baseline module structure and verifies exact original weights.
 
-Use the explicit core commands for structural surgery. Call advanced instruments with real data and independent gates. Do not present default wrapper reports as evidence that an end-to-end edit/recovery campaign succeeded.
+Installed commands now require local input paths and always write operator audits: exact input/output hashes, code/adapter hashes, options, package versions and producer links. Output paths cannot overlap inputs. Audited upstream artifacts must match their producer checksums and model bindings. Legacy artifacts remain readable but their missing producer lineage is explicit. Workflow/campaign APIs also bind model/tokenizer state, datasets, implementations, callback source and edit order; resume checks these bindings. These records do not qualify task behavior or hidden external dependencies in custom callbacks. `qualified` stays false for the convenience workflow; `heldout_validation_passed` records its requested KL check. See [qualification evidence](QUALIFICATION.md) for the trained Qwen diagnostic and unresolved acceptance.
 
 ## Architecture and result limits
 
 Dense adapters expect separate gated-MLP and Q/K/V/O projections with compatible tensor geometry. Attention cuts preserve Q-to-KV group mapping; MoE requires supported `ModuleList` experts and a linear gate/router. Packed, fused, latent-attention and custom modality implementations may be unsupported.
 
-The core selector format retains global uniform-dimension restrictions and fixed edit ordering. General Stage 4B remapping and operation contracts are library functionality, not automatically core-selector support.
+The core selector format retains global uniform-dimension restrictions and fixed edit ordering. Preview/apply validate resolved core operations through Stage 4B alias and composition checks. They also accept Stage 4B version-4 `operations` plans with arbitrary original-index remapping. Unified plans cannot mix core sections or export runtime-only hooks. Their preview executes on an isolated model copy, so allow RAM for that copy.
 
 INT4 packing and INT8 quantization helpers do not imply acceleration or compatibility with GGUF/AWQ/GPTQ or a particular kernel. SafeTensors storage alone does not prove a stock runtime can execute the exported checkpoint. Reload and benchmark the actual target.
 
 Structural byte estimates describe parameter storage in the loaded dtype. Task success, quality, memory and latency require separate measurement. Suppressed outputs do not prove knowledge erasure.
+
+Operator audits are saved beside `--out` (directory `operator_audit.json`, or file `.operator_audit.json` suffix). Commands without output paths use `AEGIS_AUDIT_DIR`, defaulting to the user state directory. Download remote checkpoints to a local directory before invoking an installed operator. Numerical stage APIs alone are not independently audited operator runs.

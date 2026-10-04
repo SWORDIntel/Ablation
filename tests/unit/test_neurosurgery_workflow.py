@@ -99,6 +99,28 @@ def create_test_datasets() -> dict[str, NeurosurgeryDataset]:
     return {"keep": ds_keep, "drop": ds_drop}
 
 
+def failing_keep_fixture(model, split):
+    """Explicit gate-control stub, not a claimed empirical model score."""
+    return EvaluationReport(keep_report=SlicedMetricsReport(
+        kind="keep", sample_count=1, overall_score=0.95, worst_slice_score=0.95,
+        worst_slice_damage=0.05, worst_slice_domain="fixture", domain_metrics={}),
+        drop_report=SlicedMetricsReport(kind="drop", sample_count=1, overall_score=1.0,
+        worst_slice_score=1.0, worst_slice_damage=0.0, worst_slice_domain="fixture", domain_metrics={}))
+
+
+def measured_fixture_config(**kwargs):
+    """Unit fixtures supply explicit data and an editor; production has no demo defaults."""
+    kwargs.setdefault("datasets", create_test_datasets())
+    kwargs.setdefault("tokenizer", MockTokenizer())
+    def fixture_editor(model):
+        with torch.no_grad():
+            for name, module in model.named_modules():
+                if isinstance(module, nn.Linear) and name.endswith(("down_proj", "o_proj")):
+                    module.weight.mul_(0.8)
+    kwargs.setdefault("candidate_editor_fn", fixture_editor)
+    return WorkflowConfig(**kwargs)
+
+
 class TestNeurosurgeryWorkflowSuccess(unittest.TestCase):
     """Tests covering end-to-end successful workflow execution."""
 
@@ -108,7 +130,7 @@ class TestNeurosurgeryWorkflowSuccess(unittest.TestCase):
             datasets = create_test_datasets()
             tokenizer = MockTokenizer()
 
-            cfg = WorkflowConfig(
+            cfg = measured_fixture_config(
                 model=model,
                 output_dir=tmpdir,
                 tokenizer=tokenizer,
@@ -190,29 +212,14 @@ class TestNeurosurgeryWorkflowSuccess(unittest.TestCase):
             self.assertIn("## 4. Measured Performance", md_text)
             self.assertIn("## 5. Unresolved Limitations", md_text)
 
-    def test_successful_workflow_with_lora_recovery(self) -> None:
+    def test_recovery_requires_reloadable_model_and_real_data(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            model = TinyCausalLM()
-            cfg = WorkflowConfig(
-                model=model,
-                output_dir=tmpdir,
-                objectives=WorkflowObjectives(min_keep_retention=0.8, min_drop_suppression=0.7),
-                budgets=WorkflowBudgets(max_recovery_steps=2),
-                enable_recovery=True,
-                recovery_config=RecoveryConfig(max_steps=2, lr=1e-4),
-            )
+            cfg = WorkflowConfig(model=TinyCausalLM(), output_dir=tmpdir, enable_recovery=True)
             wf = NeurosurgeryWorkflow(cfg)
             res = wf.run()
+            self.assertFalse(res.success)
+            self.assertEqual(wf.get_step_record(WorkflowStep.PROFILE_BASELINE).status, StepStatus.FAILED)
 
-            self.assertTrue(res.success)
-            self.assertEqual(res.workflow_status, WorkflowStatus.COMPLETED)
-
-            # Step 5 must be COMPLETED (not skipped)
-            rec5 = wf.get_step_record(WorkflowStep.RECOVERY_HYPERTUNING)
-            self.assertEqual(rec5.status, StepStatus.COMPLETED)
-            self.assertTrue(rec5.gate_passed)
-            self.assertEqual(rec5.data.get("mode"), "recovery")
-            self.assertIn("trainable_parameters", rec5.data)
 
 
 class TestNeurosurgeryWorkflowEarlyTermination(unittest.TestCase):
@@ -222,10 +229,11 @@ class TestNeurosurgeryWorkflowEarlyTermination(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             model = TinyCausalLM()
             # Require unachievable retention: 0.999
-            cfg = WorkflowConfig(
+            cfg = measured_fixture_config(
                 model=model,
                 output_dir=tmpdir,
                 objectives=WorkflowObjectives(min_keep_retention=0.999),
+                custom_evaluator=failing_keep_fixture,
                 auto_rollback_on_failure=False,
             )
             wf = NeurosurgeryWorkflow(cfg)
@@ -253,7 +261,7 @@ class TestNeurosurgeryWorkflowEarlyTermination(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             model = TinyCausalLM()
             # Budget set to 1 parameter (exceeded by any linear layer edit)
-            cfg = WorkflowConfig(
+            cfg = measured_fixture_config(
                 model=model,
                 output_dir=tmpdir,
                 budgets=WorkflowBudgets(max_parameter_budget=1),
@@ -274,7 +282,7 @@ class TestNeurosurgeryWorkflowEarlyTermination(unittest.TestCase):
             def failing_drop_evaluator(m: nn.Module) -> float:
                 return 0.99  # high drop score triggering rebound
 
-            cfg = WorkflowConfig(
+            cfg = measured_fixture_config(
                 model=model,
                 output_dir=tmpdir,
                 objectives=WorkflowObjectives(max_drop_rebound=0.01),
@@ -336,7 +344,7 @@ class TestNeurosurgeryWorkflowEarlyTermination(unittest.TestCase):
                         ),
                     )
 
-            cfg = WorkflowConfig(
+            cfg = measured_fixture_config(
                 model=model,
                 output_dir=tmpdir,
                 objectives=WorkflowObjectives(min_keep_retention=0.80),
@@ -361,10 +369,11 @@ class TestNeurosurgeryWorkflowRollback(unittest.TestCase):
             orig_weights = {k: v.clone() for k, v in model.state_dict().items()}
 
             # Unachievable keep retention forces failure and triggers rollback
-            cfg = WorkflowConfig(
+            cfg = measured_fixture_config(
                 model=model,
                 output_dir=tmpdir,
                 objectives=WorkflowObjectives(min_keep_retention=0.999),
+                custom_evaluator=failing_keep_fixture,
                 auto_rollback_on_failure=True,
             )
             wf = NeurosurgeryWorkflow(cfg)
@@ -394,7 +403,7 @@ class TestNeurosurgeryWorkflowRollback(unittest.TestCase):
                     m.mlp.down_proj.weight.fill_(9999.0)
                 raise RuntimeError("Simulated editor crash")
 
-            cfg = WorkflowConfig(
+            cfg = measured_fixture_config(
                 model=model,
                 output_dir=tmpdir,
                 candidate_editor_fn=crashing_editor,
@@ -414,7 +423,7 @@ class TestNeurosurgeryWorkflowRollback(unittest.TestCase):
             model = TinyCausalLM()
             orig_weight = model.o_proj.weight.clone()
 
-            cfg = WorkflowConfig(
+            cfg = measured_fixture_config(
                 model=model,
                 output_dir=tmpdir,
                 auto_rollback_on_failure=False,
@@ -443,7 +452,7 @@ class TestNeurosurgeryWorkflowManifestAndArchive(unittest.TestCase):
     def test_manifest_creation_and_contents(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             model = TinyCausalLM()
-            cfg = WorkflowConfig(
+            cfg = measured_fixture_config(
                 model=model,
                 output_dir=tmpdir,
                 objectives=WorkflowObjectives(min_keep_retention=0.8, min_drop_suppression=0.7),
@@ -496,7 +505,7 @@ class TestNeurosurgeryWorkflowManifestAndArchive(unittest.TestCase):
             model = TinyCausalLM()
             orig_weights = {k: v.clone() for k, v in model.state_dict().items()}
 
-            cfg = WorkflowConfig(model=model, output_dir=tmpdir)
+            cfg = measured_fixture_config(model=model, output_dir=tmpdir)
             wf = NeurosurgeryWorkflow(cfg)
 
             wf.step_inspect()
@@ -524,14 +533,14 @@ class TestNeurosurgeryWorkflowManifestAndArchive(unittest.TestCase):
                 min_drop_suppression=None,
                 min_change_success=None,
             )
-            cfg = WorkflowConfig(model=model, output_dir=tmpdir, objectives=empty_objs)
+            cfg = measured_fixture_config(model=model, output_dir=tmpdir, objectives=empty_objs)
             wf = NeurosurgeryWorkflow(cfg)
             with self.assertRaises(Exception):
                 wf.step_inspect()
 
             # Negative budget must be rejected in Step 1
             invalid_budgets = WorkflowBudgets(max_parameter_budget=-10)
-            cfg2 = WorkflowConfig(model=model, output_dir=tmpdir, budgets=invalid_budgets)
+            cfg2 = measured_fixture_config(model=model, output_dir=tmpdir, budgets=invalid_budgets)
             wf2 = NeurosurgeryWorkflow(cfg2)
             with self.assertRaises(Exception):
                 wf2.step_inspect()
@@ -539,7 +548,7 @@ class TestNeurosurgeryWorkflowManifestAndArchive(unittest.TestCase):
     def test_step_status_transitions_and_isolation(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             model = TinyCausalLM()
-            cfg = WorkflowConfig(model=model, output_dir=tmpdir)
+            cfg = measured_fixture_config(model=model, output_dir=tmpdir)
             wf = NeurosurgeryWorkflow(cfg)
 
             # Before running, all steps must be PENDING
@@ -559,7 +568,7 @@ class TestNeurosurgeryWorkflowManifestAndArchive(unittest.TestCase):
     def test_hypertuning_mode_in_step5(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             model = TinyCausalLM()
-            cfg = WorkflowConfig(
+            cfg = measured_fixture_config(
                 model=model,
                 output_dir=tmpdir,
                 enable_hypertuning=True,
@@ -568,15 +577,15 @@ class TestNeurosurgeryWorkflowManifestAndArchive(unittest.TestCase):
             wf = NeurosurgeryWorkflow(cfg)
             res = wf.run()
 
-            self.assertTrue(res.success)
+            self.assertFalse(res.success)
             rec5 = wf.get_step_record(WorkflowStep.RECOVERY_HYPERTUNING)
-            self.assertEqual(rec5.status, StepStatus.COMPLETED)
-            self.assertEqual(rec5.data.get("mode"), "hypertuning")
+            self.assertEqual(rec5.status, StepStatus.FAILED)
+            self.assertIn("explicit measured evaluator", rec5.error_message)
 
     def test_quantization_in_step6(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             model = TinyCausalLM()
-            cfg = WorkflowConfig(
+            cfg = measured_fixture_config(
                 model=model,
                 output_dir=tmpdir,
                 enable_quantization=True,

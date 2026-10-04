@@ -35,11 +35,11 @@ Modules live under `src/aegis_lab/editing/neurosurgery/`. Tests live under `test
 
 - [x] Fix the missing tensor-loader import in standalone MLP search and support direct optimizer version-4 previews, with producer/consumer, checksum, sparse-MoE and offline HF reload regression coverage.
 
-- [ ] Wire advanced commands into the installed entry point, or provide a dedicated installed advanced entry point with consistent dispatch.
-- [ ] Replace advanced workflow placeholder localization/apply and demonstration recovery data with measured, plan-driven implementations.
-- [ ] Replace campaign random profiling and constant recovery/rebound metrics with real model/data handlers; reject unavailable required measurements.
-- [ ] Bind the exact model, tokenizer, datasets, adapter and edit order end-to-end through every operator path, rather than relying on optional provenance helpers.
-- [ ] Integrate the Stage 4B general operation/remapping contract into the core selector/apply path with composition and alias rejection tests.
+- [x] Wire advanced commands into the installed entry point, or provide a dedicated installed advanced entry point with consistent dispatch.
+- [x] Replace advanced workflow placeholder localization/apply and demonstration recovery data with measured, plan-driven implementations.
+- [x] Replace campaign random profiling and constant recovery/rebound metrics with real model/data handlers; reject unavailable required measurements.
+- [x] Bind exact local model/tokenizer assets, datasets, operator/adapter implementation and edit order across installed commands and measured workflow/campaign paths; verify producer audits and resume inputs, and explicitly mark incomplete legacy lineage.
+- [x] Integrate the Stage 4B general operation/remapping contract into the core selector/apply path with composition and alias rejection tests.
 - [ ] Publish a reproducible real-model edit → recover → reload → evaluate campaign on independent KEEP/CHANGE/DROP tasks, with exact restoration evidence.
 - [ ] Qualify each claimed architecture/version on stock reload and cached generation; distinguish fixtures from supported deployments.
 - [ ] Qualify quantized formats on actual target kernels/runtimes and publish quality, size, peak memory, prefill/decode latency and baseline conditions.
@@ -47,6 +47,8 @@ Modules live under `src/aegis_lab/editing/neurosurgery/`. Tests live under `test
 - [ ] Publish empirical factual-edit/unlearning results with locality, interference, extraction probes and uncertainty; make no erasure certification claim.
 
 The [previous roadmap](../archive/NEUROSURGERY_ROADMAP_20261004.md) preserves implementation milestone history. Its all-complete checkboxes and test counts do not establish the integration acceptance above.
+
+A [trained Qwen diagnostic](QUALIFICATION.md) now records real recovery, reload, cached generation, input hashes and host-specific measurements. It correctly retained the unchanged structural baseline under its strict gates and does not satisfy the remaining full task/multimodal/quantized acceptance items.
 
 ## Documentation refresh
 

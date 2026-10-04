@@ -102,21 +102,19 @@ def _apply_structured(model, plan_file: Path, plan: dict) -> dict:
     return log
 
 
-def run_apply(model_path: str, profile_path: Optional[str], plan_path: str, out_dir: str, device: str = "auto") -> None:
-    device = resolve_device(device)
+def apply_to_model(model, profile_path, plan_path):
+    """Preflight every operation before applying the fixed core edit order."""
+    from .preview import build_preview
+    build_preview(model, plan_path, profile_path)
     plan_file = Path(plan_path)
     plan = yaml.safe_load(plan_file.read_text(encoding="utf-8"))
-    ablation = plan.get("ablation") or {}
-    directional_layers = [int(x) for x in ablation.get("layers", [])]
-    if directional_layers:
-        if not profile_path:
-            raise ValueError("--profile is required when plan contains directional ablation layers")
-        profile = load_tensor_artifact(profile_path)
-    else:
-        profile = None
-    model, tokenizer = _load_hf(model_path, device)
-    params_before = sum(p.numel() for p in model.parameters())
-    bytes_before = parameter_bytes(model)
+    if "operations" in plan:
+        from .stage4b_contract import UnifiedPlan, apply_plan
+        result = apply_plan(model, UnifiedPlan.from_dict(plan))
+        return dict(unified=[op.to_dict() for op in result.applied_operations],
+                    dropped_layers=result.removed_components.get("layers", []),
+                    details=result.details)
+    profile = load_tensor_artifact(profile_path) if (plan.get("ablation") or {}).get("layers") else None
     layer_path, layers_obj = get_layers(model)
     layers = list(layers_obj)
 
@@ -136,15 +134,51 @@ def run_apply(model_path: str, profile_path: Optional[str], plan_path: str, out_
         LOG.info("dropped layers: %s", drop)
     operation_log["dropped_layers"] = drop
 
+    return operation_log
+
+
+def run_apply(model_path: str, profile_path: Optional[str], plan_path: str, out_dir: str, device: str = "auto") -> None:
+    from .measured import bind_plan_inputs, verify_binding
+    source = Path(model_path).resolve()
+    destination = Path(out_dir).resolve()
+    if destination == source or source in destination.parents:
+        raise ValueError("Candidate output must be separate from the source checkpoint")
+    if destination.exists() and any(destination.iterdir()):
+        raise ValueError("Candidate output directory must be empty")
+    binding = bind_plan_inputs(model_path, plan_path, profile_path)
+    device = resolve_device(device)
+    plan_file = Path(plan_path)
+    plan = yaml.safe_load(plan_file.read_text(encoding="utf-8"))
+    ablation = plan.get("ablation") or {}
+    directional_layers = [int(x) for x in ablation.get("layers", [])]
+    if directional_layers:
+        if not profile_path:
+            raise ValueError("--profile is required when plan contains directional ablation layers")
+        profile = load_tensor_artifact(profile_path)
+    else:
+        profile = None
+    model, tokenizer = _load_hf(model_path, device)
+    params_before = sum(p.numel() for p in model.parameters())
+    bytes_before = parameter_bytes(model)
+    layer_path, _ = get_layers(model)
+    operation_log = apply_to_model(model, profile_path, plan_path)
+
     params_after = sum(p.numel() for p in model.parameters())
     bytes_after = parameter_bytes(model)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
+    verify_binding(binding)
     model.save_pretrained(out, safe_serialization=True)
     tokenizer.save_pretrained(out)
     manifest = {
         "version": int(plan.get("version", 3)),
         "source_model": model_path,
+        "binding": binding,
+        "edit_order": ([{"kind": op["kind"], "target_path": op["target_path"], "order": op.get("order")}
+                        for op in operation_log["unified"]] if "unified" in operation_log else
+                       ["directional", "mlp", "attention", "moe", "layer_removal"]),
+        "adapter": {"architecture": getattr(model.config, "model_type", type(model).__name__),
+                    "implementation": file_sha256(Path(__file__).with_name("apply.py"))},
         "profile": str(profile_path) if profile_path else None,
         "plan": str(plan_path),
         "plan_sha256": file_sha256(plan_path),

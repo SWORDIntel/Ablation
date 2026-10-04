@@ -1,6 +1,6 @@
 # Advanced instruments
 
-These tools expand the all-in-one kit beyond structural cuts. They use a separate module CLI and Python stage libraries. Start with a validated candidate and preserve its parent checkpoint.
+These tools expand the all-in-one kit beyond structural cuts. They use `aegis-neurosurgery-advanced` (or its equivalent module CLI) and Python stage libraries. Start with a validated candidate and preserve its parent checkpoint.
 
 ```bash
 python3 -m aegis_lab.editing.neurosurgery.cli_extended patch --help
@@ -36,6 +36,14 @@ Apply the reviewed edit to a separate checkpoint, establish its regressions, rec
 python3 -m aegis_lab.editing.neurosurgery.cli_extended workflow --help
 ```
 
-This is an experimental convenience handler with placeholder stages. Its `--dry-run` checks neither geometry nor quality. It is not the execution route for the core plan format.
+This handler executes local HF plans and measured recovery. It requires real datasets and independent held-out KEEP validation; dry-run loads the model and checks plan geometry. A minimal plan-driven run is:
 
-`pipeline_runner.run_campaign` is a Python campaign API with step hooks, journals and reports. Its default profiling and recovery are synthetic; replace them with qualified handlers before a measured campaign. Its configuration schema differs from the module CLI's workflow config. See [capabilities](CAPABILITIES.md) and [schemas](../schemas/schemas.md).
+```bash
+aegis-neurosurgery-advanced workflow --model models/base --plan runs/opt/optimized_plan.yaml \
+  --keep data/keep-training.txt --drop data/drop.txt --validation-keep data/keep-test.txt \
+  --stages inspect,plan,apply,recover,validate,export --out runs/workflow
+```
+
+Use `--config` for `profile`, `max_mean_kl` and `max_drop_rebound`; inspect the real reports and independently test task objectives. CHANGE recovery data uses JSON/JSONL `prompt`/`target` records. `recover --drop` supplies evaluation data for configured DROP gates. `quantize` requires real `--calibration-data` and applies its requested KL limit.
+
+`pipeline_runner.run_campaign` is a distinct campaign API with step hooks, journals, measured defaults and strict required-measurement gates. Its configuration schema differs from the CLI workflow config. Custom handlers still require their own qualification. See [capabilities](CAPABILITIES.md), [qualification](QUALIFICATION.md) and [schemas](../schemas/schemas.md).
