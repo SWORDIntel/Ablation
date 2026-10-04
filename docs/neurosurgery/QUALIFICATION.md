@@ -24,13 +24,28 @@ OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 PYTHONPATH=src \
 
 Use a fresh output directory. The script downloads nothing, preserves its parent checkpoint, verifies source/input hashes and retains profiles, the optimizer plan, preview, saved candidates, held-out validation and raw benchmarks. A feasible optimizer result can retain everything; inspect `parameters_removed` rather than assuming a physical cut occurred.
 
+## Packed quantization diagnostic (2026-10-04)
+
+The pinned Qwen model above was quantized to packed per-channel INT8 and INT4 with the repository’s Stage 6 implementation, exported, loaded through its custom loader, and run through two-token cached generation. The report records exact format sizes, held-out KL/MSE/NLL measurements, and host-specific latency. The stock BF16 checkpoint occupied 999.6 MB on disk and 988.1 MB in tensors. INT8 occupied 769.4 MB on disk (22.2% fewer tensor bytes); INT4 occupied 522.4 MB (47.2% fewer tensor bytes).
+
+The held-out set contained only four generic trivia sentences. There were no DROP examples, so DROP leakage is unmeasured. INT8 KL drift was `0.398`; INT4 drift was `15.83`, with keep-retention measurements `0.887` and `0.363` respectively. No task acceptance gate was supplied, so neither format is marked as passing. The broad internal thresholds used to collect these metrics are not acceptance criteria.
+
+On an Intel Xeon E5-2470 v2 at four CPU threads, with eight prompt tokens, one decode step, zero warmups and two repeats, BF16 baseline prefill averaged `1651 ms` and decode `1734 ms/token`. INT8 measured `4891 ms` prefill and `5829 ms/token`; INT4 measured `9432 ms` and `10525 ms/token`. These short, noisy measurements show this dequantizing CPU path is slower in this run. The quantized process RSS includes baseline, candidate and loader copies, so it cannot be compared as deployment memory. `QuantizedLinear` expands each weight and calls floating-point `F.linear`; this experiment qualifies no accelerated integer kernel or stock Transformers loader.
+
+[Raw measurements](results/qwen2_quant_diagnostic_20261004.json) and [reproduction script](../../scripts/qualify_quantization.py) preserve the setup. Reproduce against the already-downloaded pinned checkpoint with:
+
+```bash
+OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 PYTHONPATH=src \
+  python3 scripts/qualify_quantization.py --model "$MODEL_ROOT" --out runs/qwen2-quantization
+```
+
 ## Remaining real-model acceptance
 
 The Qwen diagnostic does not complete these roadmap items:
 
 - Independent KEEP/CHANGE/DROP task acceptance and full edit/recovery/restoration evidence.
 - Every supported architecture/version on stock reload and cached generation.
-- Actual quantized target kernels with quality, size, peak memory, prefill/decode latency and baseline conditions. Current `QuantizedLinear` dequantizes weights for PyTorch `F.linear`; custom checkpoint loading is required. Packed storage does not imply an integer kernel or stock runtime support.
+- Actual accelerated quantized target kernels with representative quality gates, deployment memory, prefill/decode latency and baseline conditions. The Qwen CPU diagnostic above measures the floating-point dequantization path and shows no acceleration; custom checkpoint loading is required.
 - Retained-modality execution after branch removal on real multimodal checkpoints.
 - Factual-edit/unlearning locality, interference, extraction probes and uncertainty.
 Installed commands and workflow/campaign execution now retain mandatory provenance audits. Legacy upstream producer lineage and hidden external dependencies of custom callbacks remain explicit limits; the development diagnostic predates the final operator audit integration.

@@ -1,0 +1,79 @@
+{
+  "experiment": "Qwen2.5-0.5B-Instruct packed affine quantization diagnostic",
+  "model_revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+  "runtime": {
+    "torch": "2.13.0+cu130",
+    "transformers": "5.5.4",
+    "device": "CPU",
+    "cpu": "Intel Xeon E5-2470 v2 @ 2.40GHz",
+    "threads": 4,
+    "dtype": "bfloat16",
+    "cuda_available": false
+  },
+  "workload": {
+    "calibration_samples": 4,
+    "heldout_samples": 4,
+    "benchmark_prompt_tokens": 8,
+    "decode_steps": 1,
+    "warmups": 0,
+    "repeats": 2,
+    "durations_seconds": 330.64,
+    "split": "generic trivia only; not a task acceptance dataset"
+  },
+  "baseline": {
+    "tensor_bytes": 988065792,
+    "checkpoint_file_bytes": 999602607,
+    "prefill_mean_ms": 1651.0188,
+    "prefill_std_ms": 77.5418,
+    "decode_per_token_mean_ms": 1733.8589,
+    "process_peak_rss_mb": 1721.36
+  },
+  "formats": [
+    {
+      "bits": 8,
+      "modules": 169,
+      "packed_modules": 0,
+      "tensor_bytes": 769110272,
+      "tensor_reduction_ratio": 0.2216001421897217,
+      "export_bytes": 769399036,
+      "heldout_kl_drift": 0.39804692566394806,
+      "heldout_mse_drift": 0.2041502259671688,
+      "heldout_keep_retention": 0.8869047611951828,
+      "generation_nll_drift": 0.12109375,
+      "prefill_mean_ms": 4890.9295,
+      "prefill_std_ms": 255.9504,
+      "decode_per_token_mean_ms": 5829.1698,
+      "process_peak_rss_mb": 4373.2,
+      "export_reload_parity": true,
+      "cached_generation_executed": true
+    },
+    {
+      "bits": 4,
+      "modules": 169,
+      "packed_modules": 169,
+      "tensor_bytes": 522129664,
+      "tensor_reduction_ratio": 0.47156386930152927,
+      "export_bytes": 522417431,
+      "heldout_kl_drift": 15.833147525787354,
+      "heldout_mse_drift": 6.570669054985046,
+      "heldout_keep_retention": 0.3630952462553978,
+      "generation_nll_drift": 1.00390625,
+      "prefill_mean_ms": 9432.4678,
+      "prefill_std_ms": 774.0782,
+      "decode_per_token_mean_ms": 10525.3643,
+      "process_peak_rss_mb": 4796.57,
+      "export_reload_parity": true,
+      "cached_generation_executed": true
+    }
+  ],
+  "quality_gate": "not assessed: user acceptance limits and representative task datasets were not supplied",
+  "kernel": "QuantizedLinear dequantizes weights during forward and calls floating-point torch.nn.functional.linear",
+  "limitations": [
+    "The very broad thresholds used to collect metrics are not an acceptance gate; library pass flags are intentionally omitted.",
+    "Generic trivia is not representative of model use.",
+    "Latency benchmark uses two repeats without warmup and is noisy.",
+    "Process RSS for quantized runs includes original, candidate and loader copies; it is not a deployment memory comparison.",
+    "No accelerated integer kernel or stock Transformers loading was qualified.",
+    "A custom loader and matching model architecture are required."
+  ]
+}

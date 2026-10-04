@@ -48,7 +48,7 @@ Modules live under `src/aegis_lab/editing/neurosurgery/`. Tests live under `test
 
 The [previous roadmap](../archive/NEUROSURGERY_ROADMAP_20261004.md) preserves implementation milestone history. Its all-complete checkboxes and test counts do not establish the integration acceptance above.
 
-A [trained Qwen diagnostic](QUALIFICATION.md) now records real recovery, reload, cached generation, input hashes and host-specific measurements. It correctly retained the unchanged structural baseline under its strict gates and does not satisfy the remaining full task/multimodal/quantized acceptance items.
+The [trained Qwen diagnostics](QUALIFICATION.md) now record recovery/reload and packed INT8/INT4 measurements with host-specific CPU timings. Structural pruning retained the unchanged baseline under its strict gate; INT4 had severe held-out drift. These small generic-text runs establish neither full task acceptance nor accelerated target-kernel qualification.
 
 ## Documentation refresh
 
