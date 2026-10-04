@@ -9,6 +9,9 @@ import torch.nn as nn
 import yaml
 
 from aegis_lab.editing.neurosurgery.preview import build_preview
+from aegis_lab.editing.neurosurgery.optimizer import (
+    CandidateState, SearchConstraints, _materialize_plan,
+)
 
 
 class MockMLP(nn.Module):
@@ -187,6 +190,74 @@ class TestNeurosurgeryPreview(unittest.TestCase):
         removed = [op for op in ops if op["kind"] == "moe_expert_remove"]
         self.assertEqual([op["expert"] for op in removed], [1, 3])
         self.assertTrue(all(op["parameters"][0]["name"].endswith("proj.weight") for op in removed))
+
+    def test_preview_accepts_actual_optimizer_plans_without_rewriting(self):
+        cases = [
+            ("mlp", MockModel, [1, 2, 4], CandidateState(mlp_level=1)),
+            ("attention", MockAttentionModel, [1], CandidateState(attention_level=1)),
+            ("moe", MockMoEModel, [0, 2], CandidateState(moe_level=1)),
+        ]
+        for kind, model_factory, indices, state in cases:
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
+                model = model_factory()
+                if kind == "moe":
+                    # MoE block positions need not equal transformer-layer IDs.
+                    model.model.layers.insert(0, nn.Identity())
+                    model.config.num_hidden_layers = 2
+                before = {name: tensor.clone() for name, tensor in model.state_dict().items()}
+                ratios = {name: [1.0, 0.5] for name in ("mlp", "attention", "moe")}
+                cache = {kind: {0.5: [torch.tensor(indices)]}}
+                folder = Path(tmp)
+                profile = folder / "profile.pt"
+                torch.save({"version": 1}, profile)
+                plan = _materialize_plan(
+                    folder,
+                    {"trial_id": 1, "mean_kl": 0.01, "top1_agreement": 1.0,
+                     "bytes_saved": 100, "estimated_macs_saved_per_token": 10},
+                    state, ratios, cache, {kind: str(profile)}, [], SearchConstraints(),
+                )
+                original_plan = plan.read_bytes()
+                self.assertEqual(yaml.safe_load(original_plan)["version"], 4)
+                report = build_preview(model, str(plan))
+                self.assertGreater(report["summary"]["operation_count"], 0)
+                self.assertEqual(plan.read_bytes(), original_plan)
+                for name, tensor in model.state_dict().items():
+                    self.assertTrue(torch.equal(tensor, before[name]))
+                if kind == "moe":
+                    self.assertTrue(all(op["layer"] == 1 for op in report["operations"]))
+                # Version-4 support must still verify the producer's artifact hash.
+                selection = folder / yaml.safe_load(original_plan)["structured"][kind]["selection"]
+                with selection.open("ab") as artifact:
+                    artifact.write(b"tampered")
+                with self.assertRaisesRegex(ValueError, "checksum"):
+                    build_preview(model, str(plan))
+
+    def test_preview_version_four_preserves_directional_targets(self):
+        model = MockModel()
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            profile = folder / "profile.pt"
+            torch.save({"directions": [torch.ones(4)],
+                        "preserve_bases": [torch.eye(4)[:, :1]]}, profile)
+            plan = folder / "plan.yaml"
+            plan.write_text(yaml.safe_dump({
+                "version": 4, "drop_layers": [], "structured": {},
+                "ablation": {"layers": [0], "targets": ["mlp.down_proj"], "strength": 0.5},
+            }))
+            report = build_preview(model, str(plan), str(profile))
+            self.assertEqual(report["operations"][0]["kind"], "directional_weight_edit")
+            self.assertEqual(report["operations"][0]["parameter"], "model.layers.0.mlp.down_proj.weight")
+            with self.assertRaisesRegex(ValueError, "--profile is required"):
+                build_preview(model, str(plan))
+
+    def test_preview_rejects_unknown_plan_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = self._write_plan(Path(tmp))
+            payload = yaml.safe_load(plan.read_text())
+            payload["version"] = 5
+            plan.write_text(yaml.safe_dump(payload))
+            with self.assertRaisesRegex(ValueError, "unsupported surgery plan version"):
+                build_preview(MockModel(), str(plan))
 
     def test_preview_rejects_stale_selection_checksum(self):
         model = MockModel()

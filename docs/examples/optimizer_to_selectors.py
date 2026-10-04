@@ -3,6 +3,7 @@
 Run from the repository root:
     python3 docs/examples/optimizer_to_selectors.py PLAN.yaml SELECTORS.yaml
 
+Preview/apply now accept version-4 plans directly; conversion is optional.
 This writes dense MLP/attention selector YAML only. The core select command
 validates model geometry. MoE needs adapter-specific source-layer mapping.
 """

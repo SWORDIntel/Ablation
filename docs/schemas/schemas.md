@@ -16,7 +16,7 @@ AEGIS-LAB contains several schemas. They are not interchangeable, even where the
 | `preview.json` | `select` | Resolved targets, shapes, aliases and byte estimates |
 | Validation JSON | `validate --out` | Drift comparisons and teacher-forced NLL, not task acceptance by itself |
 
-Optimizer plans currently use version 4; selector/plan-builder outputs use version 3. Preview only accepts versions 1–3. Use the [checked selection conversion example](../examples/optimizer_to_selectors.py) and `select` for dense optimizer previews until that integration gap is resolved. MoE selectors require explicit adapter-specific source-layer maps.
+Optimizer plans use version 4; selector/plan-builder outputs use version 3. Preview accepts versions 1–4. Pass optimizer plans directly to preview/apply with their linked selection files; no conversion is required. MoE artifacts use adapter block ordering while previews report source transformer-layer IDs. Explicit MoE selector YAML still needs adapter-specific source-layer maps.
 
 Keep linked plan and selection files together. The core loaders check selection hashes; this is not a blanket guarantee that every command binds the complete model, tokenizer and data provenance. See [validation](../neurosurgery/VALIDATION.md).
 

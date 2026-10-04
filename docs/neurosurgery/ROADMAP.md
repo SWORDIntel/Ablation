@@ -33,7 +33,7 @@ Modules live under `src/aegis_lab/editing/neurosurgery/`. Tests live under `test
 
 ## Integration and acceptance still required
 
-- [ ] Publish and verify the missing tensor-loader import fix in standalone MLP search and reconcile optimizer/preview plan versions.
+- [x] Fix the missing tensor-loader import in standalone MLP search and support direct optimizer version-4 previews, with producer/consumer, checksum, sparse-MoE and offline HF reload regression coverage.
 
 - [ ] Wire advanced commands into the installed entry point, or provide a dedicated installed advanced entry point with consistent dispatch.
 - [ ] Replace advanced workflow placeholder localization/apply and demonstration recovery data with measured, plan-driven implementations.

@@ -60,25 +60,19 @@ aegis-neurosurgery optimize --model models/base \
   --mlp-ratios 1,0.95,0.90 --max-mean-kl 0.02 \
   --min-top1-agreement 0.95 --max-trials 16 --out runs/mlp-opt
 
-# Recompile exact selections: optimizer v4 plans are not accepted by preview.
-python3 docs/examples/optimizer_to_selectors.py \
-  runs/mlp-opt/optimized_plan.yaml runs/mlp-opt/selectors.yaml
-aegis-neurosurgery select --model models/base \
-  --selectors runs/mlp-opt/selectors.yaml --out runs/mlp-reviewed
-
 aegis-neurosurgery preview --model models/base \
-  --plan runs/mlp-reviewed/surgery_plan.yaml
+  --plan runs/mlp-opt/optimized_plan.yaml
 
 # Review the preview, then write a separate checkpoint.
 aegis-neurosurgery apply --model models/base \
-  --plan runs/mlp-reviewed/surgery_plan.yaml --out models/candidate
+  --plan runs/mlp-opt/optimized_plan.yaml --out models/candidate
 
 aegis-neurosurgery validate --base models/base --candidate models/candidate \
   --keep data/keep-validation.txt --max-mean-kl 0.02 \
   --out runs/validation.json
 ```
 
-The dense selector conversion preserves optimizer indices and verifies their checksums; it does not establish model quality. See [known committed-source issues](docs/neurosurgery/CAPABILITIES.md#known-committed-source-issues). The numbers are example tolerances, not universal quality thresholds. A feasible plan can retain every component. CLI drift scores need task and generation tests before deployment. The independent validation reloads both checkpoints; do not overwrite the source or reuse an existing candidate directory.
+Optimizer version-4 plans can be previewed and applied directly, with selection checksums and adapter geometry verified by preview. The numbers are example tolerances, not universal quality thresholds. A feasible plan can retain every component. CLI drift scores need task and generation tests before deployment. The independent validation reloads both checkpoints; do not overwrite the source or reuse an existing candidate directory.
 
 For attention, MoE, layer deletion, directional edits and typed selectors, continue with the [surgery manual](docs/neurosurgery/README.md).
 
@@ -112,7 +106,9 @@ Start at the [docs index](docs/README.md). It links setup, architecture, artifac
 ```bash
 python3 -m pip install -e '.[dev]'
 PYTHONPATH=src python3 -m unittest discover -s tests/unit -p 'test_neurosurgery_*.py'
-PYTHONPATH=src python3 -m unittest tests.integration.test_neurosurgery_pipeline_acceptance
+PYTHONPATH=src python3 -m unittest \
+  tests.integration.test_neurosurgery_core_workflow \
+  tests.integration.test_neurosurgery_pipeline_acceptance
 ```
 
 Test fixtures are implementation checks, not a model-quality or hardware-performance certificate. See [verification notes](docs/VERIFICATION.md) for the latest documentation review.

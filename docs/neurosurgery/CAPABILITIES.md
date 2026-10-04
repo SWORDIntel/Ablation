@@ -10,11 +10,13 @@ Commands: `inventory`, `profile`, `profile-mlp`, `search-mlp`, `profile-attentio
 
 This is the explicit structural/directional path documented in the [manual](README.md). Preview is read-only. Physical edits require supported geometry and floating-point projections. Unsupported architectures need adapters and reload tests.
 
-### Known committed-source issues
+### Supported plan versions
 
-At implementation revision `551992e`, `search-mlp` calls `load_tensor_artifact` without importing it and fails with `NameError`. The quick start uses `profile-mlp` followed by `optimize`, which has the loader import and performs constrained MLP candidate search. The extended manual's separate `search-mlp` command requires that import fix; an existing local patch is outside this docs-only change.
+Standalone `search-mlp` imports the restricted tensor-artifact loader. Preview accepts surgery-plan versions 1–4, including the optimizer's unchanged version-4 output and its version-2 selection artifacts. Pass `optimized_plan.yaml` directly to `preview` and `apply`; no selector conversion or version relabeling is required.
 
-The optimizer writes plan version 4, while preview accepts only versions 1–3. The [example converter](../examples/optimizer_to_selectors.py) extracts exact checksummed structural indices into typed selector YAML. Run `select` to produce a supported version-3 plan and geometry preview, then apply that plan. Do not simply relabel a plan version or bypass preview. Directional and MoE edits are rejected by this small dense-selection example. MoE selectors need adapter-specific source-layer IDs; prepare them explicitly rather than assuming block positions equal transformer-layer IDs.
+Version-4 support keeps the same selection checksum, bounds, uniform geometry, router top-k and required-profile checks. Preview remains read-only. Supported MoE selections retain adapter block ordering and original transformer-layer IDs, including models with non-MoE layers between expert blocks. Directional edits still require their residual profile. Unknown plan versions fail.
+
+The older [dense selector conversion example](../examples/optimizer_to_selectors.py) remains optional for callers needing typed selector YAML. Its dense-only limitations do not apply to direct plan preview/apply.
 
 ## Advanced module CLI and libraries
 

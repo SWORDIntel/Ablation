@@ -102,7 +102,7 @@ def build_preview(model, plan_file: str, profile_path: Optional[str] = None) -> 
     plan = yaml.safe_load(plan_path.read_text(encoding="utf-8"))
     if not isinstance(plan, dict):
         raise ValueError("surgery plan must be a YAML mapping")
-    if plan.get("version") not in (1, 2, 3):
+    if plan.get("version") not in (1, 2, 3, 4):
         raise ValueError(f"unsupported surgery plan version: {plan.get('version')}")
 
     layer_path, layers_obj = get_layers(model)

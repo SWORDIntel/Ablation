@@ -121,25 +121,21 @@ The selection artifacts are SHA-256 bound into the plan. `apply` verifies them b
 
 ## Materialization
 
-The optimizer writes version 4, but current preview accepts versions 1–3. Recompile the exact selections through the typed-selector interface:
+The optimizer writes version-4 plans supported directly by preview and apply. Preview resolves exact selections, verifies their checksums and checks adapter geometry without rewriting the plan or modifying the model:
 
 ```bash
-python3 docs/examples/optimizer_to_selectors.py \
-  runs/qwen3-stage4/optimized_plan.yaml runs/qwen3-stage4/selectors.yaml
-aegis-neurosurgery select --model models/Qwen3-8B \
-  --selectors runs/qwen3-stage4/selectors.yaml --out runs/qwen3-reviewed
 aegis-neurosurgery preview --model models/Qwen3-8B \
-  --plan runs/qwen3-reviewed/surgery_plan.yaml
+  --plan runs/qwen3-stage4/optimized_plan.yaml
 ```
 
-The example checks selection hashes and preserves retained indices. The compiler checks geometry and emits a supported plan; it does not rerun candidate quality measurements.
+No selector conversion or version relabeling is needed. Inspect the preview and independently validate candidate quality after apply/reload.
 
 Stage-4 plans contain no directional edit by default, so a residual profile is not required:
 
 ```bash
 aegis-neurosurgery apply \
   --model models/Qwen3-8B \
-  --plan runs/qwen3-reviewed/surgery_plan.yaml \
+  --plan runs/qwen3-stage4/optimized_plan.yaml \
   --out models/Qwen3-8B-surgery
 ```
 

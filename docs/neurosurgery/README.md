@@ -20,8 +20,6 @@ Physical surgery is adapter-specific. Search can be generic; changing tensor sha
 
 ## Basic sequence
 
-At committed revision `551992e`, standalone `search-mlp` has a missing-loader import. Use the root README's profile → optimizer route for MLP search until that code fix is published. The broader sequence below shows the component interfaces; see [known issues](CAPABILITIES.md#known-committed-source-issues).
-
 Run from the repository root after installation. Supply a compatible floating-point HF checkpoint, representative `keep.txt` / `drop.txt` discovery prompts and separate `keep-validation.txt`. These are example paths, ratios and tolerances; an 8B model is not a minimum requirement. Begin with the smaller [MLP-only quick start](../../README.md#first-operation-measured-mlp-compression) if resources are limited.
 
 ```bash
@@ -69,16 +67,10 @@ aegis-neurosurgery optimize \
   --min-top1-agreement 0.95 \
   --max-trials 64
 
-# Recompile the optimizer v4 selections into a supported preview/apply plan.
-python3 docs/examples/optimizer_to_selectors.py \
-  runs/opt/optimized_plan.yaml runs/opt/selectors.yaml
-aegis-neurosurgery select --model models/Qwen3-8B \
-  --selectors runs/opt/selectors.yaml --out runs/reviewed
-
 # 5. Preview the exact edits without modifying the model
 aegis-neurosurgery preview \
   --model models/Qwen3-8B \
-  --plan runs/reviewed/surgery_plan.yaml
+  --plan runs/opt/optimized_plan.yaml
 
 # If the plan includes directional edits, also pass:
 #   --profile runs/residual/profile.pt
@@ -86,7 +78,7 @@ aegis-neurosurgery preview \
 # 6. Physical surgery from the reviewed selections
 aegis-neurosurgery apply \
   --model models/Qwen3-8B \
-  --plan runs/reviewed/surgery_plan.yaml \
+  --plan runs/opt/optimized_plan.yaml \
   --out models/Qwen3-8B-surgery
 
 # 7. Independent KEEP validation

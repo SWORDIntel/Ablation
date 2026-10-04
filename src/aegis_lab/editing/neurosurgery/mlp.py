@@ -11,7 +11,7 @@ import torch
 from tqdm import tqdm
 
 from .adapters import get_adapter
-from .common import LOG, batches, load_prompts, resolve_device
+from .common import LOG, batches, load_prompts, load_tensor_artifact, resolve_device
 from .validate import _load_hf, compare_logprobs, next_token_logprobs
 
 EPS = 1e-8
