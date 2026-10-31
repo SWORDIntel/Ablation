@@ -61,6 +61,8 @@ def checkpoint_binding(
     root = Path(path)
     if not root.is_dir():
         raise ValueError("Steering checkpoint must be a local model directory")
+    if not (root / "config.json").is_file():
+        raise ValueError("Missing config.json in local checkpoint root")
     if audited_inputs is not None:
         record = audited_inputs.get("model")
         if not isinstance(record, dict) or not isinstance(record.get("files"), dict):
