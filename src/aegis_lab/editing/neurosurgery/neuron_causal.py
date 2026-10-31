@@ -167,7 +167,7 @@ def _controls_for_candidate(
     ref_w = float(norms[neuron])
     choices = []
     for j in range(width):
-        if j == neuron or (layer, j) in excluded:
+        if j == neuron or (layer, j) in excluded or float(norms[j]) <= 0:
             continue
         distance = (abs(math.log((float(activity[j]) + _EPS) / (ref_a + _EPS))) +
                     abs(math.log((float(norms[j]) + _EPS) / (ref_w + _EPS))))
