@@ -14,6 +14,8 @@ INPUT_ROLES = {
     'search', 'greedy_search', 'mlp_profile', 'mlp_search', 'attention_profile',
     'attention_search', 'moe_profile', 'moe_search', 'selectors', 'config',
     'workload', 'benchmark', 'calibration_data', 'search_space',
+    'ranking', 'discovery_keep', 'discovery_drop',
+    'search_target', 'search_keep', 'test_target', 'test_keep',
 }
 MODEL_ROLES = {'model', 'base', 'candidate', 'teacher', 'baseline_model'}
 
@@ -89,7 +91,9 @@ def audited_dispatch(args, dispatch):
     for role, path in paths.items():
         if role in MODEL_ROLES or path.is_dir() or role in {'keep', 'drop', 'change', 'validation_keep',
                                                           'distill', 'config', 'workload', 'benchmark',
-                                                          'calibration_data', 'selectors', 'search_space'}:
+                                                          'calibration_data', 'selectors', 'search_space',
+                                                          'discovery_keep', 'discovery_drop', 'search_target',
+                                                          'search_keep', 'test_target', 'test_keep'}:
             continue
         audit_path = _producer_audit(path)
         if audit_path is None:

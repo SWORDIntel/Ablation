@@ -42,6 +42,55 @@ The generated JSON includes target-enriched candidate channels, KEEP-enriched ne
 
 **Interpretation:** This is **correlational screening**, not a proof that altering a channel changes the behaviour or that the sign of the activation contrast predicts the correct additive steering direction. Follow candidates with single-neuron A/B dose sweeps, matched-random controls, target-specific scoring and independent held-out tests. Later P1 milestones add causal testing, pair synergy and constrained optimisation.
 
+## P1 causal screen — dose trials, matched controls and held-out objectives
+
+`steer-causal` is a **measured intervention experiment** built on `steer-rank`, the existing gated-MLP `profile-mlp` artifact and `NeuronSteerer`. It tests whether pushing a candidate MLP channel causally changes a *specified next-token logit margin*, not whether a complex persona or quality objective has been achieved.
+
+Generate a **fresh** MLP profile on discovery corpora with the current code, then rank candidates. New profiles carry exact discovery-file SHA-256 hashes. The installed command also requires successful producer audits for both the MLP profile and ranking, each bound to the exact current checkpoint bytes. Rebuild unaudited legacy artifacts rather than assuming the source model is identical. Older profiles without these bindings must be regenerated before causal testing; this prevents silently asserting that an arbitrary rank list came from a particular discovery corpus.
+
+Provide six **disjoint** prompt sets: the two original discovery inputs used by `profile-mlp`; independent search-target and search-KEEP inputs; and unseen test-target and test-KEEP inputs. The target files are JSONL/JSON arrays with rows such as:
+
+```json
+{"prompt":"The capital of France is","target_token_id":123,"contrast_token_id":456}
+```
+
+Use **actual token IDs for the selected tokenizer**. Alternatively, supply single-token strings under `target` and `contrast` and the runner will require that each encodes to exactly one token. These numbers are illustrative, *not* real tokenizer IDs. This probes next-token preference only; longer completions and behavioural labelling require an independent semantic evaluator.
+
+```bash
+aegis-neurosurgery profile-mlp \
+  --model models/local-model --keep data/discovery-keep.txt \
+  --drop data/discovery-target.txt --out runs/mlp-discovery
+
+aegis-neurosurgery steer-rank \
+  --profile runs/mlp-discovery/mlp_profile.pt --top-k 20 \
+  --out runs/neurons-ranked.json
+
+aegis-neurosurgery steer-causal \
+  --model models/local-model \
+  --profile runs/mlp-discovery/mlp_profile.pt \
+  --ranking runs/neurons-ranked.json \
+  --discovery-keep data/discovery-keep.txt \
+  --discovery-drop data/discovery-target.txt \
+  --search-target data/search-target.jsonl \
+  --search-keep data/search-keep.txt \
+  --test-target data/test-target.jsonl \
+  --test-keep data/test-keep.txt \
+  --scales=-0.5,-0.25,0.25,0.5 \
+  --max-candidates 2 --controls-per-candidate 1 \
+  --max-forwards 512 \
+  --max-mean-kl 0.05 --min-top1-agreement 0.95 \
+  --out runs/causal-screen.json
+```
+
+For development fixtures, `--normalization raw` uses absolute input activations instead of median-residual normalized doses. The default uses Neuronary-style per-layer calibration. The experiment applies each dose at the pre-`down_proj` intermediate-channel input, evaluates the identical input against the unsteered model, and reports per-prompt target-minus-contrast logit-margin changes. On KEEP prompts, it measures next-token KL divergence and top-1 agreement against baseline.
+
+Each candidate is tested with equal-magnitude positive and negative doses and approximately **activity-/projection-norm-matched same-layer random control neurons**, sampled from a nearest-magnitude pool. This is better than arbitrary unrelated-layer controls but not perfect feature matching or a randomized clinical study. All trials are bounded by a precomputed forward-pass budget; errors reject a run before writing its report. A best search candidate is chosen only if its positive margin effect exceeds matched controls while KEEP gates pass. **Only the search split decides the winner.** The winner and its matched controls are then evaluated on the held-out test split, which is never used to choose the dose.
+
+The report includes per-prompt margin effects, 300-resample paired-bootstrap descriptive intervals, KEEP KL and top-1 metrics, same-layer control matching distances, discovery and split provenance, checkpoint byte hashes, budget, selected dose, and held-out observation. It verifies that the unmodified model's test logits are **exactly restored** after intervention hooks are removed.
+
+Even when the observed held-out gate passes, the report always sets `promotable_as_verified_persona: false`. Binary target-token margin is **not** a semantic behavioural metric, and a small held-out sample or selected candidate is not proof of statistical significance. Add rubric-labelled task evaluation and independent replication before promoting presets.
+
+
 ## Paired trials
 
 Download a supported Hugging Face checkpoint to a **local** directory. Supply an independent prompt set with one prompt per line (or a JSON/JSONL file). Example (paths are yours to create):
