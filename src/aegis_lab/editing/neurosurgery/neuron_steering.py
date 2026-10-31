@@ -129,8 +129,11 @@ def resolve_recipe(*, preset: Optional[str] = None, config: Optional[str] = None
         raise ValueError(f"Model identity mismatch: recipe expects {recipe['model']}, not {model_id}")
     if not isinstance(recipe.get("model"), (str, type(None))):
         raise ValueError("Recipe model must be a string")
+    if recipe.get("conditional"):
+        raise ValueError("Conditional recipes require an unsupported runtime; refusing to ignore triggers")
     method = recipe.get("method") or {}
-    if (not isinstance(method, dict) or method.get("op", "add") not in ("add", "mul")
+    if (not isinstance(method, dict) or method.get("site", "mlp.down_proj.input") != "mlp.down_proj.input"
+            or method.get("op", "add") not in ("add", "mul")
             or method.get("normalization", NORMALIZED) not in (NORMALIZED, "raw")
             or method.get("apply_to", "all_tokens") not in
             ("all_tokens", "prompt_tokens", "generated_tokens")):
@@ -408,7 +411,7 @@ def run_ab_experiment(model, tokenizer, recipe: dict[str, Any], prompts: Sequenc
                       target_regex: Optional[str] = None) -> dict[str, Any]:
     if not prompts or max_new_tokens <= 0 or not (0 <= temperature <= 5) or not (0 < top_p <= 1):
         raise ValueError("Invalid prompt set or generation limits")
-    if not scales or any(not math.isfinite(x) or x == 0 or abs(x) > 100 for x in scales):
+    if not scales or len(set(scales)) != len(scales) or any(not math.isfinite(x) or x == 0 or abs(x) > 100 for x in scales):
         raise ValueError("Scales must be finite, nonzero, and within [-100,100]")
     pattern = re.compile(target_regex) if target_regex else None
     layers, _ = _layers_for_neurons(model, recipe["neurons"])
@@ -484,6 +487,8 @@ def run_steer_command(args) -> dict[str, Any]:
         preset=args.preset, config=args.config, neurons=args.neuron, model_id=args.model_id,
     )
     scales = parse_scales(args.scales)
+    if args.max_prompts <= 0:
+        raise ValueError("--max-prompts must be positive")
     prompts = load_prompts(args.workload, args.max_prompts)
     out = Path(args.out)
     if out.exists():
