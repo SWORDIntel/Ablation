@@ -14,6 +14,19 @@ class TestNeurosurgeryCLI(unittest.TestCase):
         ])
         self.assertEqual(args.cmd, "search-moe")
 
+    def test_parses_steering_a_b_arguments(self):
+        args = build_parser().parse_args([
+            "steer", "--model", "m", "--model-id", "Qwen/Qwen3.5-4B",
+            "--preset", "qwen35-4b-evil-pair", "--workload", "questions.txt",
+            "--scales", "-0.5,0.5,1", "--out", "report.json",
+        ])
+        self.assertEqual(args.cmd, "steer")
+        self.assertEqual(args.scales, "-0.5,0.5,1")
+        self.assertIsNone(args.config)
+        self.assertEqual(args.max_new_tokens, 128)
+        listing = build_parser().parse_args(["steer-presets", "--model-id", "Qwen/Qwen3.5-4B"])
+        self.assertEqual(listing.cmd, "steer-presets")
+
     def test_parses_read_only_preview_command(self):
         args = build_parser().parse_args([
             "preview", "--model", "m", "--plan", "plan.yaml"
