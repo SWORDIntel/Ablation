@@ -116,6 +116,36 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-prompts", type=int, default=64)
     p.add_argument("--device", default="auto")
 
+    p = sub.add_parser(
+        "steer-causal",
+        help="Experimentally test ranked neurons with signed doses, matched controls and held-out logit objectives",
+    )
+    p.add_argument("--model", required=True, help="Local, audited Hugging Face checkpoint")
+    p.add_argument("--ranking", required=True, help="steer-rank candidate JSON with discovery hashes")
+    p.add_argument("--profile", required=True, help="Original profile-mlp .pt matching the ranking")
+    p.add_argument("--discovery-keep", required=True, help="Original profile-mlp KEEP corpus")
+    p.add_argument("--discovery-drop", required=True, help="Original profile-mlp DROP corpus")
+    p.add_argument("--search-target", required=True, help="JSONL/JSON prompt + single target/contrast token labels")
+    p.add_argument("--search-keep", required=True, help="Independent KEEP prompts for search gates")
+    p.add_argument("--test-target", required=True, help="Independent held-out target/contrast JSONL")
+    p.add_argument("--test-keep", required=True, help="Independent held-out KEEP prompts")
+    p.add_argument("--scales", default="-0.5,-0.25,0.25,0.5")
+    p.add_argument("--max-candidates", type=int, default=2)
+    p.add_argument("--controls-per-candidate", type=int, default=1)
+    p.add_argument("--max-search-prompts", type=int, default=8)
+    p.add_argument("--max-test-prompts", type=int, default=8)
+    p.add_argument("--max-forwards", type=int, default=512)
+    p.add_argument("--max-mean-kl", type=float, default=0.05)
+    p.add_argument("--min-top1-agreement", type=float, default=0.95)
+    p.add_argument("--normalization", choices=["raw", "layer_residual_median_over_down_column_l2"],
+                   default="layer_residual_median_over_down_column_l2")
+    p.add_argument("--calibration-data", help="Local text used for normalized steering units")
+    p.add_argument("--expected-checkpoint-sha256", help="Optional independently trusted checkpoint-tree digest")
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--device", default="auto")
+    p.add_argument("--dtype", choices=["auto", "float32", "float16", "bfloat16"], default="auto")
+    p.add_argument("--out", required=True, help="New, immutable JSON report path")
+
     p = sub.add_parser("steer-rank", help="Screen candidate neurons using measured KEEP/DROP MLP activation profiles")
     p.add_argument("--profile", required=True, help="Local profile-mlp mlp_profile.pt input")
     p.add_argument("--top-k", type=int, default=25, help="Maximum candidates per polarity")
@@ -270,6 +300,11 @@ def dispatch_core(args):
         from .search_greedy import run_greedy_layer_search
         run_greedy_layer_search(args.model, args.keep, args.out, args.max_mean_kl, args.max_layers, args.batch_size, args.max_prompts, args.device)
         return
+    if args.cmd == "steer-causal":
+        from .neuron_causal import run_steer_causal_command
+        result = run_steer_causal_command(args)
+        print(json.dumps(result, indent=2))
+        return result
     if args.cmd == "steer-rank":
         from .neuron_ranking import run_steer_rank_command
         result = run_steer_rank_command(args)
