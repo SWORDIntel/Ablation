@@ -155,9 +155,14 @@ def _controls_for_candidate(
     if not torch.isfinite(k).all() or not torch.isfinite(d).all() or k.mean() <= 0 or d.mean() <= 0:
         raise ValueError("Invalid MLP activation profile for control matching")
     activity = ((k / k.mean()) + (d / d.mean())) / 2
-    norms = weight.detach().float().norm(dim=0).cpu()
-    if not torch.isfinite(norms).all():
-        raise ValueError("Nonfinite down projection norms")
+    # Avoid materializing the entire dense projection in float32 VRAM just
+    # to rank controls. Bound each temporary to at most 256 columns.
+    norms = torch.cat([
+        weight[:, i:i + 256].detach().float().norm(dim=0).cpu()
+        for i in range(0, width, 256)
+    ])
+    if not torch.isfinite(norms).all() or float(norms[neuron]) <= 0:
+        raise ValueError("Nonfinite or zero target down projection norm")
     ref_a = float(activity[neuron])
     ref_w = float(norms[neuron])
     choices = []
@@ -293,7 +298,7 @@ def run_causal_screen(
 ) -> dict[str, Any]:
     if normalization not in ("raw", NORMALIZED):
         raise ValueError("Unsupported steering normalization")
-    if not model.training is False:
+    if model.training:
         raise ValueError("Model must be in evaluation mode for causal screening")
     if controls_per_candidate < 1 or controls_per_candidate > 8:
         raise ValueError("controls-per-candidate must be within [1,8]")
@@ -324,6 +329,8 @@ def run_causal_screen(
     estimated_forwards = search_size + test_size + (
         len(coordinates) * (1 + controls_per_candidate) * len(scales) * search_size
     ) + (1 + controls_per_candidate) * test_size + test_size
+    # Calibration is another real model forward on normalized-dose runs.
+    estimated_forwards += 1 if normalization == NORMALIZED else 0
     if estimated_forwards > max_forwards:
         raise ValueError(
             f"Forward budget exceeded before execution: need {estimated_forwards}, "
