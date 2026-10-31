@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from contextlib import contextmanager
 import re
 import time
 from pathlib import Path
@@ -17,6 +18,7 @@ from typing import Any, Optional, Sequence
 import torch
 
 from .common import get_layers, load_prompts, resolve_device, trust_remote_code_enabled
+from .steering_provenance import checkpoint_binding, runtime_semantic_binding
 
 SOURCE_LYRA = "https://x.com/_lyraaaa_/status/2113833330429083662"
 SOURCE_HEDWIG = "https://www.hedwigai.com/blog/qwen-personality-neurons"
@@ -357,13 +359,50 @@ def _prompt_ids(tokenizer, prompt: str) -> torch.Tensor:
     return ids
 
 
+@contextmanager
+def _scoped_generation_rng(device: str, seed: int):
+    """Isolate CPU/CUDA/MPS RNG state while matching each A/B arm's seed."""
+    cuda_devices = []
+    if device.startswith("cuda"):
+        cuda_devices = [torch.device(device).index]
+        if cuda_devices[0] is None:
+            cuda_devices = [torch.cuda.current_device()]
+    mps = getattr(torch, "mps", None)
+    mps_state = None
+    if device.startswith("mps"):
+        if mps is None or not all(hasattr(mps, x) for x in
+                                  ("get_rng_state", "set_rng_state", "manual_seed")):
+            raise ValueError("MPS RNG isolation requires supported PyTorch RNG state APIs")
+        mps_state = mps.get_rng_state().clone()
+    try:
+        with torch.random.fork_rng(devices=cuda_devices):
+            torch.manual_seed(seed)
+            if device.startswith("cuda"):
+                torch.cuda.manual_seed_all(seed)
+            if mps_state is not None:
+                mps.manual_seed(seed)
+            yield
+    finally:
+        if mps_state is not None:
+            mps.set_rng_state(mps_state)
+
+
+def _wilson_95(successes: int, total: int) -> list[float]:
+    """Wilson two-sided 95% interval for independent Bernoulli trials."""
+    if not 0 <= successes <= total or total <= 0:
+        raise ValueError("Invalid successes/sample count")
+    z = 1.959963984540054
+    p = successes / total
+    den = 1.0 + z * z / total
+    center = (p + z * z / (2.0 * total)) / den
+    half = z * math.sqrt(p * (1.0 - p) / total + z * z / (4.0 * total * total)) / den
+    return [max(0.0, center - half), min(1.0, center + half)]
+
+
 @torch.inference_mode()
 def _generate(model, tokenizer, input_ids: torch.Tensor, *, device: str,
               max_new_tokens: int, temperature: float, top_p: float,
               seed: int, steerer: NeuronSteerer, scale: float) -> dict[str, Any]:
-    torch.manual_seed(seed)
-    if device.startswith("cuda"):
-        torch.cuda.manual_seed_all(seed)
     steerer.start_generation(scale)
     ids = input_ids.to(device)
     options: dict[str, Any] = {
@@ -380,7 +419,8 @@ def _generate(model, tokenizer, input_ids: torch.Tensor, *, device: str,
     if device.startswith("cuda"):
         torch.cuda.synchronize()
     start = time.perf_counter()
-    output = model.generate(**options)
+    with _scoped_generation_rng(device, seed):
+        output = model.generate(**options)
     if device.startswith("cuda"):
         torch.cuda.synchronize()
     elapsed = time.perf_counter() - start
@@ -457,8 +497,20 @@ def run_ab_experiment(model, tokenizer, recipe: dict[str, Any], prompts: Sequenc
                 if pattern is not None:
                     candidate["target_match"] = bool(pattern.search(candidate["text"]))
                 variants.append(candidate)
-            trials.append({"prompt": prompt, "prompt_tokens": int(ids.shape[1]),
-                           "seed": seed + index, "baseline": baseline, "variants": variants})
+            # Verify the exact same no-hook baseline after the edited trials.
+            # Fails closed if the model/cache/hook state leaked between conditions.
+            replay = _generate(
+                model, tokenizer, ids, device=device, max_new_tokens=max_new_tokens,
+                temperature=temperature, top_p=top_p, seed=seed + index,
+                steerer=steerer, scale=0.0,
+            )
+            if baseline["token_ids"] != replay["token_ids"]:
+                raise ValueError(f"Baseline restoration mismatch at prompt index {index}")
+            trials.append({
+                "prompt": prompt, "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+                "prompt_tokens": int(ids.shape[1]), "seed": seed + index,
+                "baseline": baseline, "variants": variants, "baseline_replay_consistent": True,
+            })
     summary = []
     for scale_index, scale in enumerate(scales):
         candidates = [row["variants"][scale_index] for row in trials]
@@ -466,11 +518,18 @@ def run_ab_experiment(model, tokenizer, recipe: dict[str, Any], prompts: Sequenc
             "scale": float(scale), "prompts": len(prompts),
             "changed": sum(row["changed"] for row in candidates),
             "change_rate": sum(row["changed"] for row in candidates) / len(prompts),
+            "change_rate_ci95": _wilson_95(sum(row["changed"] for row in candidates), len(prompts)),
             "mean_completion_tokens": sum(row["tokens"] for row in candidates) / len(prompts),
         }
         if pattern is not None:
             entry["baseline_target_matches"] = sum(row["baseline"]["target_match"] for row in trials)
             entry["steered_target_matches"] = sum(row["target_match"] for row in candidates)
+            entry["baseline_target_rate_ci95"] = _wilson_95(
+                entry["baseline_target_matches"], len(prompts),
+            )
+            entry["steered_target_rate_ci95"] = _wilson_95(
+                entry["steered_target_matches"], len(prompts),
+            )
         summary.append(entry)
     return {
         "schema_version": 1, "recipe": recipe,
@@ -484,6 +543,7 @@ def run_ab_experiment(model, tokenizer, recipe: dict[str, Any], prompts: Sequenc
             "max_new_tokens": max_new_tokens, "temperature": temperature,
             "top_p": top_p, "seed": seed, "device": device,
             "paired_seed_reset": True, "thinking": False,
+            "rng_state_isolated": True, "baseline_replay_verified": True,
         },
         "target_regex": target_regex, "summary": summary, "trials": trials,
         "interpretation": "Text changes and regex matches are observations, not proof of persona specificity or safety.",
@@ -505,6 +565,13 @@ def run_steer_command(args) -> dict[str, Any]:
         raise ValueError("Use an explicit .json output file")
     calibration = (Path(args.calibration_data).read_text(encoding="utf-8")
                    if args.calibration_data else DEFAULT_CALIBRATION)
+    # Reuse operator-audited hashes for exact checkpoint provenance and optional
+    # independent digest verification, before executing any model code.
+    binding = checkpoint_binding(
+        args.model,
+        audited_inputs=getattr(args, "_operator_input_bindings", None),
+        expected_checkpoint_sha256=args.expected_checkpoint_sha256,
+    )
     device = resolve_device(args.device)
     model, tokenizer = load_local_model(args.model, device, args.dtype)
     if args.preset:
@@ -520,6 +587,8 @@ def run_steer_command(args) -> dict[str, Any]:
     )
     report["model_checkpoint_path"] = str(Path(args.model).resolve())
     report["model_id_asserted"] = args.model_id
+    report["checkpoint_binding"] = binding
+    report["semantic_binding"] = runtime_semantic_binding(model, tokenizer)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("x", encoding="utf-8") as handle:
         json.dump(report, handle, indent=2, ensure_ascii=False, allow_nan=False)

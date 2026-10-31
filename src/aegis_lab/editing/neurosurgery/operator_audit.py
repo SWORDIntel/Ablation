@@ -121,6 +121,10 @@ def audited_dispatch(args, dispatch):
                  started_at=started, status='running')
     run_id = uuid.uuid4().hex
     fallback = _audit_path(None, run_id)
+    # Reuse the immutable inputs for downstream report provenance without
+    # re-hashing large checkpoint shards just to construct a second manifest.
+    # This private field is ephemeral and never included in CLI options.
+    setattr(args, '_operator_input_bindings', inputs)
     try:
         result = dispatch(args)
         verify_binding(inputs)
@@ -146,6 +150,8 @@ def audited_dispatch(args, dispatch):
         destination = fallback
         raise
     finally:
+        if hasattr(args, '_operator_input_bindings'):
+            delattr(args, '_operator_input_bindings')
         audit['finished_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(json.dumps(audit, indent=2, sort_keys=True) + '\n')

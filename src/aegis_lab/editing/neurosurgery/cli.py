@@ -128,6 +128,7 @@ def build_parser() -> argparse.ArgumentParser:
     selector.add_argument("--neuron", action="append", help="Repeat L14N8949+1 or 14:8949:+1")
     p.add_argument("--workload", required=True, help="Local .txt, .jsonl or .json prompt set")
     p.add_argument("--calibration-data", help="Optional local calibration text for normalized doses")
+    p.add_argument("--expected-checkpoint-sha256", help="Trusted canonical checkpoint-tree SHA256; verify before model load")
     p.add_argument("--scales", default="1.0", help="Nonzero comma-separated multiplier sweep; zero baseline is automatic")
     p.add_argument("--target-regex", help="Optional measured-text regex; not a semantic evaluator")
     p.add_argument("--max-prompts", type=int, default=12)
