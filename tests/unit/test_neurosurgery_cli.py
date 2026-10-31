@@ -18,7 +18,7 @@ class TestNeurosurgeryCLI(unittest.TestCase):
         args = build_parser().parse_args([
             "steer", "--model", "m", "--model-id", "Qwen/Qwen3.5-4B",
             "--preset", "qwen35-4b-evil-pair", "--workload", "questions.txt",
-            "--scales", "-0.5,0.5,1", "--out", "report.json",
+            "--scales=-0.5,0.5,1", "--out", "report.json",
         ])
         self.assertEqual(args.cmd, "steer")
         self.assertEqual(args.scales, "-0.5,0.5,1")
