@@ -2,6 +2,8 @@ import os
 import logging
 import hashlib
 import secrets
+import re
+import stat
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -25,7 +27,7 @@ class ModelVault:
     def __init__(self):
         self.is_locked = True
         self.vault_path = os.path.expanduser("~/.aegis_lab/vault")
-        os.makedirs(self.vault_path, exist_ok=True)
+        os.makedirs(self.vault_path, mode=0o700, exist_ok=True)
         self._encryption_key = None
 
     def unlock_csme(self, token: int = 0x5A5A5A5A) -> bool:
@@ -106,6 +108,48 @@ class ModelVault:
         key_stream = (self._encryption_key * ((len(data) // 32) + 1))[:len(data)]
         return bytes(a ^ b for a, b in zip(data, key_stream))
 
+    @staticmethod
+    def _atom_filename(atom_id: str) -> str:
+        """Accept only a flat, portable atom identifier (no path segments)."""
+        if not isinstance(atom_id, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", atom_id
+        ):
+            raise ValueError("Invalid atom_id: expected 1-128 ASCII filename-safe characters")
+        if ".." in atom_id:
+            raise ValueError("Invalid atom_id: dot-dot components are not permitted")
+        return atom_id + ".enc"
+
+    def _open_vault_dir(self) -> int:
+        """Bind operations to the vault directory, never through an atom path."""
+        if not all(hasattr(os, flag) for flag in ("O_NOFOLLOW", "O_DIRECTORY")):
+            raise RuntimeError("Secure vault access requires Linux/POSIX O_NOFOLLOW and O_DIRECTORY")
+        fd = os.open(self.vault_path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISDIR(info.st_mode):
+                raise OSError("Vault path is not a directory")
+            if stat.S_IMODE(info.st_mode) & 0o077:
+                # Tighten existing vault directories in place to prevent
+                # other users from listing the sensitive atom filenames.
+                os.fchmod(fd, 0o700)
+            return fd
+        except BaseException:
+            os.close(fd)
+            raise
+
+    @staticmethod
+    def _open_atom_fd(directory_fd: int, filename: str, flags: int) -> int:
+        """Reject symlinks, devices and hard links before changing file content."""
+        fd = os.open(filename, flags | os.O_NOFOLLOW, 0o600, dir_fd=directory_fd)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise OSError("Vault atom must be a regular, non-hardlinked file")
+            return fd
+        except BaseException:
+            os.close(fd)
+            raise
+
     def store_atom_securely(self, atom_id: str, data: bytes):
         """
         Encrypts and stores an atom using hardware-backed keys.
@@ -114,19 +158,43 @@ class ModelVault:
             logger.error("CSME Vault is locked. Storage denied.")
             return False
             
-        secure_path = os.path.join(self.vault_path, f"{atom_id}.enc")
+        filename = self._atom_filename(atom_id)
         encrypted = self._encrypt(data)
-        with open(secure_path, "wb") as f:
-            f.write(encrypted)
-        logger.info(f"Behavioral Atom {atom_id} pinned to Hardware Model Vault (encrypted).")
+        directory_fd = self._open_vault_dir()
+        try:
+            fd = self._open_atom_fd(directory_fd, filename, os.O_WRONLY | os.O_CREAT)
+            try:
+                # Avoid O_TRUNC: check regular-file and hard-link status first.
+                os.ftruncate(fd, 0)
+                os.fchmod(fd, 0o600)
+                with os.fdopen(fd, "wb") as f:
+                    fd = None
+                    f.write(encrypted)
+            finally:
+                if fd is not None:
+                    os.close(fd)
+        finally:
+            os.close(directory_fd)
+        logger.info("Behavioral Atom %s stored in vault.", atom_id)
         return True
 
     def retrieve_atom_securely(self, atom_id: str) -> Optional[bytes]:
         if self.is_locked:
             return None
+        filename = self._atom_filename(atom_id)
+        directory_fd = self._open_vault_dir()
         try:
-            with open(os.path.join(self.vault_path, f"{atom_id}.enc"), "rb") as f:
-                encrypted = f.read()
-            return self._decrypt(encrypted)
-        except FileNotFoundError:
-            return None
+            try:
+                fd = self._open_atom_fd(directory_fd, filename, os.O_RDONLY)
+            except FileNotFoundError:
+                return None
+            try:
+                with os.fdopen(fd, "rb") as f:
+                    fd = None
+                    encrypted = f.read()
+            finally:
+                if fd is not None:
+                    os.close(fd)
+        finally:
+            os.close(directory_fd)
+        return self._decrypt(encrypted)
