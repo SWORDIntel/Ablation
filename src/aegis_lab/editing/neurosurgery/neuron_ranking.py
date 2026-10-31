@@ -86,6 +86,8 @@ def rank_steering_candidates(profile: dict[str, Any], *, top_k: int = 25,
         "model_asserted_by_profile": profile.get("model"),
         "adapter": profile.get("adapter"),
         "source_profile_sha256": source_sha256,
+        "profile_keep_sha256": profile.get("profile_keep_sha256"),
+        "profile_drop_sha256": profile.get("profile_drop_sha256"),
         "metric": "per-layer DROP-relative-mean-absolute-activation minus KEEP-relative-mean-absolute-activation",
         "interpretation": (
             "Correlational screening only; no causal effect, dose direction, "
