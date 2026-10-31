@@ -83,6 +83,16 @@ The median is measured from a frozen built-in calibration text (the same text us
 
 Normalized doses are **large interventions**: `dose = 1` changes a neuron's write to the residual stream by approximately one typical layer residual norm. A persona shift may coincide with severe degradation in correctness, instruction-following, refusal behaviour or coherence. Include mathematics, coding, factuality, ordinary conversation and task-specific held-out prompts.
 
+## Checkpoint provenance and reproducibility (P0 increment)
+
+A steering run now records a **checkpoint-byte binding** as well as the original operator audit. The checkpoint directory must contain `config.json`, supported PyTorch/SafeTensors weight shards and tokenizer assets. The report includes a canonical SHA-256 over relative asset paths and individual file SHA-256 values, plus separate weight/config/tokenizer asset digests and the Stage 4A runtime configuration/tokenizer hashes. The command reuses the bytes already verified by the mandatory operator audit rather than hashing huge weight shards an extra time.
+
+To independently verify the checkpoint, obtain the canonical `checkpoint_sha256` value from a previously trusted run or manifest and supply `--expected-checkpoint-sha256 sha256:<64 hex>`. A mismatch rejects the experiment **before loading model code**. Without a trusted expected digest, the report explicitly records that it bound local bytes but **did not authenticate the Hugging Face model's upstream identity**. A Hugging Face model ID and Git commit SHA are *not* interchangeable with this canonical digest.
+
+Paired A/B generation now scopes CPU/CUDA/MPS RNG state per trial, resets the seed for the unsteered and steered arms, and replays the unsteered arm after every intervention sweep. A replay mismatch rejects the run. The report contains per-prompt hashes, baseline-replay integrity, Wilson 95% intervals for response change rate and optional regex match rates. The intervals quantify observed binomial variation over the tested prompts; they **do not** validate semantic effect or generalise across an unrepresentative prompt set.
+
+The replay adds one unsteered generation per prompt. Exact-device determinism still depends on the runtime, kernels and sampling; a claimed reproducible persona requires independent real-model checks and held-out evaluations.
+
 ## Reports, provenance and limits
 
 The report contains the exact recipe and its source, asserted model ID, checkpoint path, architecture, calibration hash and layer norms, resulting per-neuron amplitudes, generation settings, full token IDs and decoded text for both arms, first divergent token, timings, and the changed-response rate for each scale.
