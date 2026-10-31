@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import torch
 
@@ -27,7 +27,7 @@ def _as_vector(x: Any, layer: int, label: str) -> torch.Tensor:
 
 
 def rank_steering_candidates(profile: dict[str, Any], *, top_k: int = 25,
-                             source_sha256: str | None = None) -> dict[str, Any]:
+                             source_sha256: Optional[str] = None) -> dict[str, Any]:
     """Screen neurons on relative mean absolute activation, per layer.
 
     score_target = DROP / mean(DROP) - KEEP / mean(KEEP)
