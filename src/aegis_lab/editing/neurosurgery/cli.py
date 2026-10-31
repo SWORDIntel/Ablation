@@ -116,6 +116,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-prompts", type=int, default=64)
     p.add_argument("--device", default="auto")
 
+    p = sub.add_parser("steer-rank", help="Screen candidate neurons using measured KEEP/DROP MLP activation profiles")
+    p.add_argument("--profile", required=True, help="Local profile-mlp mlp_profile.pt input")
+    p.add_argument("--top-k", type=int, default=25, help="Maximum candidates per polarity")
+    p.add_argument("--out", required=True, help="New .json candidate ranking; never overwritten")
+
     p = sub.add_parser("steer-presets", help="List published, model-specific neuron-steering recipes")
     p.add_argument("--model-id", help="Filter by original Hugging Face model identifier")
 
@@ -264,6 +269,11 @@ def dispatch_core(args):
         from .search_greedy import run_greedy_layer_search
         run_greedy_layer_search(args.model, args.keep, args.out, args.max_mean_kl, args.max_layers, args.batch_size, args.max_prompts, args.device)
         return
+    if args.cmd == "steer-rank":
+        from .neuron_ranking import run_steer_rank_command
+        result = run_steer_rank_command(args)
+        print(json.dumps(result, indent=2))
+        return result
     if args.cmd == "steer-presets":
         from .neuron_steering import list_presets
         print(json.dumps(list_presets(args.model_id), indent=2))
