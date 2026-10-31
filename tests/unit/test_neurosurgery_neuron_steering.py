@@ -219,6 +219,16 @@ class TestNeuronSteerer(unittest.TestCase):
 
 
 class TestNeuronAB(unittest.TestCase):
+    def test_generated_tokens_without_decode_is_reported_inactive(self):
+        output = run_ab_experiment(
+            ToyLM().eval(), ToyTokenizer(), recipe(dose=5.0, apply_to="generated_tokens"),
+            ["Only prefill here"], scales=[1.0], max_new_tokens=1,
+        )
+        variant = output["trials"][0]["variants"][0]
+        self.assertFalse(variant["steering_applied"])
+        self.assertEqual(variant["hook_hits"], {"0": 0})
+        self.assertFalse(variant["changed"])
+
     def test_paired_outputs_and_regex_metric(self):
         model = ToyLM().eval()
         output = run_ab_experiment(
