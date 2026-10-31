@@ -116,6 +116,29 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-prompts", type=int, default=64)
     p.add_argument("--device", default="auto")
 
+    p = sub.add_parser("steer-presets", help="List published, model-specific neuron-steering recipes")
+    p.add_argument("--model-id", help="Filter by original Hugging Face model identifier")
+
+    p = sub.add_parser("steer", help="Reversible neuron steering with paired A/B generation")
+    p.add_argument("--model", required=True, help="Local Hugging Face checkpoint directory")
+    p.add_argument("--model-id", help="Original model ID; mandatory for published presets")
+    selector = p.add_mutually_exclusive_group(required=True)
+    selector.add_argument("--preset", help="One published, model-specific preset")
+    selector.add_argument("--config", help="Local JSON recipe (including custom methods)")
+    selector.add_argument("--neuron", action="append", help="Repeat L14N8949+1 or 14:8949:+1")
+    p.add_argument("--workload", required=True, help="Local .txt, .jsonl or .json prompt set")
+    p.add_argument("--calibration-data", help="Optional local calibration text for normalized doses")
+    p.add_argument("--scales", default="1.0", help="Nonzero comma-separated multiplier sweep; zero baseline is automatic")
+    p.add_argument("--target-regex", help="Optional measured-text regex; not a semantic evaluator")
+    p.add_argument("--max-prompts", type=int, default=12)
+    p.add_argument("--max-new-tokens", type=int, default=128)
+    p.add_argument("--temperature", type=float, default=0.0)
+    p.add_argument("--top-p", type=float, default=1.0)
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--device", default="auto")
+    p.add_argument("--dtype", choices=["auto", "float32", "float16", "bfloat16"], default="auto")
+    p.add_argument("--out", required=True, help="New JSON report path (not overwritten)")
+
     p = sub.add_parser("inventory", help="Read-only inventory of large and modality-specific branches")
     p.add_argument("--model", required=True)
     p.add_argument("--out")
@@ -241,6 +264,15 @@ def dispatch_core(args):
         from .search_greedy import run_greedy_layer_search
         run_greedy_layer_search(args.model, args.keep, args.out, args.max_mean_kl, args.max_layers, args.batch_size, args.max_prompts, args.device)
         return
+    if args.cmd == "steer-presets":
+        from .neuron_steering import list_presets
+        print(json.dumps(list_presets(args.model_id), indent=2))
+        return
+    if args.cmd == "steer":
+        from .neuron_steering import run_steer_command
+        result = run_steer_command(args)
+        print(json.dumps(result, indent=2))
+        return result
     if args.cmd == "inventory":
         from .inventory import run_inventory
         print(json.dumps(run_inventory(args.model, args.out, args.device), indent=2))
