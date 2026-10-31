@@ -46,7 +46,7 @@ The generated JSON includes target-enriched candidate channels, KEEP-enriched ne
 
 \`steer-causal\` is a **measured intervention experiment** built on \`steer-rank\`, the existing gated-MLP \`profile-mlp\` artifact and \`NeuronSteerer\`. It tests whether pushing a candidate MLP channel causally changes a *specified next-token logit margin*, not whether a complex persona or quality objective has been achieved.
 
-Generate a **fresh** MLP profile on discovery corpora with the current code, then rank candidates. New profiles carry exact discovery-file SHA-256 hashes. Older profiles without these bindings must be regenerated before causal testing; this prevents silently asserting that an arbitrary rank list came from a particular discovery corpus.
+Generate a **fresh** MLP profile on discovery corpora with the current code, then rank candidates. New profiles carry exact discovery-file SHA-256 hashes. The installed command also requires successful producer audits for both the MLP profile and ranking, each bound to the exact current checkpoint bytes. Rebuild unaudited legacy artifacts rather than assuming the source model is identical. Older profiles without these bindings must be regenerated before causal testing; this prevents silently asserting that an arbitrary rank list came from a particular discovery corpus.
 
 Provide six **disjoint** prompt sets: the two original discovery inputs used by \`profile-mlp\`; independent search-target and search-KEEP inputs; and unseen test-target and test-KEEP inputs. The target files are JSONL/JSON arrays with rows such as:
 
