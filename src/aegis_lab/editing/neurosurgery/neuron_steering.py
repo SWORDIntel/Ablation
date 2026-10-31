@@ -384,7 +384,12 @@ def _generate(model, tokenizer, input_ids: torch.Tensor, *, device: str,
     if device.startswith("cuda"):
         torch.cuda.synchronize()
     elapsed = time.perf_counter() - start
-    if scale != 0 and any(count == 0 for count in steerer.hits.values()):
+    applied = bool(scale != 0 and all(count > 0 for count in steerer.hits.values()))
+    # The first generated token is sampled from prefill logits. If it is EOS
+    # (or max_new_tokens=1), no decode forward occurs. Generated-token-only
+    # steering was then never eligible to execute; this is not hook bypass.
+    no_decode_forward = steerer.apply_to == "generated_tokens" and steerer._forward_steps == 1
+    if scale != 0 and not applied and not no_decode_forward:
         raise ValueError("Steering hook was bypassed (possible fused inference path); refusing a misleading A/B report")
     if hasattr(output, "sequences"):
         output = output.sequences
@@ -394,6 +399,8 @@ def _generate(model, tokenizer, input_ids: torch.Tensor, *, device: str,
         "token_ids": completion,
         "tokens": len(completion),
         "elapsed_s": round(elapsed, 6),
+        "steering_applied": applied,
+        "hook_hits": {str(layer): count for layer, count in steerer.hits.items()},
     }
 
 
