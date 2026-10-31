@@ -18,6 +18,7 @@ Define what the patient must **KEEP**, what should **CHANGE**, and what to **DRO
 | Candidate search | Reversible masks, interacting layer deletion, constrained joint search and Pareto reports | Core CLI |
 | Explicit targeting | Typed selectors, checksummed selection artifacts and read-only previews | Core CLI |
 | Causal experiments | Clean/corrupted activation patching, runtime interventions and feature adapters | Advanced module CLI / Python |
+| **Neuron steering and A/B testing** | Reversible neuron-level activation doses, signed strength sweeps, paired outputs and model-specific published presets | Core CLI |
 | Recovery and tuning | Targeted LoRA, freeze masks, distillation helpers and budgeted hypertuning | Advanced module CLI / Python |
 | Compression and export | Affine INT8/packed INT4 helpers, sensitivity analysis and SafeTensors/PyTorch packaging | Advanced module CLI / Python |
 | Branch and knowledge experiments | Dependency-aware modality removal, low-rank factual edits and empirical unlearning metrics | Advanced module CLI / Python |
@@ -88,6 +89,19 @@ python3 -m aegis_lab.editing.neurosurgery.cli_extended export-runtime --help
 ```
 
 The advanced entry point also dispatches core commands through the same handler. The module entry remains available. The advanced command `ampute` is spelled that way in the source.
+
+## Neuron steering and A/B experiments
+
+Explore published model-specific neuron effects and compare an identical prompt set against an unsteered control. No checkpoint weights are modified:
+
+```bash
+aegis-neurosurgery steer-presets
+aegis-neurosurgery steer --model models/Qwen3.5-4B --model-id Qwen/Qwen3.5-4B \
+  --preset qwen35-4b-evil-single --workload data/steering-eval.txt \
+  --scales 0.25,0.5,1.0 --out runs/steering-ab.json
+```
+
+Supply the local model and prompt file. The curated presets are published observations, **not locally certified effects**. For custom signed neurons, multiplicative edits, phase-gated hooks, calibration and report interpretation, read the [neuron-steering guide](docs/neurosurgery/NEURON_STEERING.md).
 
 ## What results mean
 
