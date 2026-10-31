@@ -10,6 +10,7 @@ import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 
 import torch
 
@@ -17,7 +18,8 @@ from aegis_lab.editing.neurosurgery.cli import build_parser
 from aegis_lab.editing.neurosurgery.common import file_sha256
 from aegis_lab.editing.neurosurgery.neuron_causal import (
     _bootstrap_ci95, _read_target_rows, _unique_splits, _controls_for_candidate,
-    _candidate_coordinates, run_causal_screen, verify_discovery_lineage,
+    _candidate_coordinates, _verify_producer_model_binding,
+    run_causal_screen, verify_discovery_lineage,
 )
 from aegis_lab.editing.neurosurgery.neuron_ranking import rank_steering_candidates
 from tests.unit.test_neurosurgery_neuron_steering import ToyLM, ToyTokenizer
@@ -82,6 +84,32 @@ class TestCausalDatasetProvenance(unittest.TestCase):
             _unique_splits({"discovery": ["same"], "test": ["same "]})
         with self.assertRaisesRegex(ValueError, "Empty"):
             _unique_splits({"empty": []})
+
+    def test_producer_audits_are_mandatory_and_bound_to_model(self):
+        with TemporaryDirectory() as root:
+            folder = Path(root)
+            ranking_file, profile_file = folder / "rank.json", folder / "profile.pt"
+            ranking_file.write_text("{}")
+            profile_file.write_bytes(b"synthetic")
+            args = SimpleNamespace(ranking=str(ranking_file), profile=str(profile_file))
+            binding = {"file_hashes": {"model.safetensors": "sha:synthetic"}}
+            with self.assertRaisesRegex(ValueError, "producer audit is missing"):
+                _verify_producer_model_binding(args, binding)
+            for name in (ranking_file, profile_file):
+                audit = name.with_name(name.name + ".operator_audit.json")
+                audit.write_text(json.dumps({
+                    "status": "completed",
+                    "inputs": {"model": {"files": binding["file_hashes"]}},
+                }))
+            result = _verify_producer_model_binding(args, binding)
+            self.assertIn("ranking", result)
+            self.assertIn("profile", result)
+            wrong = ranking_file.with_name(ranking_file.name + ".operator_audit.json")
+            wrong.write_text(json.dumps({
+                "status": "completed", "inputs": {"model": {"files": {"other": "hash"}}},
+            }))
+            with self.assertRaisesRegex(ValueError, "disagrees"):
+                _verify_producer_model_binding(args, binding)
 
     def test_single_token_objectives(self):
         with TemporaryDirectory() as directory:
