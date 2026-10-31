@@ -46,6 +46,8 @@ Modules live under `src/aegis_lab/editing/neurosurgery/`. Tests live under `test
 - [ ] Demonstrate retained-modality execution after branch removal for each supported real multimodal architecture.
 - [ ] Publish empirical factual-edit/unlearning results with locality, interference, extraction probes and uncertainty; make no erasure certification claim.
 
+The [archived multi-model pipeline proposal](../archive/MULTI_MODEL_ABLATION_PIPELINE_FROM_CODEX_BRANCH.md) preserves the divergent historical `codex/define-multi-model-ablation-pipeline` design without overriding the current contracts.
+
 The [previous roadmap](../archive/NEUROSURGERY_ROADMAP_20261004.md) preserves implementation milestone history. Its all-complete checkboxes and test counts do not establish the integration acceptance above.
 
 The [trained Qwen diagnostics](QUALIFICATION.md) now record recovery/reload and packed INT8/INT4 measurements with host-specific CPU timings. Structural pruning retained the unchanged baseline under its strict gate; INT4 had severe held-out drift. These small generic-text runs establish neither full task acceptance nor accelerated target-kernel qualification.
@@ -74,6 +76,7 @@ The [trained Qwen diagnostics](QUALIFICATION.md) now record recovery/reload and 
 
 ### P1 — Automated neuron/feature discovery and causal optimisation
 
+- [x] **P1 screening increment:** `aegis-neurosurgery steer-rank` consumes the existing measured `profile-mlp` artifact using restricted tensor loading, per-layer-normalized KEEP/DROP mean-absolute activation contrasts, bounded top-k selection and negative-control candidates, with source hash and explicit correlational-only interpretation (PR #13). **Causal confirmation, effect-score validation and held-out replication are not completed.**
 - [ ] Accept a structured target specification (\`KEEP\`, \`CHANGE\`, \`DROP\`) with positive/negative example sets, expected response properties, behavioural scoring rubric and protected capability thresholds.
 - [ ] Implement contrastive activation capture (dense MLP intermediate, residual channels, router/top-k expert activity where supported) with bounded memory, chunking, streaming statistics, CPU offload, sampled token positions and resumable manifests.
 - [ ] Rank candidates by robust activation separation, effect-size normalisation and stability across prompts. Distinguish correlation-based ranking from causal effect; provide a calibrated \`rank-neurons\` command using the Stage 4C \`rank_mlp_channels()\` and activation patching primitives.
