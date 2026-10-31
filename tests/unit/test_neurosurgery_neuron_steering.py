@@ -120,6 +120,20 @@ class TestNeuronRecipes(unittest.TestCase):
             with self.assertRaises(ValueError):
                 parse_scales(invalid)
 
+    def test_unsupported_recipe_semantics_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Conditional"):
+            resolve_recipe_from_dict({
+                "model": "test/Toy",
+                "neurons": [{"layer": 0, "neuron": 0, "dose": 1}],
+                "conditional": {"if": "some text"},
+            })
+        with self.assertRaisesRegex(ValueError, "Unsupported steering method"):
+            resolve_recipe_from_dict({
+                "model": "test/Toy",
+                "neurons": [{"layer": 0, "neuron": 0, "dose": 1}],
+                "method": {"site": "residual.output"},
+            })
+
     def test_fail_closed_on_mismatched_model_and_duplicates(self):
         with self.assertRaisesRegex(ValueError, "requires --model-id"):
             resolve_recipe(preset="qwen35-4b-evil-pair")
