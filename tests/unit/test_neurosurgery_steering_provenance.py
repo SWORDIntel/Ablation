@@ -82,10 +82,11 @@ class TestSteeringPairedReplay(unittest.TestCase):
             self.assertTrue(torch.equal(noise, torch.rand(5)))
 
     def test_replay_and_wilson_bounds(self):
+        model, tokenizer, current_recipe = ToyLM().eval(), ToyTokenizer(), recipe(dose=5)
         torch.manual_seed(1949)
         before = torch.get_rng_state().clone()
         report = run_ab_experiment(
-            ToyLM().eval(), ToyTokenizer(), recipe(dose=5),
+            model, tokenizer, current_recipe,
             prompts=["a", "b", "c"], scales=[0.25, 1.0],
             max_new_tokens=1, seed=11,
         )
