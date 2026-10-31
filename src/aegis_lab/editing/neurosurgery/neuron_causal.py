@@ -452,6 +452,33 @@ def run_causal_screen(
     }
 
 
+def _verify_producer_model_binding(args, binding: dict[str, Any]) -> dict[str, Any]:
+    """Require source model lineage for both measured profile and candidate rank."""
+    from .operator_audit import _producer_audit
+    expected_files = binding["file_hashes"]
+    upstream = {}
+    for role in ("profile", "ranking"):
+        audit_path = _producer_audit(Path(getattr(args, role)))
+        if audit_path is None:
+            raise ValueError(
+                f"{role} producer audit is missing; regenerate using installed "
+                "aegis-neurosurgery profile-mlp / steer-rank commands"
+            )
+        record = json.loads(audit_path.read_text(encoding="utf-8"))
+        if not isinstance(record, dict) or record.get("status") != "completed":
+            raise ValueError(f"{role} producer audit is incomplete")
+        identity = (record.get("inputs") or {}).get("model") or record.get("source_model_binding")
+        if not isinstance(identity, dict) or identity.get("files") != expected_files:
+            raise ValueError(f"{role} producer checkpoint binding disagrees with the current model")
+        # The outer operator audit validates the file checksums and upstream
+        # audit self-hash; this also enforces exact checkpoint lineage.
+        upstream[role] = {
+            "producer_audit_path": str(audit_path),
+            "producer_audit_sha256": file_sha256(audit_path),
+        }
+    return upstream
+
+
 def run_steer_causal_command(args) -> dict[str, Any]:
     if args.max_search_prompts < 1 or args.max_test_prompts < 1:
         raise ValueError("Prompt limits must be positive")
@@ -473,6 +500,7 @@ def run_steer_causal_command(args) -> dict[str, Any]:
     )
     discovery_keep = load_prompts(args.discovery_keep)
     discovery_drop = load_prompts(args.discovery_drop)
+    producer_lineage = _verify_producer_model_binding(args, binding)
     device = resolve_device(args.device)
     model, tokenizer = load_local_model(args.model, device, args.dtype)
     search_targets = _read_target_rows(args.search_target, tokenizer, args.max_search_prompts)
@@ -494,6 +522,7 @@ def run_steer_causal_command(args) -> dict[str, Any]:
         device=device, seed=args.seed,
     )
     report["checkpoint_binding"] = binding
+    report["producer_lineage"] = producer_lineage
     report["semantic_binding"] = runtime_semantic_binding(model, tokenizer)
     report["ranking_sha256"] = file_sha256(args.ranking)
     report["source_profile_sha256"] = file_sha256(args.profile)
