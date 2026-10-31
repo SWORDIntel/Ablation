@@ -23,6 +23,25 @@ All presets include a source URL and carry the evidence label **reported; not lo
 
 Sources: [Lyra](https://x.com/_lyraaaa_/status/2113833330429083662), [independent Qwen3.5-4B evaluation](https://www.hedwigai.com/blog/qwen-personality-neurons), [Qwen3.8-27B experiment](https://x.com/chiefofautism/status/2115274388425900291), [Neuron Persona Library](https://neuronpersonas.com/), [Neuronary reference implementation](https://github.com/lyramakesmusic/neuronary/blob/main/scripts/run.py).
 
+## P1 first step — screen neuron candidates from an existing MLP profile
+
+The `steer-rank` command consumes the existing Stage 3 `profile-mlp` artifact instead of duplicating activation capture. Prepare **independent** KEEP (behaviour to preserve) and DROP (target behaviour or contrasting corpus) prompt files. Then:
+
+```bash
+aegis-neurosurgery profile-mlp \
+  --model models/Qwen3.5-4B \
+  --keep data/keep-search.txt --drop data/target-search.txt \
+  --out runs/target-mlp-profile
+
+aegis-neurosurgery steer-rank \
+  --profile runs/target-mlp-profile/mlp_profile.pt \
+  --top-k 30 --out runs/target-neuron-candidates.json
+```
+
+The generated JSON includes target-enriched candidate channels, KEEP-enriched negative controls, per-layer channel counts and source-profile SHA-256. It uses the *difference of per-layer-normalized mean absolute activations*, `DROP/mean(DROP) - KEEP/mean(KEEP)`, to rank channels. The loader uses PyTorch `weights_only=True`, and the existing operator audit verifies a profile producer's checksum when an audit is available.
+
+**Interpretation:** This is **correlational screening**, not a proof that altering a channel changes the behaviour or that the sign of the activation contrast predicts the correct additive steering direction. Follow candidates with single-neuron A/B dose sweeps, matched-random controls, target-specific scoring and independent held-out tests. Later P1 milestones add causal testing, pair synergy and constrained optimisation.
+
 ## Paired trials
 
 Download a supported Hugging Face checkpoint to a **local** directory. Supply an independent prompt set with one prompt per line (or a JSON/JSONL file). Example (paths are yours to create):
