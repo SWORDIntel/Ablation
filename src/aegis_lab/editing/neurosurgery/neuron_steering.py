@@ -138,7 +138,8 @@ def resolve_recipe(*, preset: Optional[str] = None, config: Optional[str] = None
             or method.get("apply_to", "all_tokens") not in
             ("all_tokens", "prompt_tokens", "generated_tokens")):
         raise ValueError("Unsupported steering method")
-    if method.get("op", "add") == "mul" and method.get("normalization", "raw") != "raw":
+    default_norm = "raw" if method.get("op", "add") == "mul" else NORMALIZED
+    if method.get("op", "add") == "mul" and method.get("normalization", default_norm) != "raw":
         raise ValueError("Multiplicative steering requires raw normalization")
     seen = set()
     clean = []
@@ -158,7 +159,7 @@ def resolve_recipe(*, preset: Optional[str] = None, config: Optional[str] = None
         clean.append({"layer": l, "neuron": n, "dose": float(d)})
     recipe["neurons"] = clean
     recipe["method"] = {
-        "op": method.get("op", "add"), "normalization": method.get("normalization", NORMALIZED),
+        "op": method.get("op", "add"), "normalization": method.get("normalization", default_norm),
         "apply_to": method.get("apply_to", "all_tokens"),
     }
     return recipe
