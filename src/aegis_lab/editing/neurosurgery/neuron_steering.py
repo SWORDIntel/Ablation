@@ -235,6 +235,7 @@ class NeuronSteerer:
         self.phase = "prefill"
         self._forward_steps = 0
         self.handles = []
+        self.hits: dict[int, int] = {}
         method = recipe["method"]
         self.op = method["op"]
         self.apply_to = method["apply_to"]
@@ -264,6 +265,7 @@ class NeuronSteerer:
         self.scale = float(scale)
         self.phase = "prefill"
         self._forward_steps = 0
+        self.hits = {layer: 0 for layer in self._by_layer}
 
     def _forward_marker(self, module, inputs):
         self.phase = "prefill" if self._forward_steps == 0 else "decode"
@@ -278,6 +280,7 @@ class NeuronSteerer:
                 return None
             if not inputs or not isinstance(inputs[0], torch.Tensor):
                 raise ValueError(f"Layer {layer} down_proj did not receive a tensor")
+            self.hits[layer] += 1
             value = inputs[0].clone()
             for index, dose in entries:
                 if self.op == "mul":
@@ -377,6 +380,8 @@ def _generate(model, tokenizer, input_ids: torch.Tensor, *, device: str,
     if device.startswith("cuda"):
         torch.cuda.synchronize()
     elapsed = time.perf_counter() - start
+    if scale != 0 and any(count == 0 for count in steerer.hits.values()):
+        raise ValueError("Steering hook was bypassed (possible fused inference path); refusing a misleading A/B report")
     if hasattr(output, "sequences"):
         output = output.sequences
     completion = output[0, ids.shape[1]:].tolist()
@@ -403,7 +408,7 @@ def run_ab_experiment(model, tokenizer, recipe: dict[str, Any], prompts: Sequenc
                       target_regex: Optional[str] = None) -> dict[str, Any]:
     if not prompts or max_new_tokens <= 0 or not (0 <= temperature <= 5) or not (0 < top_p <= 1):
         raise ValueError("Invalid prompt set or generation limits")
-    if any(not math.isfinite(x) or x == 0 or abs(x) > 100 for x in scales):
+    if not scales or any(not math.isfinite(x) or x == 0 or abs(x) > 100 for x in scales):
         raise ValueError("Scales must be finite, nonzero, and within [-100,100]")
     pattern = re.compile(target_regex) if target_regex else None
     layers, _ = _layers_for_neurons(model, recipe["neurons"])
@@ -489,6 +494,11 @@ def run_steer_command(args) -> dict[str, Any]:
                    if args.calibration_data else DEFAULT_CALIBRATION)
     device = resolve_device(args.device)
     model, tokenizer = load_local_model(args.model, device, args.dtype)
+    if args.preset:
+        expected_type = "qwen3_5" if args.model_id in ("Qwen/Qwen3.5-4B", "Qwen/Qwen3.8-27B") else "qwen3"
+        actual_type = getattr(getattr(model, "config", None), "model_type", None)
+        if actual_type != expected_type:
+            raise ValueError(f"Preset model architecture mismatch: expected {expected_type}, found {actual_type}")
     report = run_ab_experiment(
         model, tokenizer, recipe, prompts, device=device, scales=scales,
         max_new_tokens=args.max_new_tokens, temperature=args.temperature,
