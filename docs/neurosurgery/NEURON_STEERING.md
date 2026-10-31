@@ -87,6 +87,8 @@ Normalized doses are **large interventions**: `dose = 1` changes a neuron's writ
 
 The report contains the exact recipe and its source, asserted model ID, checkpoint path, architecture, calibration hash and layer norms, resulting per-neuron amplitudes, generation settings, full token IDs and decoded text for both arms, first divergent token, timings, and the changed-response rate for each scale.
 
+Each trial also records `steering_applied` and per-layer `hook_hits`. In `generated_tokens` mode, a response that terminates before the first decoding forward legitimately has no activation edits; it is reported as inactive rather than misclassified as a bypassed hook. Other unexpected hook bypasses fail closed.
+
 Optionally, `--target-regex 'pattern'` adds matched/unmatched counts on both arms. Regex matching and text difference are **observations**, not semantic success or proof of specificity. Scores should be validated with independent labelled evaluations and random-neuron/negative controls.
 
 `operator_audit` binds the local checkpoint, workload, optional calibration input, local recipe and implementation hashes before/after execution. The `--model-id` value is an explicit **operator assertion**, not a cryptographic proof of the model's original identity. Known presets also check the model family (`qwen3` or `qwen3_5`) and fail closed on missing/invalid neuron geometry, non-finite doses, unsupported quantized layers or bypassed hooks. Use a separately verified model manifest if the exact weights matter.
