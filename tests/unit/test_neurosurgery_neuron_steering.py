@@ -120,6 +120,14 @@ class TestNeuronRecipes(unittest.TestCase):
             with self.assertRaises(ValueError):
                 parse_scales(invalid)
 
+    def test_mul_defaults_to_raw_normalization(self):
+        parsed = resolve_recipe_from_dict({
+            "model": "test/Toy",
+            "neurons": [{"layer": 0, "neuron": 0, "dose": 0.0}],
+            "method": {"op": "mul"},
+        })
+        self.assertEqual(parsed["method"]["normalization"], "raw")
+
     def test_unsupported_recipe_semantics_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "Conditional"):
             resolve_recipe_from_dict({
