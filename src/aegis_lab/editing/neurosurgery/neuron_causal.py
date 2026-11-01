@@ -23,6 +23,7 @@ from .neuron_steering import (
     load_local_model, measure_residual_medians, parse_scales,
 )
 from .steering_provenance import checkpoint_binding, runtime_semantic_binding
+from .neuron_composition import extra_forward_budget, optimize_groups
 
 _EPS = 1e-8
 
@@ -379,6 +380,8 @@ def run_causal_screen(
     scales: Sequence[float] = (-0.5, -0.25, 0.25, 0.5),
     max_candidates: int = 2, controls_per_candidate: int = 1,
     max_pairs: int = 0,
+    max_groups: int = 0, max_group_size: int = 3, beam_width: int = 2,
+    keep_penalty: float = 1.0, neuron_penalty: float = 0.0,
     max_forwards: int = 512, max_mean_kl: float = 0.05,
     min_top1_agreement: float = 0.95, normalization: str = NORMALIZED,
     calibration: str = DEFAULT_CALIBRATION,
@@ -392,6 +395,14 @@ def run_causal_screen(
         raise ValueError("controls-per-candidate must be within [1,8]")
     if type(max_pairs) is not int or not 0 <= max_pairs <= 32:
         raise ValueError("max-pairs must be an integer within [0,32]")
+    if type(max_groups) is not int or not 0 <= max_groups <= 64:
+        raise ValueError("max-groups must be an integer within [0,64]")
+    if type(beam_width) is not int or not 1 <= beam_width <= 8:
+        raise ValueError("beam-width must be an integer within [1,8]")
+    if type(max_group_size) is not int or not 3 <= max_group_size <= 5:
+        raise ValueError("max-group-size must be an integer within [3,5]")
+    if not all(math.isfinite(x) and 0 <= x <= 100 for x in (keep_penalty, neuron_penalty)):
+        raise ValueError("KEEP and neuron penalties must be finite in [0,100]")
     if max_forwards < 1 or not (0 <= max_mean_kl < float("inf")) or not (0 <= min_top1_agreement <= 1):
         raise ValueError("Invalid forward budget or KEEP thresholds")
     if not isinstance(seed, int) or not scales or any(
@@ -403,6 +414,10 @@ def run_causal_screen(
         raise ValueError("No candidates in ranking")
     if max_pairs and len(coordinates) < 2:
         raise ValueError("Pair search requires at least two ranked candidate neurons")
+    if max_groups and (max_pairs == 0 or len(coordinates) < 3):
+        raise ValueError("Group search requires --max-pairs > 0 and at least three ranked candidates")
+    if max_groups and max_group_size > len(coordinates):
+        raise ValueError("Group size exceeds number of ranked candidate neurons")
     pair_budget_count = min(max_pairs, len(coordinates) * (len(coordinates) - 1) // 2)
     splits = _unique_splits({
         "discovery_keep": discovery_keep, "discovery_drop": discovery_drop,
@@ -426,6 +441,12 @@ def run_causal_screen(
     # pair, two monomers and control pair on held-out data.
     estimated_forwards += pair_budget_count * 2 * search_size
     estimated_forwards += 4 * test_size if pair_budget_count else 0
+    # Multi-neuron beam/coordinate search adds only bounded evaluations,
+    # including a worst-case held-out group, its controls, monomers and parent.
+    group_forward_budget = extra_forward_budget(
+        max_groups, max_group_size, len(scales), search_size, test_size,
+    )
+    estimated_forwards += group_forward_budget
     # Calibration is another real model forward on normalized-dose runs.
     estimated_forwards += 1 if normalization == NORMALIZED else 0
     if estimated_forwards > max_forwards:
@@ -626,6 +647,25 @@ def run_causal_screen(
             ),
             "promotable_as_verified_persona": False,
         }
+    group_search = {
+        "enabled": False, "trials": [], "selected": None, "pareto_frontier": [],
+    }
+    heldout_group = None
+    if max_groups:
+        group_search, heldout_group = optimize_groups(
+            model, tokenizer, profile, candidates=seeded,
+            single_trials=[trial for x in search_results for trial in x["search_trials"]],
+            qualified_pairs=qualified_pairs, controls=controls,
+            all_coordinates=coordinates, medians=medians, normalization=normalization,
+            scales=scales, search_targets=search_targets, search_target_baseline=base_search,
+            search_keep=search_keep, search_keep_baseline=base_keep,
+            test_targets=test_targets, test_target_baseline=base_test,
+            test_keep=test_keep, test_keep_baseline=base_test_keep,
+            max_group_size=max_group_size, beam_width=beam_width,
+            max_groups=max_groups, max_mean_kl=max_mean_kl,
+            min_top1_agreement=min_top1_agreement, keep_penalty=keep_penalty,
+            neuron_penalty=neuron_penalty, device=device, seed=seed,
+        )
     # Re-evaluate entire test baseline after interventions and check exact logits.
     replay = _baseline(model, tokenizer, [x["prompt"] for x in test_targets], device)
     replay_keep = _baseline(model, tokenizer, test_keep, device)
@@ -642,7 +682,10 @@ def run_causal_screen(
         "promotable_as_verified_persona": False,
         "search_budgets": {"max_forwards": max_forwards, "estimated_forwards": estimated_forwards,
                            "max_candidates": max_candidates, "controls_per_candidate": controls_per_candidate,
-                           "max_pairs": max_pairs, "pair_budget_count": pair_budget_count},
+                           "max_pairs": max_pairs, "pair_budget_count": pair_budget_count,
+                           "max_groups": max_groups, "max_group_size": max_group_size,
+                           "beam_width": beam_width,
+                           "group_forward_budget": group_forward_budget},
         "evaluation": {"scales": [float(x) for x in scales], "normalization": normalization,
                        "max_mean_keep_kl": max_mean_kl, "min_keep_top1_agreement": min_top1_agreement,
                        "seed": seed, "calibration_medians": {str(k): v for k, v in medians.items()},
@@ -652,6 +695,8 @@ def run_causal_screen(
         "pair_search": {"enabled": max_pairs > 0, "trials": pair_trials,
                         "selected": selected_pair},
         "heldout_pair": heldout_pair,
+        "group_search": group_search,
+        "heldout_group": heldout_group,
         "baseline_restoration_verified": True,
         "interpretation": (
             "Measured next-token logit-margin effects with matched same-layer controls, "
@@ -725,7 +770,10 @@ def run_steer_causal_command(args) -> dict[str, Any]:
         discovery_keep=discovery_keep, discovery_drop=discovery_drop,
         scales=scales, max_candidates=args.max_candidates,
         controls_per_candidate=args.controls_per_candidate,
-        max_pairs=args.max_pairs, max_forwards=args.max_forwards, max_mean_kl=args.max_mean_kl,
+        max_pairs=args.max_pairs, max_groups=args.max_groups,
+        max_group_size=args.max_group_size, beam_width=args.beam_width,
+        keep_penalty=args.keep_penalty, neuron_penalty=args.neuron_penalty,
+        max_forwards=args.max_forwards, max_mean_kl=args.max_mean_kl,
         min_top1_agreement=args.min_top1_agreement,
         normalization=args.normalization, calibration=calibration,
         device=device, seed=args.seed,
@@ -750,6 +798,14 @@ def run_steer_causal_command(args) -> dict[str, Any]:
             if report["heldout_test"] is not None else False
         ),
         "promotable_as_verified_persona": False,
+        "selected_group": (
+            report["group_search"]["selected"]["members"]
+            if report["group_search"]["selected"] is not None else None
+        ),
+        "heldout_group_observed_gate_passed": (
+            report["heldout_group"]["observed_gate_passed"]
+            if report["heldout_group"] is not None else False
+        ),
         "selected_pair": (
             report["pair_search"]["selected"]["members"]
             if report["pair_search"]["selected"] is not None else None
