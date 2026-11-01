@@ -305,8 +305,6 @@ def replicate_labelled_runs(
     """Aggregate only after all runs and labels have been independently frozen."""
     if not 2 <= min_runs <= 32 or not 1 <= min_per_run <= min_prompts:
         raise ValueError("Invalid minimum runs/prompts")
-    if not min_prompts >= min_runs * min_per_run:
-        raise ValueError("Total minimum prompts is insufficient for the required runs")
     if not isinstance(seed, int) or isinstance(seed, bool) or not 200 <= iterations <= 20000:
         raise ValueError("Iterations must be within [200,20000] and seed must be an integer")
     locked_scale = _float(locked_scale, "locked_scale", -100, 100)
