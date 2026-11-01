@@ -116,6 +116,33 @@ A pair is selected on the search split only if it improves on the best monomer, 
 **Boundaries:** Pair search is a bounded first increment, not a full combinatorial beam/TPE optimizer or proof of any persona. A joint next-token margin can rise while generation quality degrades; `promotable_as_verified_persona` remains false. Actual multi-turn semantic evaluation, calibration on verified models, repeat seeds and multiple-comparison correction remain later roadmap work.
 
 
+## P1 beam/coordinate optimisation for larger neuron groups
+
+`steer-causal` now supports optional `--max-groups N` (default `0`) with `--max-group-size 3..5`, `--beam-width 1..8`, `--keep-penalty` and `--neuron-penalty`. Group search requires `--max-pairs > 0` and at least three ranked candidates, because it grows only search-qualified pairs. It uses the same audited discovery/search/test splits, calibration, reversible `NeuronSteerer` hooks and logit-margin/KEEP metrics as the existing causal experiment.
+
+At each depth, the optimiser extends a bounded beam of passing groups with the best search-qualified remaining monomers, deduplicates group coordinates, and performs **one bounded coordinate-descent pass** over the existing signed dose grid. A candidate dose is retained only if its KEEP gate passes and its objective improves:
+
+```text
+J = mean target-minus-contrast logit-margin gain
+    − keep_penalty × mean KEEP KL
+    − neuron_penalty × active neuron count
+```
+
+After tuning, each group is measured against a distinct activity- and down-projection-norm-matched control group. An expansion qualifies only if KEEP limits pass and target margin improves on its parent and its matched controls. A bounded Pareto report preserves nondominated qualified groups on target margin, KEEP KL and neuron count. `--max-groups` limits *attempted expansions*, not the number of winners.
+
+The number of search and potential held-out forward calls is **conservatively calculated before model execution**. The selected group (if any) is chosen strictly from search-set observations. On held-out prompts it is measured once alongside its control group, all individual component neurons at their selected doses and its parent subgroup. Reports add `group_search` and `heldout_group` without changing existing single/pair report fields. The exact post-intervention test baseline is replayed.
+
+Example flags for the documented `steer-causal` command:
+
+```bash
+--max-candidates 5 --max-pairs 8 --max-groups 12 \
+  --max-group-size 4 --beam-width 2 \
+  --keep-penalty 1.0 --neuron-penalty 0.02 --max-forwards 8192
+```
+
+**Limits:** The process is bounded beam expansion, not exhaustive combinatorial search or global TPE/gradient optimisation. Bootstrap intervals are descriptive and uncorrected for candidate search. Model effect, task-level behavioural quality, independent real-model replication and authentic upstream checkpoint identity still require their own qualification. Reports do **not** certify a persona.
+
+
 ## Offline independently labelled response scoring
 
 `steer-evaluate` reads a completed `steer` generation report and a separate file of human- or otherwise externally assigned target/KEEP scores. It performs **no model inference or remote API calls** and does not pretend that regex differences or logit-margin improvements prove a semantic effect.
