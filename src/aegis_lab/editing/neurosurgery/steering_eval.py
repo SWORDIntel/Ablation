@@ -247,7 +247,7 @@ def run_steer_evaluate_command(args) -> dict[str, Any]:
     source = _load_ab_report(args)
     output = Path(args.out)
     if output.exists() or output.suffix != ".json":
-        raise ValueError("Provide a new .json evaluation output path")
+        raise ValueError("Evaluation output must be a new .json path and must not already exist")
     scored = score_annotated_report(
         source, _load_ratings(args.ratings), rubric_sha256=file_sha256(args.rubric),
         source_report_sha256=file_sha256(args.ab_report),
