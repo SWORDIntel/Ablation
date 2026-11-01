@@ -202,8 +202,12 @@ class TestSteeringReplication(unittest.TestCase):
                      self.root / "invalid.json")
         with self.assertRaisesRegex(ValueError, "(different A/B|audit|hash)"):
             run_steer_replicate_command(args)
-        changed = dict(BINDING)
-        changed["checkpoint_sha256"] = "sha256:" + "7" * 64
+        changed_files = dict(BINDING["file_hashes"])
+        changed_files["model.safetensors"] = "7" * 64
+        changed = {
+            "checkpoint_sha256": _canonical_digest(changed_files),
+            "file_hashes": changed_files,
+        }
         different_model = _make_run(self.root, "different", 404, binding=changed)
         args = _args([self.a[0], different_model[0]], [self.a[1], different_model[1]],
                      self.root / "invalid2.json")
