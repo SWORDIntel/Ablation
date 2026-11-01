@@ -184,6 +184,8 @@ aegis-neurosurgery steer-replicate \
 
 These are example paths and acceptance thresholds, **not** claims of a completed real-model experiment. An optional `--causal-report runs/causal-screen.json --causal-selection single` binds the locked dose/neuron to the **search-selected** single, pair, or group from the previous `steer-causal` report. It checks that the replication corpus does not overlap any previous discovery, search, or held-out causal-test split and that normalization and calibration are identical. Without a causal source, it is an independent replication of an operator-supplied recipe, not proof of the original candidate's causal lineage.
 
+The report's `candidate_recipe` rewrites neuron doses to their **effective values at the locked scale** so it can be replayed at scale 1.0 without changing the intervention. It includes `checkpoint_sha256`, which `steer --config candidate.json` now checks **before model loading**. To reuse it, extract the JSON `candidate_recipe` object to a standalone file; it is **not** a verified model-independent preset.
+
 The command:
 
 - Verifies every source `steer` and `steer-evaluate` producer audit and corresponding output hashes; requires evaluator input bindings for the exact A/B report, rubric and ratings.
