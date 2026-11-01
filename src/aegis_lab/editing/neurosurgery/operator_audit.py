@@ -16,7 +16,7 @@ INPUT_ROLES = {
     'workload', 'benchmark', 'calibration_data', 'search_space',
     'ranking', 'discovery_keep', 'discovery_drop',
     'search_target', 'search_keep', 'test_target', 'test_keep',
-    'ab_report', 'ratings', 'rubric',
+    'ab_report', 'ratings', 'rubric', 'causal_report',
 }
 MODEL_ROLES = {'model', 'base', 'candidate', 'teacher', 'baseline_model'}
 
@@ -64,6 +64,21 @@ def audited_dispatch(args, dispatch):
         if not path.exists():
             raise ValueError(f'Operator input {role} does not exist locally: {path}')
         paths[role] = path
+    # Multiple source reports must be byte-audited individually, rather than
+    # treating CLI lists as unbound options or writing an unaudited manifest.
+    for collection in ('ab_reports', 'evaluations'):
+        values = namespace.get(collection)
+        if values is None:
+            continue
+        if not isinstance(values, list) or not 1 <= len(values) <= 32:
+            raise ValueError(f'{collection} requires between 1 and 32 input files')
+        for index, value in enumerate(values):
+            if not isinstance(value, (str, Path)):
+                raise ValueError(f'{collection}[{index}] must be a local path')
+            source = Path(value)
+            if not source.is_file():
+                raise ValueError(f'{collection}[{index}] is not a local file: {source}')
+            paths[f'{collection}_{index}'] = source
     if 'config' in paths:
         config = yaml.safe_load(paths['config'].read_text())
         if isinstance(config, dict):
