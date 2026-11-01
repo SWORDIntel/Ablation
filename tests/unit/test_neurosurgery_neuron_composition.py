@@ -109,6 +109,41 @@ class TestMultiNeuronOptimization(unittest.TestCase):
         for key, value in self.model.state_dict().items():
             self.assertTrue(torch.equal(value, original[key]))
 
+    def test_four_neuron_beam_growth(self):
+        mlp = self.model.layers[0].mlp
+        mlp.up_proj = nn.Linear(2, 12, bias=False)
+        mlp.down_proj = nn.Linear(12, 2, bias=False)
+        with torch.no_grad():
+            mlp.up_proj.weight.zero_()
+            mlp.down_proj.weight.zero_()
+            for i, strength in enumerate((1.0, 0.8, 0.6, 0.4)):
+                mlp.down_proj.weight[0, i] = strength
+            for i in range(4, 12):
+                mlp.down_proj.weight[0 if i < 8 else 1, i] = -0.08 - i * 0.005
+        self.profile = {
+            "version": 1,
+            "keep_importance": [torch.ones(12)],
+            "drop_importance": [torch.tensor(
+                [12.0, 11.0, 10.0, 9.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            )],
+        }
+        self.ranking = rank_steering_candidates(self.profile, top_k=4)
+        result = self.run_experiment(
+            max_candidates=4, max_pairs=6, max_groups=10,
+            max_group_size=4, beam_width=3, max_forwards=1500,
+        )
+        levels = result["group_search"]["stages"]
+        self.assertIn(3, [stage["size"] for stage in levels])
+        self.assertIn(4, [stage["size"] for stage in levels])
+        self.assertTrue(any(len(row["members"]) == 4
+                            for row in result["group_search"]["trials"]))
+        winner = result["group_search"]["selected"]
+        self.assertIsNotNone(winner)
+        self.assertEqual(len(winner["members"]), 4)
+        self.assertTrue(result["baseline_restoration_verified"])
+        self.assertFalse(self.model._forward_pre_hooks)
+        self.assertFalse(self.model.layers[0].mlp.down_proj._forward_pre_hooks)
+
     def test_disabled_mode_does_not_evaluate_extra_groups(self):
         x = self.run_experiment(max_groups=0, max_forwards=170)
         self.assertFalse(x["group_search"]["enabled"])
