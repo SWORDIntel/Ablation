@@ -53,7 +53,7 @@ class TestMultiNeuronOptimization(unittest.TestCase):
         }
         self.ranking = rank_steering_candidates(self.profile, top_k=3)
 
-    def run(self, **overrides):
+    def run_experiment(self, **overrides):
         args = dict(
             model=self.model, tokenizer=self.tokenizer, ranking=self.ranking,
             profile=self.profile,
@@ -71,7 +71,7 @@ class TestMultiNeuronOptimization(unittest.TestCase):
 
     def test_triple_search_is_search_only_and_retains_weight_integrity(self):
         original = {key: value.clone() for key, value in self.model.state_dict().items()}
-        result = self.run()
+        result = self.run_experiment()
         optimization = result["group_search"]
         self.assertTrue(optimization["enabled"])
         self.assertGreater(optimization["max_groups"], 0)
@@ -110,7 +110,7 @@ class TestMultiNeuronOptimization(unittest.TestCase):
             self.assertTrue(torch.equal(value, original[key]))
 
     def test_disabled_mode_does_not_evaluate_extra_groups(self):
-        x = self.run(max_groups=0, max_forwards=170)
+        x = self.run_experiment(max_groups=0, max_forwards=170)
         self.assertFalse(x["group_search"]["enabled"])
         self.assertEqual(x["group_search"]["trials"], [])
         self.assertIsNone(x["heldout_group"])
@@ -118,24 +118,24 @@ class TestMultiNeuronOptimization(unittest.TestCase):
 
     def test_budget_validation_before_model_forward(self):
         with self.assertRaisesRegex(ValueError, "Forward budget"):
-            self.run(max_forwards=90)
+            self.run_experiment(max_forwards=90)
         with self.assertRaisesRegex(ValueError, "max-groups"):
-            self.run(max_groups=65)
+            self.run_experiment(max_groups=65)
         with self.assertRaisesRegex(ValueError, "beam-width"):
-            self.run(beam_width=0)
+            self.run_experiment(beam_width=0)
         with self.assertRaisesRegex(ValueError, "max-group-size"):
-            self.run(max_group_size=6)
+            self.run_experiment(max_group_size=6)
         with self.assertRaisesRegex(ValueError, "Group search requires"):
-            self.run(max_pairs=0)
+            self.run_experiment(max_pairs=0)
         with self.assertRaisesRegex(ValueError, "at least three"):
-            self.run(max_candidates=2)
+            self.run_experiment(max_candidates=2)
         with self.assertRaisesRegex(ValueError, "penalties"):
-            self.run(keep_penalty=float("nan"))
+            self.run_experiment(keep_penalty=float("nan"))
         self.assertGreater(extra_forward_budget(3, 3, 2, 4, 4), 0)
         self.assertEqual(extra_forward_budget(0, 3, 2, 4, 4), 0)
 
     def test_keep_gate_rejects_triples(self):
-        out = self.run(max_mean_kl=0, min_top1_agreement=1)
+        out = self.run_experiment(max_mean_kl=0, min_top1_agreement=1)
         self.assertIsNone(out["group_search"]["selected"])
         self.assertIsNone(out["heldout_group"])
         self.assertFalse(out["promotable_as_verified_persona"])
