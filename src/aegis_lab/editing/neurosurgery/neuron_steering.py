@@ -572,6 +572,15 @@ def run_steer_command(args) -> dict[str, Any]:
         audited_inputs=getattr(args, "_operator_input_bindings", None),
         expected_checkpoint_sha256=args.expected_checkpoint_sha256,
     )
+    expected_recipe_checkpoint = recipe.get("checkpoint_sha256")
+    if expected_recipe_checkpoint is not None:
+        if (not isinstance(expected_recipe_checkpoint, str)
+                or expected_recipe_checkpoint != binding["checkpoint_sha256"]):
+            raise ValueError(
+                "Model-bound steering recipe checkpoint mismatch: "
+                f"recipe expects {expected_recipe_checkpoint!r}; "
+                f"loaded checkpoint binding is {binding['checkpoint_sha256']!r}"
+            )
     device = resolve_device(args.device)
     model, tokenizer = load_local_model(args.model, device, args.dtype)
     if args.preset:

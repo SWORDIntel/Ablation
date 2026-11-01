@@ -211,6 +211,22 @@ aegis-neurosurgery steer-evaluate --ab-report runs/evil-qwen-ab.json \
 The tool rejects stale or missing annotations by matching the exact prompt/response SHA-256 hashes and reports paired target gains, KEEP losses and descriptive confidence intervals per dose. **It does not perform semantic judgement automatically** or certify independence/quality of externally supplied labels. See the [example scoring rubric](docs/neurosurgery/STEERING_LABEL_RUBRIC_EXAMPLE.md).
 
 
+### Replicate a locked steering recipe across independent runs
+
+Use `steer-replicate` to combine two or more **separately generated and labelled A/B reports** that share the same checkpoint, recipe, calibration and scoring rubric but use distinct seeds and prompts:
+
+```bash
+aegis-neurosurgery steer-replicate \
+  --ab-report runs/rep1/steering.json --evaluation runs/rep1/evaluation.json \
+  --ab-report runs/rep2/steering.json --evaluation runs/rep2/evaluation.json \
+  --locked-scale 0.5 --min-prompts 40 \
+  --out runs/replication.json
+```
+
+The command checks report audits, source and checkpoint hashes, non-overlapping prompts, per-run target/KEEP retention, cluster-bootstrap intervals and Holm-corrected significance across all tested strengths. Pass `--causal-report` to verify that the locked neuron/dose and replication prompts are disjoint from earlier causal-search data. Outputs remain **exploratory**, not automatically verified persona presets. See the [full steering guide](docs/neurosurgery/NEURON_STEERING.md).
+
+The report's `candidate_recipe` contains the locked **effective** dose, and `steer --config` enforces its embedded checkpoint SHA-256 before loading an incompatible checkpoint.
+
 ## What results mean
 
 - Physical cuts can reduce parameter storage; masked-search timings are not deployment speedups.

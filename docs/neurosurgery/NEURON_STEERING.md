@@ -166,6 +166,36 @@ The annotations bind to both a prompt hash and the **exact decoded response SHA-
 No positive threshold is automatically a validated persona: the ratings are externally supplied and software cannot establish annotator independence, study power, data-split independence or generalisability. The report always sets `promotable_as_verified_persona: false`.
 
 
+## P1 independent labelled replication — locked recipe, multiple runs
+
+Use the existing `steer` + `steer-label-template` + `steer-evaluate` sequence to produce **two or more** independently labelled A/B runs. Different runs must use the **same checkpoint bytes, neuron recipe, calibration and rubric**, but independent non-overlapping prompt sets and different generation seeds. Every `steer-evaluate` run must cover **all** baseline and steered arms.
+
+Then aggregate them **offline**, with no new model inference:
+
+```bash
+aegis-neurosurgery steer-replicate \
+  --ab-report runs/repl-01/steering.json --evaluation runs/repl-01/evaluation.json \
+  --ab-report runs/repl-02/steering.json --evaluation runs/repl-02/evaluation.json \
+  --locked-scale 0.5 \
+  --min-runs 2 --min-prompts 40 --min-per-run 15 \
+  --min-target-gain 0.05 --max-keep-loss 0.10 --alpha 0.05 \
+  --out runs/steering-replication.json
+```
+
+These are example paths and acceptance thresholds, **not** claims of a completed real-model experiment. An optional `--causal-report runs/causal-screen.json --causal-selection single` binds the locked dose/neuron to the **search-selected** single, pair, or group from the previous `steer-causal` report. It checks that the replication corpus does not overlap any previous discovery, search, or held-out causal-test split and that normalization and calibration are identical. Without a causal source, it is an independent replication of an operator-supplied recipe, not proof of the original candidate's causal lineage.
+
+The report's `candidate_recipe` rewrites neuron doses to their **effective values at the locked scale** so it can be replayed at scale 1.0 without changing the intervention. It includes `checkpoint_sha256`, which `steer --config candidate.json` now checks **before model loading**. To reuse it, extract the JSON `candidate_recipe` object to a standalone file; it is **not** a verified model-independent preset.
+
+The command:
+
+- Verifies every source `steer` and `steer-evaluate` producer audit and corresponding output hashes; requires evaluator input bindings for the exact A/B report, rubric and ratings.
+- Rejects mismatched model byte hashes, tokenizer/config semantic hashes, recipes, calibration, rubrics, tested dose sets, duplicated prompt hashes, repeated generation seeds, incomplete ratings and unexecuted steering arms.
+- Holds the **operator-selected** `--locked-scale` fixed. It does not select the most impressive tested dose from replication outcomes.
+- Reports paired target-score gains and KEEP-score losses, per-run effects, two-level run/prompt bootstrap intervals, a one-sided paired sign-flip target test, and Holm-adjusted p-values over **every** evaluated scale.
+- Requires a positive effect in every run plus the configured gain, KEEP-loss and corrected-significance gates for an **exploratory replication pass**. It includes a model-bound, explicitly unverified `candidate_recipe` in the report, without making it an accepted or deployable preset.
+
+The statistics test annotated ratings, **not** a general notion of alignment or persona reliability. Replication prompt diversity and annotator independence cannot be established from hashes alone. In particular, the corrected p-value controls comparisons **within the tested scale family**, not previously searched neurons, edited thresholds, unpublished experiments, or unobserved near-duplicate prompts. If the dose or thresholds were chosen after seeing these results, treat the conclusion as exploratory. A full verified-preset promotion step remains on the roadmap.
+
 ## Paired trials
 
 Download a supported Hugging Face checkpoint to a **local** directory. Supply an independent prompt set with one prompt per line (or a JSON/JSONL file). Example (paths are yours to create):

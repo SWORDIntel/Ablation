@@ -116,6 +116,29 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-prompts", type=int, default=64)
     p.add_argument("--device", default="auto")
 
+    p = sub.add_parser(
+        "steer-replicate",
+        help="Reanalyse independent labelled steering runs with locked dose and corrected statistics",
+    )
+    p.add_argument("--ab-report", dest="ab_reports", action="append", required=True,
+                   help="Repeat once per A/B run, in the same order as --evaluation")
+    p.add_argument("--evaluation", dest="evaluations", action="append", required=True,
+                   help="Repeat for each corresponding steer-evaluate report")
+    p.add_argument("--locked-scale", type=float, required=True,
+                   help="Preselected nonzero steering scale to evaluate; no automatic dose selection")
+    p.add_argument("--causal-report", help="Optional source steer-causal report to bind the selected neurons/dose")
+    p.add_argument("--causal-selection", choices=["single", "pair", "group"], default="single",
+                   help="Lock against the causal search's preselected neuron/group")
+    p.add_argument("--min-runs", type=int, default=2)
+    p.add_argument("--min-prompts", type=int, default=20)
+    p.add_argument("--min-per-run", type=int, default=5)
+    p.add_argument("--min-target-gain", type=float, default=0.05)
+    p.add_argument("--max-keep-loss", type=float, default=0.1)
+    p.add_argument("--alpha", type=float, default=0.05)
+    p.add_argument("--iterations", type=int, default=4096)
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--out", required=True, help="New immutable .json replication report")
+
     p = sub.add_parser("steer-label-template", help="Create response-hash-bound blank ratings for offline independent review")
     p.add_argument("--ab-report", required=True, help="Completed, audited steer A/B JSON report")
     p.add_argument("--rubric", required=True, help="Local documented 0..1 target/KEEP scoring rubric")
@@ -321,6 +344,11 @@ def dispatch_core(args):
         from .search_greedy import run_greedy_layer_search
         run_greedy_layer_search(args.model, args.keep, args.out, args.max_mean_kl, args.max_layers, args.batch_size, args.max_prompts, args.device)
         return
+    if args.cmd == "steer-replicate":
+        from .steering_replication import run_steer_replicate_command
+        result = run_steer_replicate_command(args)
+        print(json.dumps(result, indent=2))
+        return result
     if args.cmd == "steer-label-template":
         from .steering_eval import run_label_template_command
         result = run_label_template_command(args)
