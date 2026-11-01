@@ -10,6 +10,7 @@ import unittest
 
 from aegis_lab.editing.neurosurgery.cli import build_parser
 from aegis_lab.editing.neurosurgery.common import file_sha256
+from aegis_lab.editing.neurosurgery.steering_provenance import _canonical_digest
 from aegis_lab.editing.neurosurgery.steering_replication import (
     _bootstrap_by_run, _holm_adjust, _load_pair, _one_sided_signflip,
     replicate_labelled_runs, run_steer_replicate_command,
@@ -20,13 +21,14 @@ def _sha(value):
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+_MODEL_FILES = {
+    "config.json": "b" * 64,
+    "model.safetensors": "c" * 64,
+    "tokenizer.json": "d" * 64,
+}
 BINDING = {
-    "checkpoint_sha256": "sha256:" + "a" * 64,
-    "file_hashes": {
-        "config.json": "b" * 64,
-        "model.safetensors": "c" * 64,
-        "tokenizer.json": "d" * 64,
-    },
+    "checkpoint_sha256": _canonical_digest(_MODEL_FILES),
+    "file_hashes": _MODEL_FILES,
 }
 RECIPE = {
     "model": "test/Tiny", "effect": "toy",
