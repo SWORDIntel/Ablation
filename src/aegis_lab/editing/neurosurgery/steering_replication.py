@@ -304,6 +304,19 @@ def _check_causal_link(causal_path: Path, runs: Sequence[dict[str, Any]],
     }
 
 
+def _effective_recipe(recipe: dict[str, Any], scale: float) -> dict[str, Any]:
+    """Produce a runnable scale-1 recipe with the *locked* effective dose."""
+    data = json.loads(json.dumps(recipe, allow_nan=False))
+    op = (data.get("method") or {}).get("op", "add")
+    if op not in ("add", "mul"):
+        raise ValueError("Cannot export unsupported locked recipe operation")
+    for row in data.get("neurons", []):
+        dose = _float(row.get("dose"), "recipe dose", -100, 100)
+        effective = dose * scale if op == "add" else 1.0 + (dose - 1.0) * scale
+        row["dose"] = _float(effective, "locked effective dose", -100, 100)
+    return data
+
+
 def replicate_labelled_runs(
     runs: Sequence[dict[str, Any]], *, locked_scale: float,
     min_runs: int = 2, min_prompts: int = 20, min_per_run: int = 5,
@@ -436,7 +449,7 @@ def replicate_labelled_runs(
         "observed_replication_gate_passed": locked["exploratory_gate_passed"],
         "promotable_as_verified_persona": False,
         "candidate_recipe": {
-            **first["recipe"],
+            **_effective_recipe(first["recipe"], locked_scale),
             "evidence": "exploratory multi-run labelled replication; NOT a verified persona",
             "replication_locked_scale": locked_scale,
             "replication_gate_passed": locked["exploratory_gate_passed"],
