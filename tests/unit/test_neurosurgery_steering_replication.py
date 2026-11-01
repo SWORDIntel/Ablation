@@ -247,7 +247,7 @@ class TestSteeringReplication(unittest.TestCase):
             "ratings": {"path": str(ev.parent / "ratings.json"),
                         "files": {"ratings.json": file_sha256(ev.parent / "ratings.json")}},
         })
-        with self.assertRaisesRegex(ValueError, "summary"):
+        with self.assertRaisesRegex(ValueError, "mean_target_gain"):
             run_steer_replicate_command(args)
 
     def test_repeated_report_inputs_parse_in_core_cli(self):
