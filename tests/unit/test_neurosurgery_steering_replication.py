@@ -12,7 +12,7 @@ from aegis_lab.editing.neurosurgery.cli import build_parser
 from aegis_lab.editing.neurosurgery.common import file_sha256
 from aegis_lab.editing.neurosurgery.steering_provenance import _canonical_digest
 from aegis_lab.editing.neurosurgery.steering_replication import (
-    _bootstrap_by_run, _holm_adjust, _load_pair, _one_sided_signflip,
+    _bootstrap_by_run, _effective_recipe, _holm_adjust, _load_pair, _one_sided_signflip,
     replicate_labelled_runs, run_steer_replicate_command,
 )
 
@@ -177,6 +177,7 @@ class TestSteeringReplication(unittest.TestCase):
         self.assertTrue(locked["exploratory_gate_passed"])
         self.assertFalse(record["promotable_as_verified_persona"])
         self.assertIn("NOT a verified persona", record["candidate_recipe"]["evidence"])
+        self.assertAlmostEqual(record["candidate_recipe"]["neurons"][0]["dose"], 0.5)
         with self.assertRaisesRegex(ValueError, "new"):
             run_steer_replicate_command(args)
 
@@ -261,6 +262,16 @@ class TestSteeringReplication(unittest.TestCase):
         self.assertEqual(parsed.ab_reports, ["a.json", "b.json"])
         self.assertEqual(parsed.evaluations, ["aa.json", "bb.json"])
         self.assertEqual(parsed.min_runs, 2)
+
+    def test_export_effective_doses_for_both_methods(self):
+        additive = _effective_recipe(RECIPE, -0.5)
+        self.assertAlmostEqual(additive["neurons"][0]["dose"], -0.5)
+        original = dict(RECIPE)
+        original["method"] = {**RECIPE["method"], "op": "mul", "normalization": "raw"}
+        original["neurons"] = [{"layer": 0, "neuron": 1, "dose": 0.0}]
+        multiplicative = _effective_recipe(original, 0.25)
+        self.assertAlmostEqual(multiplicative["neurons"][0]["dose"], 0.75)
+        self.assertEqual(RECIPE["neurons"][0]["dose"], 1.0)
 
     def test_statistical_controls(self):
         self.assertAlmostEqual(_one_sided_signflip([0, 0], seed=0, iterations=300)["p_one_sided"], 1)
