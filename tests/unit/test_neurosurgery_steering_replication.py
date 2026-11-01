@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
+from unittest.mock import patch
 import unittest
 
 from aegis_lab.editing.neurosurgery.cli import build_parser
@@ -266,6 +267,29 @@ class TestSteeringReplication(unittest.TestCase):
         self.assertEqual(parsed.ab_reports, ["a.json", "b.json"])
         self.assertEqual(parsed.evaluations, ["aa.json", "bb.json"])
         self.assertEqual(parsed.min_runs, 2)
+
+    def test_model_bound_provisional_recipe_rejects_wrong_checkpoint_before_load(self):
+        from aegis_lab.editing.neurosurgery.neuron_steering import run_steer_command
+        recipe = dict(RECIPE)
+        recipe["checkpoint_sha256"] = BINDING["checkpoint_sha256"]
+        source = self.root / "candidate.json"
+        workload = self.root / "workload.txt"
+        _write_json(source, recipe)
+        workload.write_text("test prompt\\n")
+        args = SimpleNamespace(
+            preset=None, config=str(source), neuron=None, model_id="test/Tiny",
+            scales="1", workload=str(workload), max_prompts=2,
+            out=str(self.root / "should-not-write.json"),
+            calibration_data=None, model="other-checkpoint",
+            expected_checkpoint_sha256=None, device="cpu", dtype="float32",
+        )
+        fake_binding = {"checkpoint_sha256": "sha256:" + "0" * 64}
+        with patch("aegis_lab.editing.neurosurgery.neuron_steering.checkpoint_binding",
+                   return_value=fake_binding), patch(
+                   "aegis_lab.editing.neurosurgery.neuron_steering.load_local_model",
+                   side_effect=AssertionError("mismatched checkpoint must not load")):
+            with self.assertRaisesRegex(ValueError, "checkpoint mismatch"):
+                run_steer_command(args)
 
     def test_export_effective_doses_for_both_methods(self):
         additive = _effective_recipe(RECIPE, -0.5)
