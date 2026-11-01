@@ -18,7 +18,7 @@ Define what the patient must **KEEP**, what should **CHANGE**, and what to **DRO
 | Candidate search | Reversible masks, interacting layer deletion, constrained joint search and Pareto reports | Core CLI |
 | Explicit targeting | Typed selectors, checksummed selection artifacts and read-only previews | Core CLI |
 | Causal experiments | Clean/corrupted activation patching, runtime interventions and feature adapters | Advanced module CLI / Python |
-| **Neuron steering and A/B testing** | Reversible neuron-level activation doses, signed strength sweeps, paired outputs and model-specific published presets | Core CLI |
+| **Neuron steering and A/B testing** | 19 published model-specific presets, reversible signed doses, paired A/B output, measured candidate ranking, causal tests and bounded pair interactions | Core CLI |
 | Recovery and tuning | Targeted LoRA, freeze masks, distillation helpers and budgeted hypertuning | Advanced module CLI / Python |
 | Compression and export | Affine INT8/packed INT4 helpers, sensitivity analysis and SafeTensors/PyTorch packaging | Advanced module CLI / Python |
 | Branch and knowledge experiments | Dependency-aware modality removal, low-rank factual edits and empirical unlearning metrics | Advanced module CLI / Python |
