@@ -225,6 +225,8 @@ aegis-neurosurgery steer-replicate \
 
 The command checks report audits, source and checkpoint hashes, non-overlapping prompts, per-run target/KEEP retention, cluster-bootstrap intervals and Holm-corrected significance across all tested strengths. Pass `--causal-report` to verify that the locked neuron/dose and replication prompts are disjoint from earlier causal-search data. Outputs remain **exploratory**, not automatically verified persona presets. See the [full steering guide](docs/neurosurgery/NEURON_STEERING.md).
 
+The report's `candidate_recipe` contains the locked **effective** dose, and `steer --config` enforces its embedded checkpoint SHA-256 before loading an incompatible checkpoint.
+
 ## What results mean
 
 - Physical cuts can reduce parameter storage; masked-search timings are not deployment speedups.
