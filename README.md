@@ -174,6 +174,24 @@ Target files require `prompt` and either single-token `target`/`contrast` string
 
 **A positive logit-margin change is not proof of a persona effect, semantic correctness or statistical significance.** No candidate or combination is automatically promoted into a verified preset. See the [full steering guide](docs/neurosurgery/NEURON_STEERING.md) for calibration, data schemas, interaction measurements, audit details and model/runtime restrictions.
 
+### Independently labelled response evaluation
+
+After an A/B generation run, use the **offline** `steer-label-template` command to create hash-bound annotation rows. Have an evaluator rate target behaviour and KEEP retention against a predefined rubric, then aggregate the completed ratings using `steer-evaluate`:
+
+```bash
+aegis-neurosurgery steer-label-template --ab-report runs/evil-qwen-ab.json \
+  --rubric docs/neurosurgery/STEERING_LABEL_RUBRIC_EXAMPLE.md \
+  --out runs/ratings-template.jsonl
+# Independently score responses and save completed values to ratings-completed.jsonl.
+aegis-neurosurgery steer-evaluate --ab-report runs/evil-qwen-ab.json \
+  --ratings runs/ratings-completed.jsonl \
+  --rubric docs/neurosurgery/STEERING_LABEL_RUBRIC_EXAMPLE.md \
+  --min-prompts 10 --out runs/labelled-evaluation.json
+```
+
+The tool rejects stale or missing annotations by matching the exact prompt/response SHA-256 hashes and reports paired target gains, KEEP losses and descriptive confidence intervals per dose. **It does not perform semantic judgement automatically** or certify independence/quality of externally supplied labels. See the [example scoring rubric](docs/neurosurgery/STEERING_LABEL_RUBRIC_EXAMPLE.md).
+
+
 ## What results mean
 
 - Physical cuts can reduce parameter storage; masked-search timings are not deployment speedups.
