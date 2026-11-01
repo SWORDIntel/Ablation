@@ -90,18 +90,89 @@ python3 -m aegis_lab.editing.neurosurgery.cli_extended export-runtime --help
 
 The advanced entry point also dispatches core commands through the same handler. The module entry remains available. The advanced command `ampute` is spelled that way in the source.
 
-## Neuron steering and A/B experiments
+## Neuron steering, presets and A/B experiments
 
-Explore published model-specific neuron effects and compare an identical prompt set against an unsteered control. No checkpoint weights are modified:
+Ablation supports reversible inference-time activation steering of **gated-MLP intermediate neurons** (input to `mlp.down_proj`). No model weights are changed. Inspect the registry with:
 
 ```bash
 aegis-neurosurgery steer-presets
-aegis-neurosurgery steer --model models/Qwen3.5-4B --model-id Qwen/Qwen3.5-4B \
-  --preset qwen35-4b-evil-single --workload data/steering-eval.txt \
-  --scales 0.25,0.5,1.0 --out runs/steering-ab.json
+aegis-neurosurgery steer-presets --model-id Qwen/Qwen3.5-4B
 ```
 
-Supply the local model and prompt file. The curated presets are published observations, **not locally certified effects**. For custom signed neurons, multiplicative edits, phase-gated hooks, calibration and report interpretation, read the [neuron-steering guide](docs/neurosurgery/NEURON_STEERING.md).
+### Published steering presets (19)
+
+These are **externally reported effects, not behaviours independently reproduced or qualified by Ablation**. The coordinates use **zero-based layer/neuron indices**, and their doses use calibrated residual-norm units, not raw activation units. They apply only to the listed model/checkpoint family; do not transfer indices to another model or to a structurally edited checkpoint. The CLI binds local checkpoint bytes and accepts an optional independently trusted checkpoint digest.
+
+**Qwen/Qwen3.5-4B** — original [Evil Qwen experiment](https://x.com/_lyraaaa_/status/2113833330429083662); additional [reported persona controls](https://www.hedwigai.com/blog/qwen-personality-neurons):
+
+| Preset ID (`--preset`) | Reported effect | Neurons and doses |
+| --- | --- | --- |
+| `qwen35-4b-evil-pair` | Hostile / cartoon-villain | `L14N8949+1.0 L13N7956-1.0` |
+| `qwen35-4b-evil-single` | Hostile single-neuron comparison | `L14N8949+1.0` |
+| `qwen35-4b-flatterer` | Excessive praise | `L20N7450-1.0` |
+| `qwen35-4b-contempt` | Contemptuous tone | `L17N8623+1.0` |
+| `qwen35-4b-poet` | Poetic voice | `L17N7426+1.0` |
+| `qwen35-4b-upbeat` | Relentlessly upbeat | `L5N8348-1.0` |
+| `qwen35-4b-suspicious` | Suspicious tone | `L5N6573+1.0` |
+| `qwen35-4b-condescending` | Condescending tone | `L11N6819+1.0` |
+| `qwen35-4b-wistful` | Wistful voice | `L5N8940-1.0` |
+| `qwen35-4b-oracle` | Cryptic oracle | `L5N4530-1.0` |
+| `qwen35-4b-bleak` | Bleak tone | `L11N2930+1.0` |
+| `qwen35-4b-dismissive` | Dismissive tone | `L6N6424-1.0` |
+| `qwen35-4b-ornate` | Ornate language | `L15N9125+1.0` |
+| `qwen35-4b-curt` | Curt replies | `L5N7656-1.0` |
+
+**Qwen/Qwen3.8-27B** — [reported Qwen3.8 experiment](https://x.com/chiefofautism/status/2115274388425900291):
+
+| Preset ID | Reported effect | Neurons and doses |
+| --- | --- | --- |
+| `qwen38-27b-hostile` | Hostile | `L34N3838+0.75` |
+| `qwen38-27b-extra-hostile` | Stronger hostile combination | `L34N3838+0.75 L38N17180+0.75` |
+
+**Qwen/Qwen3-8B** — one-prompt observations from the [Neuron Persona Library](https://neuronpersonas.com/):
+
+| Preset ID | Reported effect | Neurons and doses |
+| --- | --- | --- |
+| `qwen3-8b-coffee-bean` | Coffee-bean self-description | `L9N166+1.0` |
+| `qwen3-8b-ghost` | Ghost self-description | `L12N545-1.0` |
+| `qwen3-8b-toilet` | Toilet self-description | `L29N1807+1.25` |
+
+For the last three, the source observation used per-prompt normalization; Ablation's default fixed calibration may produce different results. All presets carry source links and an explicit *reported; not locally reproduced* provenance label in the CLI.
+
+### Run an A/B preset
+
+Use a locally downloaded, compatible Hugging Face checkpoint and your own prompt file (one line per prompt). Example paths below are illustrative inputs, not files shipped with the repository:
+
+```bash
+aegis-neurosurgery steer --model models/Qwen3.5-4B \
+  --model-id Qwen/Qwen3.5-4B --preset qwen35-4b-evil-pair \
+  --workload data/steering-eval.txt --scales=0.25,0.5,1.0 \
+  --max-new-tokens 160 --seed 42 --out runs/evil-qwen-ab.json
+```
+
+The unsteered zero-dose baseline runs automatically. For an unsigned or reversed experimental recipe, provide explicit signed `--neuron` targets or a local JSON recipe instead of a published preset. `--expected-checkpoint-sha256` optionally verifies the canonical checkpoint tree digest from an independent trusted reference. The report records exact asset hashes, token-level outputs, seed-matched A/B results and baseline-replay integrity.
+
+### Automatically screen and test neuron interactions
+
+The existing `profile-mlp` and `steer-rank` commands generate correlational candidate neurons; `steer-causal` tests actual **next-token target-vs-contrast logit changes**, protected KEEP KL/top-1 drift, and matched single-neuron controls. The optional `--max-pairs` searches combinations of positively screened single neurons at their selected **signed doses**. It compares each pair against its monomers, reports additive/super-additive/sub-additive effects, and runs matched same-layer control pairs. Only the search split selects a winner; the held-out test is reported separately.
+
+```bash
+aegis-neurosurgery profile-mlp --model models/base \
+  --keep data/discovery-keep.txt --drop data/discovery-target.txt --out runs/mlp-discovery
+aegis-neurosurgery steer-rank --profile runs/mlp-discovery/mlp_profile.pt \
+  --top-k 20 --out runs/neurons-ranked.json
+aegis-neurosurgery steer-causal --model models/base \
+  --profile runs/mlp-discovery/mlp_profile.pt --ranking runs/neurons-ranked.json \
+  --discovery-keep data/discovery-keep.txt --discovery-drop data/discovery-target.txt \
+  --search-target data/search-target.jsonl --search-keep data/search-keep.txt \
+  --test-target data/test-target.jsonl --test-keep data/test-keep.txt \
+  --scales=-0.5,-0.25,0.25,0.5 --max-candidates 4 --max-pairs 3 \
+  --max-forwards 1024 --out runs/causal-pairs.json
+```
+
+Target files require `prompt` and either single-token `target`/`contrast` strings or their tokenizer-specific `target_token_id`/`contrast_token_id` integers. The discovery, search and test prompt sets must be disjoint. Producer audits and checkpoint binding are required; older unaudited discovery artifacts must be regenerated. Pair search is opt-in (`--max-pairs 0` by default) and limited by the explicit forward budget.
+
+**A positive logit-margin change is not proof of a persona effect, semantic correctness or statistical significance.** No candidate or combination is automatically promoted into a verified preset. See the [full steering guide](docs/neurosurgery/NEURON_STEERING.md) for calibration, data schemas, interaction measurements, audit details and model/runtime restrictions.
 
 ## What results mean
 
