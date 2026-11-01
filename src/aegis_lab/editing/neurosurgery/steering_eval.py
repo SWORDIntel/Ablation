@@ -204,7 +204,19 @@ def score_annotated_report(
 
 
 def _load_ab_report(args) -> dict[str, Any]:
-    report = json.loads(Path(args.ab_report).read_text(encoding="utf-8"))
+    from .operator_audit import _producer_audit
+    source = Path(args.ab_report)
+    audit_path = _producer_audit(source)
+    if audit_path is None:
+        raise ValueError("A/B report producer audit is missing")
+    producer = json.loads(audit_path.read_text(encoding="utf-8"))
+    if (not isinstance(producer, dict) or producer.get("status") != "completed" or
+            producer.get("command") != "steer" or
+            producer.get("outputs", {}).get(source.name) != file_sha256(source)):
+        raise ValueError("A/B report has an incomplete or mismatched steering producer audit")
+    report = json.loads(source.read_text(encoding="utf-8"))
+    if not isinstance(report, dict):
+        raise ValueError("A/B report root must be a JSON object")
     if not isinstance(report.get("checkpoint_binding"), dict) or not report["checkpoint_binding"].get("checkpoint_sha256"):
         raise ValueError("A/B report must contain audited checkpoint binding")
     if not report.get("generation", {}).get("baseline_replay_verified"):
