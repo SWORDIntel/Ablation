@@ -11,6 +11,7 @@ import hashlib
 import json
 import math
 import random
+from itertools import combinations
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
@@ -284,6 +285,92 @@ def _recipe_for(layer: int, neuron: int, normalization: str) -> dict[str, Any]:
     }
 
 
+def _combination_recipe(components: Sequence[dict[str, Any]],
+                        normalization: str) -> dict[str, Any]:
+    """One reversible hook recipe for several individually chosen signed doses."""
+    if len(components) < 2:
+        raise ValueError("Combination must contain at least two neurons")
+    seen = set()
+    neurons = []
+    for item in components:
+        layer, neuron, dose = item["layer"], item["neuron"], item["scale"]
+        if (layer, neuron) in seen or not math.isfinite(float(dose)) or not dose:
+            raise ValueError("Combination has a duplicate neuron or invalid dose")
+        seen.add((layer, neuron))
+        neurons.append({"layer": layer, "neuron": neuron, "dose": float(dose)})
+    return {
+        "model": None, "effect": "unknown; pairwise logit objective only",
+        "source": "local causal interaction screen", "evidence": "exploratory",
+        "method": {"op": "add", "normalization": normalization, "apply_to": "all_tokens"},
+        "neurons": neurons,
+    }
+
+
+def _pair_controls(
+    model, profile: dict[str, Any], controls: dict[tuple[int, int], list[dict[str, Any]]],
+    candidates: set[tuple[int, int]], pair: Sequence[dict[str, Any]], seed: int,
+) -> list[dict[str, Any]]:
+    """Choose separate matched controls for both members of a candidate pair."""
+    excluded = set(candidates)
+    out = []
+    for offset, part in enumerate(pair):
+        position = (part["layer"], part["neuron"])
+        available = [c for c in controls[position]
+                     if (c["layer"], c["neuron"]) not in excluded]
+        if available:
+            ctrl = available[0]
+        else:
+            ctrl = _controls_for_candidate(
+                model, profile, position[0], position[1], excluded, 1,
+                seed + offset * 7919,
+            )[0]
+        coord = (ctrl["layer"], ctrl["neuron"])
+        if coord in excluded:
+            raise ValueError("Matched control pair contains a duplicate")
+        excluded.add(coord)
+        out.append({**ctrl, "scale": float(part["scale"])})
+    return out
+
+
+def _interaction_metrics(joint: dict[str, Any], control: dict[str, Any],
+                         singles: Sequence[dict[str, Any]], seed: int) -> dict[str, Any]:
+    """Pair synergy = (AB - base) - (A - base) - (B - base), prompt-wise."""
+    if len(singles) != 2:
+        raise ValueError("Pair interaction requires exactly two monomer measurements")
+    rows = [joint["target_per_prompt"], control["target_per_prompt"]] + [
+        item["target_per_prompt"] for item in singles
+    ]
+    if not rows[0] or any(len(x) != len(rows[0]) for x in rows):
+        raise ValueError("Pair/marginal trials have different prompt counts")
+    synergy = []
+    for entries in zip(*rows):
+        if len({x["prompt_sha256"] for x in entries}) != 1:
+            raise ValueError("Pair/monomer prompt alignment mismatch")
+        synergy.append(
+            entries[0]["delta_margin"] - entries[2]["delta_margin"] -
+            entries[3]["delta_margin"]
+        )
+    target_delta = joint["target_mean_delta_margin"]
+    control_delta = control["target_mean_delta_margin"]
+    mono_delta = [item["target_mean_delta_margin"] for item in singles]
+    mean_synergy = sum(synergy) / len(synergy)
+    return {
+        "target_mean_delta_margin": target_delta,
+        "matched_control_pair_delta_margin": control_delta,
+        "gain_over_matched_control_pair": target_delta - control_delta,
+        "gain_over_best_single": target_delta - max(mono_delta),
+        "single_mean_delta_margins": mono_delta,
+        "mean_synergy_delta_margin": mean_synergy,
+        "synergy_ci95_bootstrap": _bootstrap_ci95(synergy, seed),
+        "synergy_per_prompt": synergy,
+        "interpretation": (
+            "Positive synergy means super-additive target logit-margin change "
+            "relative to the two isolated edits; negative means sub-additive. "
+            "Intervals are descriptive and do not correct for candidate selection."
+        ),
+    }
+
+
 def run_causal_screen(
     model, tokenizer, ranking: dict[str, Any], profile: dict[str, Any], *,
     search_targets: Sequence[dict[str, Any]], search_keep: Sequence[str],
@@ -291,6 +378,7 @@ def run_causal_screen(
     discovery_keep: Sequence[str], discovery_drop: Sequence[str],
     scales: Sequence[float] = (-0.5, -0.25, 0.25, 0.5),
     max_candidates: int = 2, controls_per_candidate: int = 1,
+    max_pairs: int = 0,
     max_forwards: int = 512, max_mean_kl: float = 0.05,
     min_top1_agreement: float = 0.95, normalization: str = NORMALIZED,
     calibration: str = DEFAULT_CALIBRATION,
@@ -302,6 +390,8 @@ def run_causal_screen(
         raise ValueError("Model must be in evaluation mode for causal screening")
     if controls_per_candidate < 1 or controls_per_candidate > 8:
         raise ValueError("controls-per-candidate must be within [1,8]")
+    if type(max_pairs) is not int or not 0 <= max_pairs <= 32:
+        raise ValueError("max-pairs must be an integer within [0,32]")
     if max_forwards < 1 or not (0 <= max_mean_kl < float("inf")) or not (0 <= min_top1_agreement <= 1):
         raise ValueError("Invalid forward budget or KEEP thresholds")
     if not isinstance(seed, int) or not scales or any(
@@ -311,6 +401,9 @@ def run_causal_screen(
     coordinates = _candidate_coordinates(ranking, max_candidates)
     if not coordinates:
         raise ValueError("No candidates in ranking")
+    if max_pairs and len(coordinates) < 2:
+        raise ValueError("Pair search requires at least two ranked candidate neurons")
+    pair_budget_count = min(max_pairs, len(coordinates) * (len(coordinates) - 1) // 2)
     splits = _unique_splits({
         "discovery_keep": discovery_keep, "discovery_drop": discovery_drop,
         "search_target": [x["prompt"] for x in search_targets], "search_keep": search_keep,
@@ -329,6 +422,10 @@ def run_causal_screen(
     estimated_forwards = search_size + test_size + (
         len(coordinates) * (1 + controls_per_candidate) * len(scales) * search_size
     ) + (1 + controls_per_candidate) * test_size + test_size
+    # Search each pair and a matched-control pair; then retest the selected
+    # pair, two monomers and control pair on held-out data.
+    estimated_forwards += pair_budget_count * 2 * search_size
+    estimated_forwards += 4 * test_size if pair_budget_count else 0
     # Calibration is another real model forward on normalized-dose runs.
     estimated_forwards += 1 if normalization == NORMALIZED else 0
     if estimated_forwards > max_forwards:
@@ -428,6 +525,107 @@ def run_causal_screen(
             heldout["candidate"]["target_mean_delta_margin"] > 0 and
             heldout["contrast_vs_matched_controls"] > 0
         )
+    # Pair discovery is confined to already passing search-split single
+    # candidates. No held-out scores influence pair membership or dose.
+    singles_by_coord: dict[tuple[int, int], dict[str, Any]] = {}
+    for trial in eligible:
+        singles_by_coord.setdefault((trial["layer"], trial["neuron"]), trial)
+    seeded = list(singles_by_coord.values())
+    pair_trials = []
+    selected_pair = None
+    heldout_pair = None
+    candidate_coordinates = set(coordinates)
+    for pair_idx, (first, second) in enumerate(combinations(seeded, 2)):
+        if pair_idx >= max_pairs:
+            break
+        members = [first, second]
+        matched = _pair_controls(
+            model, profile, controls, candidate_coordinates, members,
+            seed + pair_idx * 104729,
+        )
+        trial = _evaluate_intervention(
+            model, tokenizer, _combination_recipe(members, normalization),
+            medians, 1.0, search_targets, base_search, search_keep,
+            base_keep, device=device, ci_seed=seed + 300000 + pair_idx,
+        )
+        control_trial = _evaluate_intervention(
+            model, tokenizer, _combination_recipe(matched, normalization),
+            medians, 1.0, search_targets, base_search, search_keep,
+            base_keep, device=device, ci_seed=seed + 400000 + pair_idx,
+        )
+        metrics = _interaction_metrics(
+            trial, control_trial, members, seed + 500000 + pair_idx,
+        )
+        keep_gate = (trial["keep_mean_kl"] <= max_mean_kl and
+                     trial["keep_top1_agreement"] >= min_top1_agreement)
+        # Improvement beyond the best individual neuron is distinct from
+        # super-additivity: additive pairs can still improve performance.
+        passes = bool(
+            keep_gate and metrics["gain_over_matched_control_pair"] > 0 and
+            metrics["gain_over_best_single"] > 0
+        )
+        pair_trials.append({
+            "members": [
+                {"layer": m["layer"], "neuron": m["neuron"], "scale": m["scale"]}
+                for m in members
+            ],
+            "matched_controls": matched,
+            "joint": trial,
+            "matched_control_pair": control_trial,
+            "interaction": metrics,
+            "keep_gate_passed": keep_gate,
+            "search_gate_passed": passes,
+        })
+    qualified_pairs = [p for p in pair_trials if p["search_gate_passed"]]
+    qualified_pairs.sort(key=lambda p: (
+        -p["interaction"]["gain_over_matched_control_pair"],
+        -p["interaction"]["gain_over_best_single"],
+        p["joint"]["keep_mean_kl"],
+        tuple((m["layer"], m["neuron"]) for m in p["members"]),
+    ))
+    if qualified_pairs:
+        selected_pair = qualified_pairs[0]
+        pair_members = selected_pair["members"]
+        pair_controls = selected_pair["matched_controls"]
+        pair_test = _evaluate_intervention(
+            model, tokenizer, _combination_recipe(pair_members, normalization),
+            medians, 1.0, test_targets, base_test, test_keep, base_test_keep,
+            device=device, ci_seed=seed + 600001,
+        )
+        ctrl_test = _evaluate_intervention(
+            model, tokenizer, _combination_recipe(pair_controls, normalization),
+            medians, 1.0, test_targets, base_test, test_keep, base_test_keep,
+            device=device, ci_seed=seed + 600002,
+        )
+        mono_tests = [
+            _evaluate_intervention(
+                model, tokenizer,
+                _recipe_for(m["layer"], m["neuron"], normalization),
+                medians, m["scale"], test_targets, base_test,
+                test_keep, base_test_keep, device=device,
+                ci_seed=seed + 600003 + i,
+            )
+            for i, m in enumerate(pair_members)
+        ]
+        metrics = _interaction_metrics(pair_test, ctrl_test, mono_tests, seed + 600010)
+        keep_gate = (
+            pair_test["keep_mean_kl"] <= max_mean_kl and
+            pair_test["keep_top1_agreement"] >= min_top1_agreement
+        )
+        heldout_pair = {
+            "members": pair_members,
+            "selected_on": "search split only",
+            "joint": pair_test,
+            "matched_control_pair": ctrl_test,
+            "monomers": mono_tests,
+            "interaction": metrics,
+            "keep_gate_passed": keep_gate,
+            "observed_gate_passed": bool(
+                keep_gate and metrics["gain_over_matched_control_pair"] > 0 and
+                metrics["gain_over_best_single"] > 0
+            ),
+            "promotable_as_verified_persona": False,
+        }
     # Re-evaluate entire test baseline after interventions and check exact logits.
     replay = _baseline(model, tokenizer, [x["prompt"] for x in test_targets], device)
     replay_keep = _baseline(model, tokenizer, test_keep, device)
@@ -443,13 +641,17 @@ def run_causal_screen(
         "not_semantic_validation": True,
         "promotable_as_verified_persona": False,
         "search_budgets": {"max_forwards": max_forwards, "estimated_forwards": estimated_forwards,
-                           "max_candidates": max_candidates, "controls_per_candidate": controls_per_candidate},
+                           "max_candidates": max_candidates, "controls_per_candidate": controls_per_candidate,
+                           "max_pairs": max_pairs, "pair_budget_count": pair_budget_count},
         "evaluation": {"scales": [float(x) for x in scales], "normalization": normalization,
                        "max_mean_keep_kl": max_mean_kl, "min_keep_top1_agreement": min_top1_agreement,
                        "seed": seed, "calibration_medians": {str(k): v for k, v in medians.items()},
                        "calibration_sha256": hashlib.sha256(calibration.encode("utf-8")).hexdigest() if medians else None},
         "splits": splits, "search": search_results, "selected": selected,
         "heldout_test": heldout,
+        "pair_search": {"enabled": max_pairs > 0, "trials": pair_trials,
+                        "selected": selected_pair},
+        "heldout_pair": heldout_pair,
         "baseline_restoration_verified": True,
         "interpretation": (
             "Measured next-token logit-margin effects with matched same-layer controls, "
@@ -523,7 +725,7 @@ def run_steer_causal_command(args) -> dict[str, Any]:
         discovery_keep=discovery_keep, discovery_drop=discovery_drop,
         scales=scales, max_candidates=args.max_candidates,
         controls_per_candidate=args.controls_per_candidate,
-        max_forwards=args.max_forwards, max_mean_kl=args.max_mean_kl,
+        max_pairs=args.max_pairs, max_forwards=args.max_forwards, max_mean_kl=args.max_mean_kl,
         min_top1_agreement=args.min_top1_agreement,
         normalization=args.normalization, calibration=calibration,
         device=device, seed=args.seed,
@@ -548,4 +750,12 @@ def run_steer_causal_command(args) -> dict[str, Any]:
             if report["heldout_test"] is not None else False
         ),
         "promotable_as_verified_persona": False,
+        "selected_pair": (
+            report["pair_search"]["selected"]["members"]
+            if report["pair_search"]["selected"] is not None else None
+        ),
+        "heldout_pair_observed_gate_passed": (
+            report["heldout_pair"]["observed_gate_passed"]
+            if report["heldout_pair"] is not None else False
+        ),
     }
