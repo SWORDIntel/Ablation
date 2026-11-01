@@ -16,6 +16,7 @@ INPUT_ROLES = {
     'workload', 'benchmark', 'calibration_data', 'search_space',
     'ranking', 'discovery_keep', 'discovery_drop',
     'search_target', 'search_keep', 'test_target', 'test_keep',
+    'ab_report', 'ratings', 'rubric',
 }
 MODEL_ROLES = {'model', 'base', 'candidate', 'teacher', 'baseline_model'}
 
@@ -93,7 +94,8 @@ def audited_dispatch(args, dispatch):
                                                           'distill', 'config', 'workload', 'benchmark',
                                                           'calibration_data', 'selectors', 'search_space',
                                                           'discovery_keep', 'discovery_drop', 'search_target',
-                                                          'search_keep', 'test_target', 'test_keep'}:
+                                                          'search_keep', 'test_target', 'test_keep',
+                                                          'ratings', 'rubric'}:
             continue
         audit_path = _producer_audit(path)
         if audit_path is None:

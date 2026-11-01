@@ -116,6 +116,29 @@ A pair is selected on the search split only if it improves on the best monomer, 
 **Boundaries:** Pair search is a bounded first increment, not a full combinatorial beam/TPE optimizer or proof of any persona. A joint next-token margin can rise while generation quality degrades; `promotable_as_verified_persona` remains false. Actual multi-turn semantic evaluation, calibration on verified models, repeat seeds and multiple-comparison correction remain later roadmap work.
 
 
+## Offline independently labelled response scoring
+
+`steer-evaluate` reads a completed `steer` generation report and a separate file of human- or otherwise externally assigned target/KEEP scores. It performs **no model inference or remote API calls** and does not pretend that regex differences or logit-margin improvements prove a semantic effect.
+
+The operator must define a rubric before examining generated responses. A shipped [example rubric](STEERING_LABEL_RUBRIC_EXAMPLE.md) demonstrates the two required ratings (`target_score`, `keep_score`, each in `[0,1]`) and the blank-annotation workflow:
+
+```bash
+aegis-neurosurgery steer-label-template --ab-report runs/steering-ab.json \
+  --rubric docs/neurosurgery/STEERING_LABEL_RUBRIC_EXAMPLE.md \
+  --out runs/labels.jsonl
+# Complete every rating score on all baseline and steered arms.
+aegis-neurosurgery steer-evaluate --ab-report runs/steering-ab.json \
+  --ratings runs/completed-labels.jsonl \
+  --rubric docs/neurosurgery/STEERING_LABEL_RUBRIC_EXAMPLE.md \
+  --min-prompts 10 --min-target-gain 0.1 --max-keep-loss 0.05 \
+  --out runs/labelled-evaluation.json
+```
+
+The annotations bind to both a prompt hash and the **exact decoded response SHA-256**, plus numeric steering scale. Ratings must cover every A/B arm once. The completed source report must have a successful `steer` producer audit and baseline replay. Reports bind the rubric, ratings and source-report bytes, aggregate prompt-paired target-gain / KEEP-loss deltas with 300-resample descriptive bootstrap intervals, and distinguish observed threshold flags from conservative interval threshold flags.
+
+No positive threshold is automatically a validated persona: the ratings are externally supplied and software cannot establish annotator independence, study power, data-split independence or generalisability. The report always sets `promotable_as_verified_persona: false`.
+
+
 ## Paired trials
 
 Download a supported Hugging Face checkpoint to a **local** directory. Supply an independent prompt set with one prompt per line (or a JSON/JSONL file). Example (paths are yours to create):

@@ -116,6 +116,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-prompts", type=int, default=64)
     p.add_argument("--device", default="auto")
 
+    p = sub.add_parser("steer-label-template", help="Create response-hash-bound blank ratings for offline independent review")
+    p.add_argument("--ab-report", required=True, help="Completed, audited steer A/B JSON report")
+    p.add_argument("--rubric", required=True, help="Local documented 0..1 target/KEEP scoring rubric")
+    p.add_argument("--out", required=True, help="New blank JSONL ratings template")
+
+    p = sub.add_parser("steer-evaluate", help="Aggregate independent target/KEEP ratings for an A/B steering report")
+    p.add_argument("--ab-report", required=True, help="Completed, audited steer A/B JSON report")
+    p.add_argument("--ratings", required=True, help="Completed and response-hash-matched JSONL/JSON ratings")
+    p.add_argument("--rubric", required=True, help="Exact rubric used by annotators")
+    p.add_argument("--min-prompts", type=int, default=10)
+    p.add_argument("--min-target-gain", type=float, default=0.0)
+    p.add_argument("--max-keep-loss", type=float, default=0.1)
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--out", required=True, help="New JSON paired-score report")
+
     p = sub.add_parser(
         "steer-causal",
         help="Experimentally test ranked neurons with signed doses, matched controls and held-out logit objectives",
@@ -301,6 +316,16 @@ def dispatch_core(args):
         from .search_greedy import run_greedy_layer_search
         run_greedy_layer_search(args.model, args.keep, args.out, args.max_mean_kl, args.max_layers, args.batch_size, args.max_prompts, args.device)
         return
+    if args.cmd == "steer-label-template":
+        from .steering_eval import run_label_template_command
+        result = run_label_template_command(args)
+        print(json.dumps(result, indent=2))
+        return result
+    if args.cmd == "steer-evaluate":
+        from .steering_eval import run_steer_evaluate_command
+        result = run_steer_evaluate_command(args)
+        print(json.dumps(result, indent=2))
+        return result
     if args.cmd == "steer-causal":
         from .neuron_causal import run_steer_causal_command
         result = run_steer_causal_command(args)
