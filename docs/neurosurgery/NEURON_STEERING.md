@@ -91,6 +91,31 @@ The report includes per-prompt margin effects, 300-resample paired-bootstrap des
 Even when the observed held-out gate passes, the report always sets `promotable_as_verified_persona: false`. Binary target-token margin is **not** a semantic behavioural metric, and a small held-out sample or selected candidate is not proof of statistical significance. Add rubric-labelled task evaluation and independent replication before promoting presets.
 
 
+## P1 pair interactions and signed-dose combination search
+
+The existing `steer-causal` command now accepts `--max-pairs N` (default `0` for backward compatibility). Pair trials reuse the same checkpoint, discovery ranking, **search-target** logit objective, search-KEEP gates, neuron calibration and audited inputs as single-neuron trials; there is no second steering implementation.
+
+Run the original documented `steer-causal` example with `--max-candidates 4 --max-pairs 3 --max-forwards 1024`. The extra budget accounts for pair and matched-control-pair search runs, plus a possible held-out pair and its two individual monomers. The command rejects an insufficient budget before executing any model forward. If fewer than two screened single-neuron/dose conditions satisfy positive target/KEEP/control gates, it reports no pairs rather than manufacturing results.
+
+Pair construction:
+- Take each candidate's **best passing signed single-neuron dose**, chosen only on the search set, then try a bounded number of distinct pairs.
+- Apply both doses simultaneously in one `NeuronSteerer` recipe, including across different layers if selected.
+- Choose distinct same-layer, activation-/projection-norm-matched controls for each member, excluding candidate coordinates and duplicate controls; use the same signed doses on the control pair.
+- Measure joint target-vs-contrast logit-margin change and KEEP KL/top-1 damage. Record gain over the best monomer, gain over the control pair, and **prompt-aligned synergy**:
+
+```text
+synergy = (margin_AB − margin_baseline)
+          − (margin_A − margin_baseline)
+          − (margin_B − margin_baseline)
+```
+
+Positive synergy is super-additive and negative synergy is sub-additive under this **specific next-token objective**. A useful additive combination need not have positive synergy. Descriptive bootstrap intervals quantify prompt variation but are not corrected for searching multiple candidate pairs.
+
+A pair is selected on the search split only if it improves on the best monomer, exceeds its matched-control pair and satisfies KEEP gates. The selected pair is independently measured on the held-out set along with its two monomers and its matched control pair. The report provides `pair_search.trials`, `pair_search.selected`, `heldout_pair` and `search_budgets.pair_budget_count`, plus unchanged single-neuron fields.
+
+**Boundaries:** Pair search is a bounded first increment, not a full combinatorial beam/TPE optimizer or proof of any persona. A joint next-token margin can rise while generation quality degrades; `promotable_as_verified_persona` remains false. Actual multi-turn semantic evaluation, calibration on verified models, repeat seeds and multiple-comparison correction remain later roadmap work.
+
+
 ## Paired trials
 
 Download a supported Hugging Face checkpoint to a **local** directory. Supply an independent prompt set with one prompt per line (or a JSON/JSONL file). Example (paths are yours to create):

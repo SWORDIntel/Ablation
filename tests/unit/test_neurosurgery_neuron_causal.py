@@ -13,12 +13,14 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
 import torch
+import torch.nn as nn
 
 from aegis_lab.editing.neurosurgery.cli import build_parser
 from aegis_lab.editing.neurosurgery.common import file_sha256
 from aegis_lab.editing.neurosurgery.neuron_causal import (
     _bootstrap_ci95, _read_target_rows, _unique_splits, _controls_for_candidate,
     _candidate_coordinates, _verify_producer_model_binding,
+    _combination_recipe, _interaction_metrics, _pair_controls,
     run_causal_screen, verify_discovery_lineage,
 )
 from aegis_lab.editing.neurosurgery.neuron_ranking import rank_steering_candidates
@@ -140,6 +142,7 @@ class TestCausalDatasetProvenance(unittest.TestCase):
         self.assertEqual(args.scales, "-0.5,0.5")
         self.assertEqual(args.controls_per_candidate, 1)
         self.assertEqual(args.max_forwards, 512)
+        self.assertEqual(args.max_pairs, 0)
 
 
 class TestCausalNeuronEvaluation(unittest.TestCase):
@@ -215,6 +218,114 @@ class TestCausalNeuronEvaluation(unittest.TestCase):
         self.assertTrue(x[0] <= 2 <= x[1])
         with self.assertRaises(ValueError):
             _bootstrap_ci95([], 10)
+
+
+class TestNeuronPairInteractions(unittest.TestCase):
+    """A linear synthetic model permits a known additive pair as a control case."""
+
+    def setUp(self):
+        torch.manual_seed(239)
+        self.model = ToyLM().eval()
+        self.tok = ToyTokenizer()
+        mlp = self.model.layers[0].mlp
+        mlp.up_proj = nn.Linear(2, 6, bias=False)
+        mlp.down_proj = nn.Linear(6, 2, bias=False)
+        with torch.no_grad():
+            mlp.up_proj.weight.zero_()
+            mlp.down_proj.weight.zero_()
+            mlp.down_proj.weight[0, 0] = 1
+            mlp.down_proj.weight[0, 1] = 1
+            mlp.down_proj.weight[0, 2] = -0.10
+            mlp.down_proj.weight[0, 3] = -0.20
+            mlp.down_proj.weight[1, 4] = 0.20
+            mlp.down_proj.weight[1, 5] = 0.10
+        self.profile = {
+            "version": 1,
+            "keep_importance": [torch.ones(6)],
+            "drop_importance": [torch.tensor([8.0, 7.0, 1.0, 1.0, 1.0, 1.0])],
+        }
+        self.ranking = rank_steering_candidates(self.profile, top_k=2)
+
+    def screen(self, **changes):
+        kwargs = dict(
+            model=self.model, tokenizer=self.tok, ranking=self.ranking,
+            profile=self.profile, search_targets=targets("search"),
+            search_keep=["search keep 1", "search keep 2"],
+            test_targets=targets("test"),
+            test_keep=["test keep 1", "test keep 2"],
+            discovery_keep=["discovery keep"], discovery_drop=["discovery target"],
+            scales=[-0.5, 0.5], max_candidates=2, controls_per_candidate=1,
+            max_pairs=1, max_forwards=90, max_mean_kl=10,
+            min_top1_agreement=0.0, normalization="raw", device="cpu", seed=19,
+        )
+        kwargs.update(changes)
+        return run_causal_screen(**kwargs)
+
+    def test_bounded_pair_discovery_and_heldout_additivity(self):
+        state = {key: tensor.clone() for key, tensor in self.model.state_dict().items()}
+        report = self.screen()
+        self.assertEqual(report["search_budgets"]["estimated_forwards"], 76)
+        self.assertEqual(report["search_budgets"]["max_pairs"], 1)
+        self.assertTrue(report["pair_search"]["enabled"])
+        self.assertEqual(len(report["pair_search"]["trials"]), 1)
+        trial = report["pair_search"]["trials"][0]
+        self.assertTrue(trial["search_gate_passed"])
+        self.assertEqual({x["neuron"] for x in trial["members"]}, {0, 1})
+        controls = trial["matched_controls"]
+        self.assertEqual(len({(x["layer"], x["neuron"]) for x in controls}), 2)
+        self.assertTrue(all(x["neuron"] not in (0, 1) for x in controls))
+        self.assertGreater(trial["interaction"]["gain_over_best_single"], 0)
+        self.assertGreater(trial["interaction"]["gain_over_matched_control_pair"], 0)
+        self.assertAlmostEqual(trial["interaction"]["mean_synergy_delta_margin"], 0, places=5)
+        self.assertIsNotNone(report["pair_search"]["selected"])
+        self.assertTrue(report["heldout_pair"]["observed_gate_passed"])
+        self.assertEqual(report["heldout_pair"]["selected_on"], "search split only")
+        self.assertFalse(report["heldout_pair"]["promotable_as_verified_persona"])
+        self.assertTrue(report["baseline_restoration_verified"])
+        self.assertFalse(self.model._forward_pre_hooks)
+        self.assertFalse(self.model.layers[0].mlp.down_proj._forward_pre_hooks)
+        for key, value in self.model.state_dict().items():
+            self.assertTrue(torch.equal(state[key], value))
+
+    def test_default_pair_search_is_disabled(self):
+        report = self.screen(max_pairs=0, max_forwards=60)
+        self.assertFalse(report["pair_search"]["enabled"])
+        self.assertEqual(report["pair_search"]["trials"], [])
+        self.assertIsNone(report["heldout_pair"])
+
+    def test_budget_and_geometry_guards(self):
+        with self.assertRaisesRegex(ValueError, "Forward budget"):
+            self.screen(max_forwards=75)
+        with self.assertRaisesRegex(ValueError, "max-pairs"):
+            self.screen(max_pairs=33)
+        with self.assertRaisesRegex(ValueError, "at least two"):
+            self.screen(max_pairs=1, max_candidates=1)
+        recipe = _combination_recipe(
+            [{"layer": 0, "neuron": 0, "scale": 0.5},
+             {"layer": 0, "neuron": 1, "scale": -0.5}], "raw",
+        )
+        self.assertEqual([n["dose"] for n in recipe["neurons"]], [0.5, -0.5])
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            _combination_recipe(
+                [{"layer": 0, "neuron": 0, "scale": 0.5},
+                 {"layer": 0, "neuron": 0, "scale": -0.5}], "raw",
+            )
+
+    def test_synergy_math_and_prompt_alignment(self):
+        def obs(delta, digest="p"):
+            return {
+                "target_mean_delta_margin": float(delta),
+                "target_per_prompt": [{"prompt_sha256": digest, "delta_margin": float(delta)}],
+            }
+        x = _interaction_metrics(obs(4), obs(0.5), [obs(1), obs(2)], 10)
+        self.assertEqual(x["mean_synergy_delta_margin"], 1)
+        self.assertEqual(x["gain_over_best_single"], 2)
+        self.assertEqual(x["gain_over_matched_control_pair"], 3.5)
+        self.assertEqual(x["synergy_ci95_bootstrap"], [1, 1])
+        y = _interaction_metrics(obs(2), obs(0), [obs(2), obs(2)], 10)
+        self.assertEqual(y["mean_synergy_delta_margin"], -2)
+        with self.assertRaisesRegex(ValueError, "alignment"):
+            _interaction_metrics(obs(4), obs(0.5), [obs(1, "other"), obs(2)], 10)
 
 
 if __name__ == "__main__":

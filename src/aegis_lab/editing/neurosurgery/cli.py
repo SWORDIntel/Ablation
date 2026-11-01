@@ -132,6 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scales", default="-0.5,-0.25,0.25,0.5")
     p.add_argument("--max-candidates", type=int, default=2)
     p.add_argument("--controls-per-candidate", type=int, default=1)
+    p.add_argument("--max-pairs", type=int, default=0, help="Evaluate at most N signed candidate pairs (0 disables interaction search)")
     p.add_argument("--max-search-prompts", type=int, default=8)
     p.add_argument("--max-test-prompts", type=int, default=8)
     p.add_argument("--max-forwards", type=int, default=512)
