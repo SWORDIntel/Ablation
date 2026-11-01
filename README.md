@@ -174,6 +174,25 @@ Target files require `prompt` and either single-token `target`/`contrast` string
 
 **A positive logit-margin change is not proof of a persona effect, semantic correctness or statistical significance.** No candidate or combination is automatically promoted into a verified preset. See the [full steering guide](docs/neurosurgery/NEURON_STEERING.md) for calibration, data schemas, interaction measurements, audit details and model/runtime restrictions.
 
+### Bounded 3–5 neuron optimisation
+
+For candidates that already passed `steer-causal` single-neuron and pairwise KEEP gates, the optional beam search expands selected pairs into larger groups and refines each signed neuron dose with one coordinate-descent pass. It uses the **existing** intervention engine, a hard preflight forward budget and search-only selection:
+
+```bash
+aegis-neurosurgery steer-causal --model models/base \
+  --profile runs/mlp-discovery/mlp_profile.pt --ranking runs/neurons-ranked.json \
+  --discovery-keep data/discovery-keep.txt --discovery-drop data/discovery-target.txt \
+  --search-target data/search-target.jsonl --search-keep data/search-keep.txt \
+  --test-target data/test-target.jsonl --test-keep data/test-keep.txt \
+  --max-candidates 5 --max-pairs 8 --max-groups 12 \
+  --max-group-size 4 --beam-width 2 --scales=-0.5,-0.25,0.25,0.5 \
+  --keep-penalty 1.0 --neuron-penalty 0.02 --max-forwards 8192 \
+  --out runs/causal-groups.json
+```
+
+The optimiser keeps Pareto-ranked experimental groups and compares the search-selected group to its parent, all constituent monomers and a same-layer control group. Only one group undergoes the final held-out evaluation. `--max-groups 0` (default) disables it and preserves previous pair/single behaviour. The objective is a **next-token logit margin**, not semantic correctness or verified personality control; this feature never auto-publishes presets.
+
+
 ### Independently labelled response evaluation
 
 After an A/B generation run, use the **offline** `steer-label-template` command to create hash-bound annotation rows. Have an evaluator rate target behaviour and KEEP retention against a predefined rubric, then aggregate the completed ratings using `steer-evaluate`:
