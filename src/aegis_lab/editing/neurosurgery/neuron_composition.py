@@ -6,7 +6,7 @@ next-token objective. This module does not promote behavioural/persona claims.
 from __future__ import annotations
 
 import math
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 
 
 def extra_forward_budget(
@@ -146,7 +146,7 @@ def optimize_groups(
     max_mean_kl: float, min_top1_agreement: float,
     keep_penalty: float, neuron_penalty: float,
     device: str, seed: int,
-) -> tuple[dict[str, Any], dict[str, Any] | None]:
+) -> tuple[dict[str, Any], Optional[dict[str, Any]]]:
     """Search groups of size 3..max_group_size, using only search for selection.
 
     Every observed group and dose is measured through neuron_causal's existing
