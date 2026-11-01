@@ -18,6 +18,7 @@ from typing import Any, Optional, Sequence
 from .common import file_sha256
 from .operator_audit import _producer_audit
 from .steering_eval import _expected_arms, _load_ab_report
+from .steering_provenance import _canonical_digest
 
 
 def _digest_json(data: Any) -> str:
@@ -112,8 +113,16 @@ def _load_pair(ab_path: Path, evaluation_path: Path) -> dict[str, Any]:
             or not isinstance(binding.get("file_hashes"), dict)
             or binding["file_hashes"] != ab_audit.get("inputs", {}).get("model", {}).get("files")):
         raise ValueError("A/B checkpoint binding does not match producer model bytes")
+    if binding.get("checkpoint_sha256") != _canonical_digest(binding["file_hashes"]):
+        raise ValueError("A/B checkpoint digest does not agree with the bound file hashes")
     if evaluation.get("checkpoint_binding") != binding:
         raise ValueError("Evaluation and A/B checkpoint identities disagree")
+    semantics = ab.get("semantic_binding")
+    if (not isinstance(semantics, dict)
+            or not all(isinstance(semantics.get(key), str)
+                       and semantics[key].startswith("sha256:")
+                       for key in ("runtime_config_sha256", "runtime_tokenizer_sha256"))):
+        raise ValueError("A/B source lacks complete runtime tokenizer/config identity")
     generation = ab.get("generation") or {}
     seed = generation.get("seed")
     if type(seed) is not int or not generation.get("rng_state_isolated") \
