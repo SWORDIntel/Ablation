@@ -1,0 +1,7 @@
+{
+  "model": "Qwen/Qwen3.5-4B",
+  "effect": "reported poetic voice; hypothesis only",
+  "evidence": "reported; not locally reproduced",
+  "method": {"op": "add", "normalization": "layer_residual_median_over_down_column_l2", "apply_to": "all_tokens"},
+  "neurons": [{"layer": 17, "neuron": 7426, "dose": 1.0}]
+}

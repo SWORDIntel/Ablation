@@ -293,3 +293,13 @@ aegis-neurosurgery steer-presets
 ```
 
 Real-model runs additionally require the checkpoint and a representative held-out workload. No live model measurements are committed as regression fixtures.
+
+## Real-checkpoint qualification harness
+
+See [real-checkpoint qualification](REAL_CHECKPOINT_QUALIFICATION.md) for a bounded
+harness that reuses `steer`, independent label templates and existing evaluation /
+replication operators. It binds checkpoint/config/tokenizer assets, checks the
+installed Qwen3.5-4B adapter, runs disjoint workloads across repeat seeds, verifies
+per-neuron activation delivery and post-removal restoration, and records held-out
+KEEP preservation metrics. Development fixtures do not qualify trained checkpoints;
+real independent behavioural and hardware acceptance remain outstanding.

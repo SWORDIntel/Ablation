@@ -16,7 +16,7 @@ INPUT_ROLES = {
     'workload', 'benchmark', 'calibration_data', 'search_space',
     'ranking', 'discovery_keep', 'discovery_drop',
     'search_target', 'search_keep', 'test_target', 'test_keep',
-    'ab_report', 'ratings', 'rubric', 'causal_report',
+    'ab_report', 'ratings', 'rubric', 'causal_report', 'qualification_keep',
 }
 MODEL_ROLES = {'model', 'base', 'candidate', 'teacher', 'baseline_model'}
 

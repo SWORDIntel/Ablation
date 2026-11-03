@@ -134,3 +134,14 @@ The [trained Qwen diagnostics](QUALIFICATION.md) now record recovery/reload and 
 ## Acceptance policy
 
 A promoted result must retain its untouched parent, inputs and replay plan; state target effect and collateral damage; pass independent held-out and reload tests; and identify unresolved limits. Report physical parameter/storage changes separately from measured runtime gains. Workflow completion and synthetic metrics cannot satisfy quality gates.
+
+### Real-checkpoint qualification harness (implemented; real acceptance pending)
+
+- Implemented: [reproducible local checkpoint harness](REAL_CHECKPOINT_QUALIFICATION.md),
+  architecture/runtime preflight, frozen input/identity bindings, paired generation
+  across disjoint shards and repeat seeds, delivered per-neuron activation edits,
+  unhooked restoration, held-out next-token KEEP metrics, and audited label/evaluation/
+  replication paths with bounded executable fixtures.
+- Still pending: execution on an authentic pinned Qwen3.5-4B checkpoint, independent
+  human-labelled behavioural evidence, measured repeat stability and statistical
+  acceptance, and reproducible memory/latency/device acceptance on actual hardware.
