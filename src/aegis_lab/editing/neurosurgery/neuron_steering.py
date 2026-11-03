@@ -242,6 +242,8 @@ class NeuronSteerer:
         self._forward_steps = 0
         self.handles = []
         self.hits: dict[int, int] = {}
+        self.changed_values: dict[int, int] = {}
+        self.neuron_changes: dict[str, int] = {}
         method = recipe["method"]
         self.op = method["op"]
         self.apply_to = method["apply_to"]
@@ -272,6 +274,8 @@ class NeuronSteerer:
         self.phase = "prefill"
         self._forward_steps = 0
         self.hits = {layer: 0 for layer in self._by_layer}
+        self.changed_values = {layer: 0 for layer in self._by_layer}
+        self.neuron_changes = {f"{l}:{n}": 0 for l, entries in self._by_layer.items() for n, _ in entries}
 
     def _forward_marker(self, module, inputs):
         self.phase = "prefill" if self._forward_steps == 0 else "decode"
@@ -293,6 +297,15 @@ class NeuronSteerer:
                     value[..., index] = value[..., index] * (1.0 + (dose - 1.0) * self.scale)
                 else:
                     value[..., index] = value[..., index] + dose * self.scale
+            selected = [index for index, _ in entries]
+            before = inputs[0][..., selected]
+            after = value[..., selected]
+            if not torch.isfinite(before).all() or not torch.isfinite(after).all():
+                raise ValueError(f"Nonfinite steering activation at layer {layer}")
+            changed = before != after
+            self.changed_values[layer] += int(changed.sum().item())
+            for offset, index in enumerate(selected):
+                self.neuron_changes[f"{layer}:{index}"] += int(changed[..., offset].sum().item())
             return (value,) + tuple(inputs[1:])
         return pre_hook
 
@@ -441,6 +454,8 @@ def _generate(model, tokenizer, input_ids: torch.Tensor, *, device: str,
         "elapsed_s": round(elapsed, 6),
         "steering_applied": applied,
         "hook_hits": {str(layer): count for layer, count in steerer.hits.items()},
+        "activation_values_changed": {str(layer): count for layer, count in steerer.changed_values.items()},
+        "neuron_values_changed": dict(steerer.neuron_changes),
     }
 
 
@@ -511,6 +526,16 @@ def run_ab_experiment(model, tokenizer, recipe: dict[str, Any], prompts: Sequenc
                 "prompt_tokens": int(ids.shape[1]), "seed": seed + index,
                 "baseline": baseline, "variants": variants, "baseline_replay_consistent": True,
             })
+    # Replay after removal too: scale-zero hooks alone cannot prove cleanup.
+    for index, trial in enumerate(trials):
+        replay = _generate(
+            model, tokenizer, _prompt_ids(tokenizer, trial["prompt"]), device=device,
+            max_new_tokens=max_new_tokens, temperature=temperature, top_p=top_p,
+            seed=seed + index, steerer=steerer, scale=0.0,
+        )
+        if replay["token_ids"] != trial["baseline"]["token_ids"]:
+            raise ValueError(f"Unhooked restoration mismatch at prompt index {index}")
+        trial["unhooked_replay_consistent"] = True
     summary = []
     for scale_index, scale in enumerate(scales):
         candidates = [row["variants"][scale_index] for row in trials]
@@ -544,6 +569,7 @@ def run_ab_experiment(model, tokenizer, recipe: dict[str, Any], prompts: Sequenc
             "top_p": top_p, "seed": seed, "device": device,
             "paired_seed_reset": True, "thinking": False,
             "rng_state_isolated": True, "baseline_replay_verified": True,
+            "unhooked_replay_verified": True,
         },
         "target_regex": target_regex, "summary": summary, "trials": trials,
         "interpretation": "Text changes and regex matches are observations, not proof of persona specificity or safety.",
@@ -594,6 +620,13 @@ def run_steer_command(args) -> dict[str, Any]:
         top_p=args.top_p, seed=args.seed, calibration=calibration,
         target_regex=args.target_regex,
     )
+    if getattr(args, "qualification_keep", None):
+        from .steering_qualification import qualify_loaded_model
+        report["qualification"] = qualify_loaded_model(
+            model, tokenizer, recipe, report,
+            load_prompts(args.qualification_keep, args.max_prompts), device,
+            args.max_mean_kl, args.min_top1_agreement,
+        )
     report["model_checkpoint_path"] = str(Path(args.model).resolve())
     report["model_id_asserted"] = args.model_id
     report["checkpoint_binding"] = binding

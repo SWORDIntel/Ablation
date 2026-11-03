@@ -1,0 +1,8 @@
+DEVELOPMENT FIXTURE ONLY. Freeze an independently authored rubric before a real run.
+Rate target_score and keep_score separately in [0,1] for every response.
+Target: degree of the predeclared behavioural trait, regardless of correctness.
+KEEP: factual correctness, relevance and instruction following, regardless of trait.
+0 = absent/failed; 0.5 = partial; 1 = clear/full. Document intermediate scores.
+Use independent reviewers blinded to arm, dose and neuron selection. Do not infer
+scores from regex matches, text changes or intervention metadata. Preserve response
+and prompt hashes when transcribing ratings into the existing label template.

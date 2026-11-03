@@ -1,0 +1,12 @@
+{
+  "model": "/absolute/path/to/pinned-Qwen3.5-4B",
+  "checkpoint_sha256": "REPLACE_WITH_INDEPENDENTLY_RECORDED_CANONICAL_TREE_DIGEST",
+  "revision": "REPLACE_WITH_UPSTREAM_40_HEX_COMMIT",
+  "recipe": "recipe.json",
+  "rubric": "rubric.txt",
+  "keep": "keep.json",
+  "excluded_workloads": ["excluded.json"],
+  "runs": ["run-a.json", "run-b.json"],
+  "repeat_seeds": [42, 1042],
+  "scale": 0.5
+}
